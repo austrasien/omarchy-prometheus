@@ -70,8 +70,8 @@ Column {
 
   readonly property string leftGlyph: String.fromCodePoint(0xF0141)
   readonly property string rightGlyph: String.fromCodePoint(0xF0142)
-  readonly property var monthNames: ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."]
-  readonly property var dayNames: ["dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."]
+  readonly property var monthNames: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+  readonly property var dayNames: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
   function refresh() {
     if (!p || !p.live) return
@@ -116,7 +116,7 @@ Column {
 
   readonly property string goalPeriodLabel: {
     var period = goal && goal.goal ? goal.goal.period : ""
-    return period === "day" ? "du jour" : period === "week" ? "de la semaine" : period === "month" ? "du mois" : ""
+    return period === "day" ? "Daily" : period === "week" ? "Weekly" : period === "month" ? "Monthly" : ""
   }
 
   function dateOf(day) { return new Date(day.date + "T12:00:00") }
@@ -125,13 +125,13 @@ Column {
     if (!week || !week.days || week.days.length !== 7) return ""
     var a = dateOf(week.days[0]), b = dateOf(week.days[6])
     var left = a.getMonth() === b.getMonth() ? String(a.getDate()) : a.getDate() + " " + monthNames[a.getMonth()]
-    return left + " – " + b.getDate() + " " + monthNames[b.getMonth()] + " · S" + week.isoWeek
+    return left + " – " + b.getDate() + " " + monthNames[b.getMonth()] + " · W" + week.isoWeek
   }
 
   function deltaText(now, then) {
-    if (then <= 0) return now > 0 ? "rien hier à la même heure" : ""
+    if (then <= 0) return now > 0 ? "nothing yesterday at this time" : ""
     var pct = Math.round((now - then) / then * 100)
-    return (pct >= 0 ? "+" : "") + pct + " % vs hier à la même heure"
+    return (pct >= 0 ? "+" : "") + pct + " % vs yesterday at this time"
   }
 
   // ---- hours goal
@@ -145,7 +145,7 @@ Column {
 
     StatRow {
       w: tab.w
-      label: "Objectif " + tab.goalPeriodLabel + (parent.worked >= parent.target ? "  " + String.fromCodePoint(0xF012C) : "")
+      label: tab.goalPeriodLabel + " goal" + (parent.worked >= parent.target ? "  " + String.fromCodePoint(0xF012C) : "")
       value: p.formatShort(parent.worked) + " / " + (tab.goal && tab.goal.goal ? tab.goal.goal.hours : 0) + " h"
       strong: true
     }
@@ -169,7 +169,7 @@ Column {
 
   // ---- insights
   PanelSectionHeader {
-    text: "AUJOURD'HUI"
+    text: "TODAY"
     foreground: w.fg
     fontFamily: w.fontFamily
   }
@@ -182,7 +182,7 @@ Column {
   }
   StatRow {
     w: tab.w
-    label: "Temps suivi"
+    label: "Tracked time"
     value: tab.insights ? p.formatShort(tab.insights.today.trackedSeconds) : p.formatShort(p.trackedSeconds)
   }
 
@@ -197,10 +197,10 @@ Column {
       var parts = []
       var d = tab.deltaText(i.today.trackedSeconds, i.yesterdaySameTime.trackedSeconds)
       if (d) parts.push(d)
-      if (i.topApp) parts.push("surtout " + i.topApp.app + " (" + p.formatShort(i.topApp.seconds) + ")")
+      if (i.topApp) parts.push("mostly " + i.topApp.app + " (" + p.formatShort(i.topApp.seconds) + ")")
       if (i.busiestDay) {
         var bd = tab.dateOf(i.busiestDay)
-        parts.push("jour le plus chargé de la semaine : " + tab.dayNames[bd.getDay()] + " " + bd.getDate()
+        parts.push("busiest day of the week: " + tab.dayNames[bd.getDay()] + " " + bd.getDate()
           + " (" + p.formatShort(i.busiestDay.trackedSeconds) + ")")
       }
       return parts.join(" · ")
@@ -242,7 +242,7 @@ Column {
       id: weekHeader
       anchors.horizontalCenter: parent.horizontalCenter
       textFormat: Text.PlainText
-      text: tab.weekOffset === 0 ? "CETTE SEMAINE  ·  " + tab.weekLabel : tab.weekLabel
+      text: tab.weekOffset === 0 ? "THIS WEEK  ·  " + tab.weekLabel : tab.weekLabel
       color: w.fg
       font.family: w.fontFamily
       font.pixelSize: Style.font.caption
@@ -337,7 +337,7 @@ Column {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             textFormat: Text.PlainText
-            text: ["D", "L", "M", "M", "J", "V", "S"][tab.dateOf(dayCol.modelData).getDay()]
+            text: ["S", "M", "T", "W", "T", "F", "S"][tab.dateOf(dayCol.modelData).getDay()]
             color: dayCol.isSelected || dayCol.isToday || dayCol.hovered ? w.accent : Util.alpha(w.fg, dayCol.modelData.future ? 0.25 : 0.5)
             font.family: w.fontFamily
             font.pixelSize: Style.font.caption
@@ -361,7 +361,7 @@ Column {
     width: parent.width
     horizontalAlignment: Text.AlignHCenter
     textFormat: Text.PlainText
-    text: tab.selected >= 0 ? "Clique à nouveau pour revenir à la semaine" : "Clique un jour pour son détail · flèches : semaines précédentes"
+    text: tab.selected >= 0 ? "Click again to go back to the week" : "Click a day for its details · arrows: previous weeks"
     color: Util.alpha(w.fg, 0.4)
     font.family: w.fontFamily
     font.pixelSize: Style.font.caption
@@ -378,7 +378,7 @@ Column {
   }
   StatRow {
     w: tab.w
-    label: "Temps suivi"
+    label: "Tracked time"
     value: {
       if (tab.selectedDay) return p.formatShort(tab.selectedDay.trackedSeconds)
       if (!tab.week || !tab.week.days) return "—"
@@ -391,12 +391,12 @@ Column {
     w: tab.w
     visible: !tab.selectedDay
     label: "Sessions"
-    value: tab.weekStats ? String(tab.weekStats.sessions) + (tab.weekStats.deepSessions > 0 ? "  ·  " + tab.weekStats.deepSessions + " de 2 h+" : "") : "—"
+    value: tab.weekStats ? String(tab.weekStats.sessions) + (tab.weekStats.deepSessions > 0 ? "  ·  " + tab.weekStats.deepSessions + " of 2 h+" : "") : "—"
   }
   StatRow {
     w: tab.w
     visible: !tab.selectedDay && !!(tab.weekStats && tab.weekStats.switchesPerHour)
-    label: "Changements d'app / h en session"
+    label: "App switches / h in session"
     value: tab.weekStats && tab.weekStats.switchesPerHour ? String(tab.weekStats.switchesPerHour) : ""
   }
 
@@ -477,8 +477,8 @@ Column {
 
     PanelSectionHeader {
       text: tab.showingOtherDay
-        ? "JOURNÉE · " + (tab.dayNames[tab.dateOf(tab.selectedDay).getDay()] + " " + tab.dateOf(tab.selectedDay).getDate()).toUpperCase()
-        : "JOURNÉE"
+        ? "DAY · " + (tab.dayNames[tab.dateOf(tab.selectedDay).getDay()] + " " + tab.dateOf(tab.selectedDay).getDate()).toUpperCase()
+        : "DAY"
       foreground: w.fg
       fontFamily: w.fontFamily
     }
@@ -486,7 +486,7 @@ Column {
     Text {
       visible: tab.tlSegments.length === 0
       textFormat: Text.PlainText
-      text: "Rien de suivi ce jour-là."
+      text: "Nothing tracked that day."
       color: Util.alpha(w.fg, 0.45)
       font.family: w.fontFamily
       font.pixelSize: Style.font.body
@@ -551,7 +551,7 @@ Column {
           var sess = tab.timeline ? tab.timeline.sessions || [] : []
           for (var j = 0; j < sess.length; j++) {
             if (at >= sess[j].start && at <= sess[j].end) {
-              hit += (hit ? "  ·  " : "") + "session " + (sess[j].task || "sans nom")
+              hit += (hit ? "  ·  " : "") + "session " + (sess[j].task || "untitled")
               break
             }
           }
@@ -684,9 +684,9 @@ Column {
 
     PanelSectionHeader {
       text: tab.showingOtherDay
-        ? "APPLICATIONS · " + (tab.dayNames[tab.dateOf(tab.selectedDay).getDay()] + " " + tab.dateOf(tab.selectedDay).getDate()
+        ? "APPS · " + (tab.dayNames[tab.dateOf(tab.selectedDay).getDay()] + " " + tab.dateOf(tab.selectedDay).getDate()
           + " " + tab.monthNames[tab.dateOf(tab.selectedDay).getMonth()]).toUpperCase()
-        : "APPLICATIONS AUJOURD'HUI"
+        : "APPS TODAY"
       foreground: w.fg
       fontFamily: w.fontFamily
     }
@@ -694,7 +694,7 @@ Column {
     Text {
       visible: tab.showingOtherDay && tab.shownApps.length === 0
       textFormat: Text.PlainText
-      text: tab.dayAppsLoading ? "Chargement…" : "Aucune app suivie ce jour-là."
+      text: tab.dayAppsLoading ? "Loading…" : "No app tracked that day."
       color: Util.alpha(w.fg, 0.45)
       font.family: w.fontFamily
       font.pixelSize: Style.font.body

@@ -20,8 +20,8 @@ only what was actually used.
   are never attributed to an app. They also pause the running session by
   themselves; such a pause resumes by itself when you are back, while a
   pause you make by hand never does.
-- **Presence check**: every 20 min of running session (a setting, 5 to 120 min), a pill asks "Toujours
-  là ?". A click keeps going; unanswered, it flashes from the 3rd minute and
+- **Presence check**: every 20 min of running session (a setting, 5 to 120 min), a pill asks "Still
+  there?". A click keeps going; unanswered, it flashes from the 3rd minute and
   the session pauses at the 4th, backdated to the question (a playing video
   keeps idle away, so idle alone cannot tell).
 - **Privacy**: apps that are never recorded, and words that keep a window
@@ -47,7 +47,7 @@ only what was actually used.
   hours (100 h to 10,000 h), levels, endurance, intensity, 3-day and weekly
   hours, streaks, active days and months, early and late sessions, midnight
   crossings, challenges, task archaeology, calm and single-app sessions,
-  "Toujours là ?" reflexes, holidays, sessions on battery or on its last 10 %, goals reached per day, week or
+  "Still there?" reflexes, holidays, sessions on battery or on its last 10 %, goals reached per day, week or
   month, personal-best weeks, XP in a day, clockwork starts, dawn streaks,
   sessions without automatic pauses, comebacks, geek dates, hours on a single
   task, named sessions, backlog clean-ups, speedruns, best month and year,
@@ -131,7 +131,7 @@ bar (session ended, challenge won).
 | `activity:idle` | `[bool, idleSeconds]` | Idle since `idleSeconds` ago |
 | `challenge:accept`, `challenge:decline` | `[id]` | Answer the extension challenge offer |
 | `challenge:abandon` | | Give up a running challenge (no bonus) |
-| `presence:confirm` | | Answer "Toujours là ?" |
+| `presence:confirm` | | Answer "Still there?" |
 | `settings:getPresenceEvery`, `settings:setPresenceEvery` | `[minutes]` | How often to ask, 5 to 120, default 20 |
 | `achievements:list` | | Every family, its tiers, what is unlocked and the progress |
 | `medals:list` | | Every medal, its ribbon, how many times won, won this period or not |

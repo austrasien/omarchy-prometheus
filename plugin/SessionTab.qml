@@ -64,7 +64,7 @@ Column {
       TextField {
         id: taskField
         width: parent.width - startButton.width - parent.spacing
-        placeholderText: w.lastTask ? w.lastTask : "Sur quoi tu travailles ?"
+        placeholderText: w.lastTask ? w.lastTask : "What are you working on?"
         foreground: w.fg
         accent: w.accent
         font.family: w.fontFamily
@@ -100,7 +100,7 @@ Column {
         id: startButton
         anchors.verticalCenter: taskField.verticalCenter
         iconText: w.playGlyph
-        text: "Démarrer"
+        text: "Start"
         foreground: w.fg
         accent: w.accent
         bordered: true
@@ -182,7 +182,7 @@ Column {
     Text {
       width: parent.width
       textFormat: Text.PlainText
-      text: "↑↓ choisir · Tab compléter · Entrée démarrer · Échap fermer"
+      text: "↑↓ pick · Tab complete · Enter start · Esc close"
       color: Util.alpha(w.fg, 0.45)
       font.family: w.fontFamily
       font.pixelSize: Style.font.caption
@@ -199,7 +199,7 @@ Column {
       width: parent.width
       horizontalAlignment: Text.AlignHCenter
       textFormat: Text.PlainText
-      text: p.session ? (p.session.task || "Session sans nom") : ""
+      text: p.session ? (p.session.task || "Untitled session") : ""
       color: Util.alpha(w.fg, 0.75)
       font.family: w.fontFamily
       font.pixelSize: Style.font.body
@@ -237,8 +237,8 @@ Column {
       horizontalAlignment: Text.AlignHCenter
       textFormat: Text.PlainText
       text: p.paused
-        ? (p.autoPauseLabel ? "En pause automatique (" + p.autoPauseLabel + ") · reprend à ton retour" : "En pause · prochain XP dans " + p.formatDuration(p.nextXpIn) + " de focus")
-        : "Prochain XP dans " + p.formatDuration(p.nextXpIn)
+        ? (p.autoPauseLabel ? "Auto-paused (" + p.autoPauseLabel + ") · resumes when you're back" : "Paused · next XP in " + p.formatDuration(p.nextXpIn) + " of focus")
+        : "Next XP in " + p.formatDuration(p.nextXpIn)
       color: Util.alpha(w.gold, p.paused ? 0.5 : 0.85)
       font.family: w.fontFamily
       font.pixelSize: Style.font.caption
@@ -267,8 +267,8 @@ Column {
           textFormat: Text.PlainText
           text: !p.challenge ? ""
             : p.challengeOffered
-              ? "Défi " + (p.challenge.index || 1) + "/" + (p.challenge.max || 3) + " : tiens " + p.challenge.minutes + " min de plus sans terminer la session, pour +" + p.challenge.xp + " XP."
-              : "Défi en cours : encore " + Math.ceil((p.challenge.remainingSeconds || 0) / 60) + " min avant de pouvoir terminer. +" + p.challenge.xp + " XP à la clé."
+              ? "Challenge " + (p.challenge.index || 1) + "/" + (p.challenge.max || 3) + ": hold " + p.challenge.minutes + " more min without ending the session, for +" + p.challenge.xp + " XP."
+              : "Challenge running: " + Math.ceil((p.challenge.remainingSeconds || 0) / 60) + " more min before you can end. +" + p.challenge.xp + " XP on the line."
           color: w.fg
           font.family: w.fontFamily
           font.pixelSize: Style.font.body
@@ -298,7 +298,7 @@ Column {
 
           Button {
             visible: p.challengeOffered
-            text: "Relever le défi"
+            text: "Take the challenge"
             foreground: w.gold
             accent: w.gold
             bordered: true
@@ -307,7 +307,7 @@ Column {
 
           Button {
             visible: p.challengeOffered
-            text: "Non merci"
+            text: "No thanks"
             foreground: w.fg
             accent: w.accent
             bordered: true
@@ -316,8 +316,8 @@ Column {
 
           Button {
             visible: p.challengeActive
-            text: "Abandonner le défi"
-            tooltipText: "Sans bonus ; la session peut ensuite être terminée"
+            text: "Abandon challenge"
+            tooltipText: "No bonus; the session can then be ended"
             foreground: Util.alpha(w.fg, 0.7)
             accent: w.accent
             bordered: true
@@ -333,7 +333,7 @@ Column {
 
       Button {
         iconText: p.paused ? w.playGlyph : w.pauseGlyph
-        text: p.paused ? "Reprendre" : "Pause"
+        text: p.paused ? "Resume" : "Pause"
         foreground: w.fg
         accent: w.accent
         bordered: true
@@ -345,8 +345,8 @@ Column {
         enabled: !p.challengeActive
         opacity: enabled ? 1 : 0.35
         iconText: w.stopGlyph
-        text: "Terminer"
-        tooltipText: "Enregistre la session et envoie le récap en notification"
+        text: "End"
+        tooltipText: "Saves the session and shows the recap"
         foreground: w.green
         accent: w.green
         bordered: true
@@ -361,8 +361,8 @@ Column {
         enabled: !p.challengeActive
         opacity: enabled ? 1 : 0.35
         iconText: w.laterGlyph
-        text: "Procrastiner"
-        tooltipText: "Enregistre le temps passé et remet la tâche dans la liste À faire, sans la marquer faite"
+        text: "Procrastinate"
+        tooltipText: "Saves the time spent and puts the task back on the to-do list, not done"
         foreground: w.red
         accent: w.red
         bordered: true
@@ -384,7 +384,7 @@ Column {
     PanelSectionHeader {
       id: todayHeader
       anchors.left: parent.left
-      text: "AUJOURD'HUI"
+      text: "TODAY"
       foreground: w.fg
       fontFamily: w.fontFamily
     }
@@ -458,7 +458,7 @@ Column {
           width: parent.width
           horizontalAlignment: Text.AlignHCenter
           textFormat: Text.PlainText
-          text: ["D", "L", "M", "M", "J", "V", "S"][new Date(modelData.date + "T12:00:00").getDay()] || ""
+          text: ["S", "M", "T", "W", "T", "F", "S"][new Date(modelData.date + "T12:00:00").getDay()] || ""
           color: dayColumn.isToday ? w.accent : Util.alpha(w.fg, 0.5)
           font.family: w.fontFamily
           font.pixelSize: Style.font.caption

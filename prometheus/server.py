@@ -98,7 +98,7 @@ class Daemon:
 
     # ------------------------------------------------------------ channels
 
-    END_REASONS = {"manual": "Session terminée", "procrastinated": "Session remise à plus tard"}
+    END_REASONS = {"manual": "Session ended", "procrastinated": "Session put off"}
 
     def _end(self, args) -> dict:
         reason = args[0] if args and args[0] in self.END_REASONS else "manual"
@@ -267,9 +267,9 @@ class Daemon:
         # Offers are answered from the bar's pill (state.challenge); a won
         # challenge is told in the bar too.
         if kind == "won":
-            self.toast("won", "Défi réussi", f"+{info['xp']} XP")
+            self.toast("won", "Challenge won", f"+{info['xp']} XP")
         elif kind == "absent":
-            self.toast("absent", "Session en pause", "pas de réponse à « Toujours là ? »")
+            self.toast("absent", "Session paused", "no answer to \"Still there?\"")
 
     # ---------------------------------------------------------------- toasts
     # Short messages for the bar plugin to show next to the timer; no

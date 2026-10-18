@@ -46,8 +46,8 @@ Item {
   // Why the session paused by itself ("" if it did not): away, locked.
   readonly property string autoPauseLabel: {
     var r = session && session.autoPaused ? session.autoPaused : []
-    if (r.indexOf("locked") >= 0) return "écran verrouillé"
-    if (r.indexOf("idle") >= 0) return "inactif"
+    if (r.indexOf("locked") >= 0) return "screen locked"
+    if (r.indexOf("idle") >= 0) return "idle"
     return ""
   }
   readonly property bool paused: session !== null && !!session.pauseStartedAt
@@ -113,7 +113,7 @@ Item {
   function act(channel, args, label, then) {
     call(channel, args, function(ok, data) {
       if (ok && data && data.success === false) {
-        failed(label + " : " + (data.error || "refusé"))
+        failed(label + " : " + (data.error || "refused"))
         return
       }
       if (ok && then) then(data)
@@ -192,11 +192,11 @@ Item {
 
   function start(task) {
     var name = (task || "").trim()
-    act("session:start", [name.length > 0 ? name : null], "Démarrage")
+    act("session:start", [name.length > 0 ? name : null], "Start")
   }
 
   function pause() { act("session:pause", [], "Pause") }
-  function resume() { act("session:resume", [], "Reprise") }
+  function resume() { act("session:resume", [], "Resume") }
 
   // Never ends a session: ending is irreversible, pausing is not.
   function toggle() {
@@ -207,13 +207,13 @@ Item {
 
   // The daemon writes the session and sends the recap as a notification.
   function stop() {
-    act("session:end", [], "Fin de session", function(d) { if (d && d.recap) root.ended(d.recap) })
+    act("session:end", [], "End session", function(d) { if (d && d.recap) root.ended(d.recap) })
   }
 
   // Ends the session too (its time stays counted), filed as put off rather
   // than done; `then` gets the recap, e.g. to send the task back to the list.
   function procrastinate(then) {
-    act("session:end", ["procrastinated"], "Procrastiner", function(d) {
+    act("session:end", ["procrastinated"], "Procrastinate", function(d) {
       if (d && d.recap) {
         root.ended(d.recap)
         if (then) then(d.recap)
@@ -226,11 +226,11 @@ Item {
   readonly property bool challengeOffered: !!challenge && challenge.state === "offered"
   readonly property bool challengeActive: !!challenge && challenge.state === "active"
 
-  function acceptChallenge() { if (challenge) act("challenge:accept", [challenge.id], "Défi") }
-  function declineChallenge() { if (challenge) act("challenge:decline", [challenge.id], "Défi") }
-  function abandonChallenge() { act("challenge:abandon", [], "Défi") }
+  function acceptChallenge() { if (challenge) act("challenge:accept", [challenge.id], "Challenge") }
+  function declineChallenge() { if (challenge) act("challenge:decline", [challenge.id], "Challenge") }
+  function abandonChallenge() { act("challenge:abandon", [], "Challenge") }
 
-  function confirmPresence() { act("presence:confirm", [], "Présence") }
+  function confirmPresence() { act("presence:confirm", [], "Presence") }
 
   // ------------------------------------------------------------------ idle
 

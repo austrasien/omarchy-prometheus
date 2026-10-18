@@ -53,7 +53,7 @@ Column {
   function add(text, source) {
     var t = (text || "").trim()
     if (!active || t.length === 0) return
-    p.act("tasks:add", [t, source || "manual"], "Ajout", function() {
+    p.act("tasks:add", [t, source || "manual"], "Add", function() {
       addField.text = ""
       tab.selIndex = -1
       tab.refresh()
@@ -67,19 +67,19 @@ Column {
 
   function complete(task) {
     if (!active) return
-    p.act("tasks:complete", [task.id], "Tâche", tab.refresh)
+    p.act("tasks:complete", [task.id], "Task", tab.refresh)
   }
 
   // Deleting drops a task without checking it, so without its XP.
   function remove(task) {
     if (!active) return
-    p.act("tasks:delete", [task.id], "Suppression", tab.refresh)
+    p.act("tasks:delete", [task.id], "Delete", tab.refresh)
   }
 
   // Re-checking a done task puts it back in the to-do list.
   function reopen(task) {
     if (!active) return
-    p.act("tasks:reopen", [task.id], "Tâche", tab.refresh)
+    p.act("tasks:reopen", [task.id], "Task", tab.refresh)
   }
 
   // Done tasks first when unfolded, then the open ones.
@@ -100,7 +100,7 @@ Column {
     visible: !tab.active
     wrapMode: Text.WordWrap
     textFormat: Text.PlainText
-    text: "Lance une session pour gérer tes tâches."
+    text: "Start a session to manage your tasks."
     color: Util.alpha(w.fg, 0.75)
     font.family: w.fontFamily
     font.pixelSize: Style.font.body
@@ -121,7 +121,7 @@ Column {
       TextField {
         id: addField
         width: parent.width - addButton.width - parent.spacing
-        placeholderText: "Nouvelle tâche"
+        placeholderText: "New task"
         foreground: w.fg
         accent: w.accent
         font.family: w.fontFamily
@@ -139,7 +139,7 @@ Column {
       Button {
         id: addButton
         anchors.verticalCenter: addField.verticalCenter
-        text: "Ajouter"
+        text: "Add"
         foreground: w.fg
         accent: w.accent
         bordered: true
@@ -155,7 +155,7 @@ Column {
 
       Text {
         textFormat: Text.PlainText
-        text: "DEPUIS LE JOURNAL  ·  ↑↓ puis Entrée"
+        text: "FROM THE JOURNAL  ·  ↑↓ then Enter"
         color: Util.alpha(w.fg, 0.45)
         font.family: w.fontFamily
         font.pixelSize: Style.font.caption
@@ -220,7 +220,7 @@ Column {
       PanelSectionHeader {
         id: todoHeader
         anchors.left: parent.left
-        text: "À FAIRE"
+        text: "TO DO"
         foreground: w.fg
         fontFamily: w.fontFamily
       }
@@ -231,7 +231,7 @@ Column {
         anchors.verticalCenter: todoHeader.verticalCenter
         visible: tab.doneToday > 0
         textFormat: Text.PlainText
-        text: (tab.showDone ? "masquer " : "") + tab.doneToday + " faite" + (tab.doneToday > 1 ? "s" : "") + " aujourd'hui"
+        text: (tab.showDone ? "hide " : "") + tab.doneToday + " done today"
         color: Util.alpha(w.fg, 0.55)
         font.family: w.fontFamily
         font.pixelSize: Style.font.caption
@@ -250,7 +250,7 @@ Column {
     Text {
       visible: tab.tasks.length === 0 && !tab.showDone
       textFormat: Text.PlainText
-      text: "Rien en attente."
+      text: "Nothing pending."
       color: Util.alpha(w.fg, 0.45)
       font.family: w.fontFamily
       font.pixelSize: Style.font.body

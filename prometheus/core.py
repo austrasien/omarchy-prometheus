@@ -245,7 +245,7 @@ class Core:
 
     def start(self, task: str | None, at: int) -> dict:
         if self._session() is not None:
-            raise Refused("Une session est déjà en cours")
+            raise Refused("A session is already running")
         task = (task or "").strip() or None
         sid = self.store.create_session(task, at)
         self.store.set_session_env(sid, on_battery=1 if self.on_battery() else 0)
@@ -258,7 +258,7 @@ class Core:
     def pause(self, at: int) -> dict:
         s = self._session()
         if s is None:
-            raise Refused("Aucune session en cours")
+            raise Refused("No session running")
         if s["pause_started_at"] is not None:
             self.store.set_setting("autoPause", {})  # now the user's pause: no auto-resume
             return {"success": True}
@@ -270,7 +270,7 @@ class Core:
     def resume(self, at: int) -> dict:
         s = self._session()
         if s is None:
-            raise Refused("Aucune session en cours")
+            raise Refused("No session running")
         if s["pause_started_at"] is None:
             return {"success": True}
         total = s["total_pause_ms"] + max(0, at - s["pause_started_at"])
@@ -284,11 +284,11 @@ class Core:
     def end(self, at: int, reason: str = "manual") -> dict:
         s = self._session()
         if s is None:
-            raise Refused("Aucune session en cours")
+            raise Refused("No session running")
         ch = self.store.last_challenge(s["id"])
         if ch is not None and ch["state"] == "active":
             left = self._challenge_left(ch, s, at)
-            raise Refused(f"Défi en cours : encore {max(1, -(-left // 60))} min. Abandonne-le pour terminer.")
+            raise Refused(f"Challenge running: {max(1, -(-left // 60))} more min. Abandon it to end the session.")
         if ch is not None and ch["state"] == "offered":
             self.store.update_challenge(ch["id"], state="expired", ended_at=at)
         total = s["total_pause_ms"]
@@ -385,7 +385,7 @@ class Core:
             self.store.set_setting("hoursGoal", None)
             return {"success": True, "goal": None}
         if not isinstance(value, dict) or value.get("period") not in GOAL_LIMITS:
-            raise Refused("Objectif invalide")
+            raise Refused("Invalid goal")
         lo, hi = GOAL_LIMITS[value["period"]]
         hours = round(min(hi, max(lo, float(value.get("hours", 0)))) * 2) / 2
         goal = {"hours": hours, "period": value["period"]}
@@ -419,7 +419,7 @@ class Core:
 
     def set_hidden_apps(self, apps, at: int) -> dict:
         if not isinstance(apps, list) or not all(isinstance(a, str) for a in apps):
-            raise Refused("Liste d'apps invalide")
+            raise Refused("Invalid app list")
         clean = sorted({a.strip() for a in apps if a.strip()})
         self.store.set_setting("hiddenApps", clean)
         self._split(at)  # the focused app may have just become hidden, or visible
@@ -429,7 +429,7 @@ class Core:
         if not isinstance(aliases, dict) or not all(
             isinstance(k, str) and isinstance(v, str) for k, v in aliases.items()
         ):
-            raise Refused("Alias invalides")
+            raise Refused("Invalid aliases")
         clean = {k.strip(): v.strip() for k, v in aliases.items() if k.strip() and v.strip() and k.strip() != v.strip()}
         self.store.set_setting("aliases", clean)
         self._split(at)  # an alias can make the focused app hidden, or visible
@@ -522,9 +522,9 @@ class Core:
     def task_add(self, text, source, at: int) -> dict:
         text = (text or "").strip() if isinstance(text, str) else ""
         if not text:
-            raise Refused("Tâche vide")
+            raise Refused("Empty task")
         if len(text) > 500:
-            raise Refused("Tâche trop longue")
+            raise Refused("Task too long")
         source = source if source in ("manual", "obsidian", "procrastinated") else "manual"
         existing = self.store.open_task_by_text(text)
         if existing is not None:  # the same open task twice is never useful
@@ -534,11 +534,11 @@ class Core:
 
     def task_complete(self, tid, at: int) -> dict:
         if self._session() is None:
-            raise Refused("Lance une session pour cocher une tâche")
+            raise Refused("Start a session to check a task")
         row = self.store.db.execute("SELECT * FROM tasks WHERE id=?", (tid,)).fetchone() if isinstance(tid, str) else None
         xp = self.task_xp(row["created_at"], at) if row is not None else 0
         if row is None or not self.store.complete_task(tid, at, self._session()["id"], xp):
-            raise Refused("Tâche introuvable ou déjà faite")
+            raise Refused("Task not found or already done")
         if not self.store.open_tasks():  # the list just went empty by finishing, not deleting
             self.store.add_event("inbox_zero", at, self._session()["id"])
         return {"success": True, "xp": xp}
@@ -546,10 +546,10 @@ class Core:
     def task_reopen(self, tid) -> dict:
         """Back to the to-do list. Refused if the same text is already open."""
         if self._session() is None:
-            raise Refused("Lance une session pour modifier une tâche")
+            raise Refused("Start a session to change a task")
         row = self.store.db.execute("SELECT * FROM tasks WHERE id=?", (tid,)).fetchone() if isinstance(tid, str) else None
         if row is None or row["done_at"] is None:
-            raise Refused("Tâche introuvable ou déjà à faire")
+            raise Refused("Task not found or already to do")
         if self.store.open_task_by_text(row["text"]) is not None:
             # Already back in the list (e.g. procrastinated): drop the done copy.
             self.store.db.execute("DELETE FROM tasks WHERE id=?", (tid,))
@@ -559,7 +559,7 @@ class Core:
 
     def set_hidden_words(self, words, at: int) -> dict:
         if not isinstance(words, list) or not all(isinstance(w, str) for w in words):
-            raise Refused("Liste de mots invalide")
+            raise Refused("Invalid word list")
         clean, seen = [], set()
         for w in words:
             w = w.strip()
@@ -598,7 +598,7 @@ class Core:
 
     def set_day_start(self, hour, at: int) -> dict:
         if not isinstance(hour, (int, float)) or not 0 <= int(hour) <= 12:
-            raise Refused("Heure de début de journée invalide (0 à 12)")
+            raise Refused("Invalid day start hour (0 to 12)")
         self.store.set_setting("dayStartHour", int(hour))
         T.set_day_start_hour(int(hour))
         return {"success": True, "dayStartHour": T.day_start_hour()}
@@ -675,7 +675,7 @@ class Core:
         s = self._session()
         ch = self.store.last_challenge(s["id"]) if s is not None else None
         if ch is None or ch["state"] != "offered" or (cid is not None and ch["id"] != cid):
-            raise Refused("Aucun défi proposé")
+            raise Refused("No challenge offered")
         return s, ch
 
     def challenge_accept(self, cid, at: int) -> dict:
@@ -692,7 +692,7 @@ class Core:
         s = self._session()
         ch = self.store.last_challenge(s["id"]) if s is not None else None
         if ch is None or ch["state"] != "active":
-            raise Refused("Aucun défi en cours")
+            raise Refused("No challenge running")
         self.store.update_challenge(ch["id"], state="abandoned", ended_at=at)
         return {"success": True}
 
@@ -729,7 +729,7 @@ class Core:
     def task_delete(self, tid) -> dict:
         """Remove an open task, without checking it (so without its XP)."""
         if not isinstance(tid, str) or not self.store.delete_open_task(tid):
-            raise Refused("Tâche introuvable ou déjà faite")
+            raise Refused("Task not found or already done")
         return {"success": True}
 
     # ------------------------------------------------------------- presence
@@ -774,7 +774,7 @@ class Core:
     def set_presence_every(self, minutes) -> dict:
         lo, hi = PRESENCE_MINUTES_RANGE
         if not isinstance(minutes, (int, float)) or not lo <= int(minutes) <= hi:
-            raise Refused(f"Intervalle de présence invalide ({lo} à {hi} min)")
+            raise Refused(f"Invalid presence interval ({lo} to {hi} min)")
         self.store.set_setting("presenceEveryMinutes", int(minutes))
         return {"success": True, "minutes": int(minutes)}
 

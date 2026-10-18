@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS medals (
 );
 
 CREATE TABLE IF NOT EXISTS events (
-  kind       TEXT NOT NULL,      -- e.g. absent: paused for not answering "Toujours là ?"
+  kind       TEXT NOT NULL,      -- e.g. absent: paused for not answering "Still there?"
   at         INTEGER NOT NULL,
   session_id TEXT
 );

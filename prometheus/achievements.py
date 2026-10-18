@@ -97,7 +97,7 @@ class Context:
     goal_hours: float | None = None                          # daily goal, if any
     level: int = 1
     monotask: float = 0.0                                    # longest one-app stretch in a session, s
-    reflexes: int = 0                                        # "Toujours là ?" answered in < 10 s
+    reflexes: int = 0                                        # "Still there?" answered in < 10 s
     inbox_zero: int = 0                                      # times the to-do list was emptied
     put_off: list = field(default_factory=list)              # (task text, when) of procrastinated sessions
     switches: dict = field(default_factory=dict)             # session id -> app changes
@@ -768,7 +768,7 @@ FAMILIES: list[Family] = [
            ["Three postponements. You're not procrastinating, you're optimizing for optionality."],
            secret=True),
     Family("ghost", "Proof of absence", lambda c: c.absences or None, [10],
-           lambda t: "Proof of Absence", lambda t: "Get paused 10 times for not answering « Toujours là ? ».",
+           lambda t: "Proof of Absence", lambda t: "Get paused 10 times for not answering \"Still there?\".",
            ["Ten no-shows. Even your AFK has an AFK."], secret=True),
     Family("monotask", "Single thread", lambda c: c.monotask or None, [1 * H, 2 * H],
            lambda t: f"Single Thread {t / H:g} h", lambda t: f"Stay {t / H:g} h in one app during a session.",
@@ -873,7 +873,7 @@ FAMILIES: list[Family] = [
            ["One hour, barely a switch. Attention is the new oil and you're OPEC.",
             "{n} calm sessions. The attention economy wants a refund."]),
     Family("reflexes", "Quick draw", lambda c: c.reflexes or None, [1, 5, 10, 25, 50, 100, 200, 300, 400, 500],
-           lambda t: f"Quick Draw {t:g}", lambda t: f"Answer « Toujours là ? » in under 10 seconds, {t:g} times.",
+           lambda t: f"Quick Draw {t:g}", lambda t: f"Answer \"Still there?\" in under 10 seconds, {t:g} times.",
            ["Under ten seconds. Still here, still shipping.",
             "{n} quick answers. Your latency beats most governments' by a decade.",
             "{n} times in under 10 s. Neuralink, call this person."]),

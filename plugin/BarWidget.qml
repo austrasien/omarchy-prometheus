@@ -63,7 +63,7 @@ BarWidget {
 
   // ---- session names: every name a session was started with, how often
   // and when last, kept inline on this widget's shell.json entry. Feeds the
-  // suggestions and the autocompletion under "Sur quoi tu travailles".
+  // suggestions and the autocompletion under "What are you working on?".
   //
   //   [{ name, count, last (epoch ms) }]
   //
@@ -202,8 +202,8 @@ BarWidget {
   onGoalProgressChanged: {
     if (goalProgress < 1 || goalKey === "" || settings.goalNotifiedFor === goalKey) return
     root.writeSetting("goalNotifiedFor", goalKey)
-    var label = goal.goal.period === "day" ? "du jour" : goal.goal.period === "week" ? "de la semaine" : "du mois"
-    root.showToast("goal", "Objectif " + label + " atteint", goal.goal.hours + " h de focus")
+    var label = goal.goal.period === "day" ? "Daily" : goal.goal.period === "week" ? "Weekly" : "Monthly"
+    root.showToast("goal", label + " goal reached", goal.goal.hours + " h of focus")
   }
 
   Connections {
@@ -256,8 +256,8 @@ BarWidget {
   readonly property string checkGlyph: String.fromCodePoint(0xF012C)
   readonly property bool goalReached: goalTarget > 0 && goalProgress >= 1
   readonly property string goalHint: goalTarget <= 0 ? ""
-    : goalReached ? " · objectif atteint"
-    : " · " + p.formatShort(goalTarget - goalWorked) + " avant l'objectif"
+    : goalReached ? " · goal reached"
+    : " · " + p.formatShort(goalTarget - goalWorked) + " to goal"
 
   readonly property string lockGlyph: String.fromCodePoint(0xF033E)
 
@@ -268,9 +268,9 @@ BarWidget {
     + (goalReached ? "  " + checkGlyph : "")
 
   readonly property string tooltip: {
-    if (!p.session) return "Prometheus · aucune session · " + p.formatShort(p.todaySeconds) + " aujourd'hui" + goalHint
+    if (!p.session) return "Prometheus · no session · " + p.formatShort(p.todaySeconds) + " today" + goalHint
     var task = p.session.task || "Session"
-    return task + (p.paused ? (p.autoPauseLabel ? " (en pause : " + p.autoPauseLabel + ")" : " (en pause)") : "") + " · " + p.formatShort(p.todaySeconds) + " aujourd'hui" + goalHint
+    return task + (p.paused ? (p.autoPauseLabel ? " (paused: " + p.autoPauseLabel + ")" : " (paused)") : "") + " · " + p.formatShort(p.todaySeconds) + " today" + goalHint
   }
 
   WidgetButton {
@@ -317,7 +317,7 @@ BarWidget {
     Behavior on width { NumberAnimation { duration: 400; easing.type: Easing.OutCubic } }
   }
 
-  // ---- presence check: "Toujours là ?" unrolls after the timer. Hovered it
+  // ---- presence check: "Still there?" unrolls after the timer. Hovered it
   // turns green; a click says yes. Unanswered for 3 min it flashes white and
   // green; at 4 min the daemon pauses the session.
 
@@ -344,7 +344,7 @@ BarWidget {
     font.family: root.fontFamily
     font.pixelSize: Style.font.caption
     font.bold: true
-    text: "Toujours là ?"
+    text: "Still there?"
   }
 
   Item {
@@ -374,7 +374,7 @@ BarWidget {
     Text {
       anchors.centerIn: parent
       textFormat: Text.PlainText
-      text: "Toujours là ?"
+      text: "Still there?"
       color: root.flashOn && !presencePill.hovered ? "#1a1b26" : presencePill.hovered || root.presenceFlashing ? root.green : root.fg
       font: presenceMetrics.font
     }
@@ -440,8 +440,8 @@ BarWidget {
       opacity: pill.hovered ? 0 : 1
       textFormat: Text.PlainText
       text: !p.challenge ? ""
-        : "Défi " + (p.challenge.index || 1) + "/" + (p.challenge.max || 3) + " : "
-          + p.challenge.minutes + " min de plus, +" + p.challenge.xp + " XP ?"
+        : "Challenge " + (p.challenge.index || 1) + "/" + (p.challenge.max || 3) + ": "
+          + p.challenge.minutes + " more min, +" + p.challenge.xp + " XP?"
       color: root.gold
       font: pillMetrics.font
       Behavior on opacity { NumberAnimation { duration: 120 } }
@@ -622,10 +622,10 @@ BarWidget {
 
       readonly property var tabs: [
         { value: "session", label: "Session" },
-        { value: "tasks", label: "Tâches", tooltip: p.session ? "" : "Disponible pendant une session" },
+        { value: "tasks", label: "Tasks", tooltip: p.session ? "" : "Available during a session" },
         { value: "stats", label: "Stats" },
-        { value: "achievements", label: "Succès" },
-        { value: "settings", label: "Réglages" }
+        { value: "achievements", label: "Achievements" },
+        { value: "settings", label: "Settings" }
       ]
       readonly property var current: root.tab === "tasks" ? tasksTab
         : root.tab === "stats" ? statsTab
@@ -720,7 +720,7 @@ BarWidget {
                   id: levelText
                   anchors.left: parent.left
                   textFormat: Text.PlainText
-                  text: p.profile ? "Niveau " + p.profile.level : ""
+                  text: p.profile ? "Level " + p.profile.level : ""
                   color: root.gold
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.body
@@ -731,7 +731,7 @@ BarWidget {
                   anchors.right: parent.right
                   anchors.verticalCenter: levelText.verticalCenter
                   textFormat: Text.PlainText
-                  text: p.profile ? p.profile.levelXp + " / " + p.profile.levelCost + " XP  ·  " + p.profile.xp + " au total" : ""
+                  text: p.profile ? p.profile.levelXp + " / " + p.profile.levelCost + " XP  ·  " + p.profile.xp + " total" : ""
                   color: Util.alpha(root.fg, 0.6)
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.caption
@@ -765,6 +765,23 @@ BarWidget {
               property string hovered: ""
 
               readonly property int perRow: 6
+
+              function legendFor(m) {
+                return m.name + (m.count > 1 ? " ×" + m.count : "") + " · " + m.desc
+                  + (m.current ? " · won " + (m.period === "day" ? "today" : m.period === "week" ? "this week" : "this month") : "")
+              }
+
+              // The legend's reserved height: the tallest of all possible
+              // legends, wrapped at the panel width. Measured off-screen.
+              property real legendHeight: 0
+              function measureLegends() {
+                var h = 0
+                for (var i = 0; i < legendProbe.count; i++) {
+                  var it = legendProbe.itemAt(i)
+                  if (it) h = Math.max(h, it.implicitHeight)
+                }
+                legendHeight = h
+              }
               // Monthly, weekly then daily medals (the daemon's order), each
               // group on its own rows; a small gap opens between groups.
               readonly property var rows: {
@@ -807,9 +824,7 @@ BarWidget {
                       MouseArea {
                         anchors.fill: parent
                         hoverEnabled: true
-                        onEntered: placard.hovered = modelData.name + (modelData.count > 1 ? " ×" + modelData.count : "")
-                          + " · " + modelData.desc
-                          + (modelData.current ? " · won " + (modelData.period === "day" ? "today" : modelData.period === "week" ? "this week" : "this month") : "")
+                        onEntered: placard.hovered = placard.legendFor(modelData)
                         onExited: placard.hovered = ""
                       }
                     }
@@ -818,17 +833,43 @@ BarWidget {
                 }
               }
 
-              // Always laid out (a blank line when nothing is hovered): the
-              // space stays reserved, so the panel does not jump on hover.
+              // Hidden probes, one per legend, to size the reserved space.
+              Item {
+                width: parent.width
+                height: 0
+                visible: false
+
+                Repeater {
+                  id: legendProbe
+                  model: p.medals
+
+                  Text {
+                    required property var modelData
+                    width: placard.width
+                    wrapMode: Text.WordWrap
+                    horizontalAlignment: Text.AlignHCenter
+                    textFormat: Text.PlainText
+                    text: placard.legendFor(modelData)
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    onImplicitHeightChanged: Qt.callLater(placard.measureLegends)
+                  }
+                }
+              }
+
+              // Always laid out, as tall as the longest legend: the space
+              // stays reserved, so the panel does not jump on hover.
               Text {
                 width: parent.width
+                height: Math.max(implicitHeight, placard.legendHeight)
+                wrapMode: Text.WordWrap
+                verticalAlignment: Text.AlignTop
                 horizontalAlignment: Text.AlignHCenter
                 textFormat: Text.PlainText
                 text: placard.hovered !== "" ? placard.hovered : " "
                 color: Util.alpha(root.fg, 0.6)
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
-                elide: Text.ElideRight
               }
             }
 
@@ -868,7 +909,7 @@ BarWidget {
                 anchors.rightMargin: Style.space(8)
                 anchors.verticalCenter: parent.verticalCenter
                 textFormat: Text.PlainText
-                text: p.idle ? "Inactif : le temps ne compte pas" : p.window ? "Suivi : " + (p.window.app || "?") : ""
+                text: p.idle ? "Idle: time is not counted" : p.window ? "Tracking: " + (p.window.app || "?") : ""
                 color: Util.alpha(root.fg, 0.5)
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
@@ -878,7 +919,7 @@ BarWidget {
               Button {
                 id: journalButton
                 anchors.right: parent.right
-                text: "Note du jour"
+                text: "Daily note"
                 foreground: root.fg
                 accent: root.accent
                 onClicked: {

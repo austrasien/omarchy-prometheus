@@ -77,7 +77,7 @@ class ServerTest(unittest.IsolatedAsyncioTestCase):
             elif msg.get("id") == 3:
                 end = msg
         self.assertEqual(end["data"]["recap"]["task"], "Écrire")
-        self.assertEqual(toast["title"], "Session terminée")
+        self.assertEqual(toast["title"], "Session ended")
         await self.call(reader, writer, 4, "session:start", ["Plus tard"])
         later = await self.call(reader, writer, 5, "session:end", ["procrastinated"])
         self.assertEqual(later["data"]["recap"]["reason"], "procrastinated")

@@ -42,7 +42,7 @@ Item {
           root.error = ""
         } catch (e) {
           root.open = []
-          root.error = "Lecture du journal impossible"
+          root.error = "Could not read the journal"
         }
       }
     }

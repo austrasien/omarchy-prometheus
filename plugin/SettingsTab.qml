@@ -18,7 +18,7 @@ Column {
   property var known: []       // [{ app, alias, seconds }] seen over 30 days
   property var words: []       // forbidden words in window titles
   property int dayStart: 5     // hour the day starts at
-  property int presenceEvery: 20   // minutes between "Toujours là ?" checks
+  property int presenceEvery: 20   // minutes between "Still there?" checks
 
   readonly property bool editing: hideField.activeFocus || wordField.activeFocus || aliasFrom.activeFocus || aliasTo.activeFocus
   spacing: Style.space(10)
@@ -46,7 +46,7 @@ Column {
   }
 
   function setAliases(map) {
-    p.act("apps:setAliases", [map], "Alias", function(d) {
+    p.act("apps:setAliases", [map], "Aliases", function(d) {
       tab.aliases = d ? d.aliases || {} : {}
       p.call("apps:known", [30], function(ok, k) { if (ok && k && k.success) tab.known = k.apps || [] })
     })
@@ -55,7 +55,7 @@ Column {
   function setDayStart(hour) {
     var h = Math.max(0, Math.min(12, hour))
     if (h === dayStart) return
-    p.act("settings:setDayStart", [h], "Début de journée", function(d) {
+    p.act("settings:setDayStart", [h], "Day start", function(d) {
       if (d) tab.dayStart = d.dayStartHour
       w.refreshGoal()
     })
@@ -64,11 +64,11 @@ Column {
   function setPresenceEvery(minutes) {
     var m = Math.max(5, Math.min(120, minutes))
     if (m === presenceEvery) return
-    p.act("settings:setPresenceEvery", [m], "Présence", function(d) { if (d) tab.presenceEvery = d.minutes })
+    p.act("settings:setPresenceEvery", [m], "Presence", function(d) { if (d) tab.presenceEvery = d.minutes })
   }
 
   function setWords(list) {
-    p.act("apps:setHiddenWords", [list], "Mots interdits", function(d) { tab.words = d ? d.hiddenTitleWords || [] : [] })
+    p.act("apps:setHiddenWords", [list], "Forbidden words", function(d) { tab.words = d ? d.hiddenTitleWords || [] : [] })
   }
 
   function addWord() {
@@ -102,16 +102,16 @@ Column {
 
   function setGoal(period, hours) {
     if (period === "off") {
-      p.act("hoursGoal:set", ["off"], "Objectif", function(d) { tab.applyGoal(null); w.refreshGoal() })
+      p.act("hoursGoal:set", ["off"], "Goal", function(d) { tab.applyGoal(null); w.refreshGoal() })
       return
     }
     var lim = goalLimits[period]
     var h = Math.round(Math.min(lim[1], Math.max(lim[0], hours)) * 2) / 2
-    p.act("hoursGoal:set", [{ hours: h, period: period }], "Objectif", function(d) { tab.applyGoal(d ? d.goal : null); w.refreshGoal() })
+    p.act("hoursGoal:set", [{ hours: h, period: period }], "Goal", function(d) { tab.applyGoal(d ? d.goal : null); w.refreshGoal() })
   }
 
   function setHidden(list) {
-    p.act("apps:setHidden", [list], "Apps masquées", function(d) { tab.hidden = d ? d.hiddenApps || [] : [] })
+    p.act("apps:setHidden", [list], "Hidden apps", function(d) { tab.hidden = d ? d.hiddenApps || [] : [] })
   }
 
   function hideTyped() {
@@ -128,7 +128,7 @@ Column {
 
   // ---- day start
   PanelSectionHeader {
-    text: "DÉBUT DE JOURNÉE"
+    text: "DAY START"
     foreground: w.fg
     fontFamily: w.fontFamily
   }
@@ -137,7 +137,7 @@ Column {
     width: parent.width
     wrapMode: Text.WordWrap
     textFormat: Text.PlainText
-    text: "Avant cette heure, le temps compte pour la veille : une soirée jusqu'à 1 h reste dans la même journée."
+    text: "Before this hour, time counts for the day before: a night working until 1:00 stays with its evening."
     color: Util.alpha(w.fg, 0.55)
     font.family: w.fontFamily
     font.pixelSize: Style.font.caption
@@ -179,7 +179,7 @@ Column {
 
   // ---- presence check
   PanelSectionHeader {
-    text: "VÉRIFICATION DE PRÉSENCE"
+    text: "PRESENCE CHECK"
     foreground: w.fg
     fontFamily: w.fontFamily
   }
@@ -188,7 +188,7 @@ Column {
     width: parent.width
     wrapMode: Text.WordWrap
     textFormat: Text.PlainText
-    text: "Pendant une session, « Toujours là ? » s'affiche à cet intervalle. Sans réponse en 4 min, la session se met en pause."
+    text: "During a session, \"Still there?\" shows up at this interval. Unanswered for 4 min, the session pauses."
     color: Util.alpha(w.fg, 0.55)
     font.family: w.fontFamily
     font.pixelSize: Style.font.caption
@@ -230,17 +230,17 @@ Column {
 
   // ---- hours goal
   PanelSectionHeader {
-    text: "OBJECTIF D'HEURES"
+    text: "HOURS GOAL"
     foreground: w.fg
     fontFamily: w.fontFamily
   }
 
   ButtonGroup {
     options: [
-      { value: "off", label: "Aucun" },
-      { value: "day", label: "Jour" },
-      { value: "week", label: "Semaine" },
-      { value: "month", label: "Mois" }
+      { value: "off", label: "None" },
+      { value: "day", label: "Day" },
+      { value: "week", label: "Week" },
+      { value: "month", label: "Month" }
     ]
     value: tab.goalPeriod
     foreground: w.fg
@@ -288,7 +288,7 @@ Column {
 
   // ---- hidden apps
   PanelSectionHeader {
-    text: "APPS NON ENREGISTRÉES"
+    text: "APPS NEVER RECORDED"
     foreground: w.fg
     fontFamily: w.fontFamily
   }
@@ -297,7 +297,7 @@ Column {
     width: parent.width
     wrapMode: Text.WordWrap
     textFormat: Text.PlainText
-    text: "Le temps passé dans ces apps n'est ni compté ni écrit sur le disque."
+    text: "Time spent in these apps is neither counted nor written to disk."
     color: Util.alpha(w.fg, 0.55)
     font.family: w.fontFamily
     font.pixelSize: Style.font.caption
@@ -310,7 +310,7 @@ Column {
     TextField {
       id: hideField
       width: parent.width - hideButton.width - currentButton.width - 2 * parent.spacing
-      placeholderText: "Nom de l'app"
+      placeholderText: "App name"
       foreground: w.fg
       accent: w.accent
       font.family: w.fontFamily
@@ -321,7 +321,7 @@ Column {
     Button {
       id: hideButton
       anchors.verticalCenter: hideField.verticalCenter
-      text: "Masquer"
+      text: "Hide"
       foreground: w.fg
       accent: w.accent
       bordered: true
@@ -331,8 +331,8 @@ Column {
     Button {
       id: currentButton
       anchors.verticalCenter: hideField.verticalCenter
-      text: "Actuelle"
-      tooltipText: p.window ? "Masquer " + p.window.app : ""
+      text: "Current"
+      tooltipText: p.window ? "Hide " + p.window.app : ""
       foreground: w.fg
       accent: w.accent
       bordered: true
@@ -386,7 +386,7 @@ Column {
 
   // ---- forbidden title words
   PanelSectionHeader {
-    text: "MOTS INTERDITS DANS LES TITRES"
+    text: "FORBIDDEN WORDS IN TITLES"
     foreground: w.fg
     fontFamily: w.fontFamily
   }
@@ -395,7 +395,7 @@ Column {
     width: parent.width
     wrapMode: Text.WordWrap
     textFormat: Text.PlainText
-    text: "Une fenêtre dont le titre contient l'un de ces mots n'est ni comptée ni écrite sur le disque. Majuscules ignorées."
+    text: "A window whose title contains one of these words is neither counted nor written to disk. Case is ignored."
     color: Util.alpha(w.fg, 0.55)
     font.family: w.fontFamily
     font.pixelSize: Style.font.caption
@@ -408,7 +408,7 @@ Column {
     TextField {
       id: wordField
       width: parent.width - wordButton.width - parent.spacing
-      placeholderText: "Mot ou expression"
+      placeholderText: "Word or phrase"
       foreground: w.fg
       accent: w.accent
       font.family: w.fontFamily
@@ -419,7 +419,7 @@ Column {
     Button {
       id: wordButton
       anchors.verticalCenter: wordField.verticalCenter
-      text: "Ajouter"
+      text: "Add"
       foreground: w.fg
       accent: w.accent
       bordered: true
@@ -473,7 +473,7 @@ Column {
 
   // ---- aliases
   PanelSectionHeader {
-    text: "RENOMMER OU REGROUPER"
+    text: "RENAME OR MERGE"
     foreground: w.fg
     fontFamily: w.fontFamily
   }
@@ -482,7 +482,7 @@ Column {
     width: parent.width
     wrapMode: Text.WordWrap
     textFormat: Text.PlainText
-    text: "Donne le même nom à plusieurs apps pour les additionner. S'applique aussi au passé."
+    text: "Give several apps the same name to add them up. Applies to the past too."
     color: Util.alpha(w.fg, 0.55)
     font.family: w.fontFamily
     font.pixelSize: Style.font.caption
@@ -516,7 +516,7 @@ Column {
     TextField {
       id: aliasTo
       width: aliasFrom.width
-      placeholderText: "Nouveau nom"
+      placeholderText: "New name"
       foreground: w.fg
       accent: w.accent
       font.family: w.fontFamily
