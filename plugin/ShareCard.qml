@@ -359,7 +359,7 @@ Rectangle {
     // League stamps: one per shining league, inked for each round finished
     // in it.
     Text {
-      visible: !!card.info && !!card.info.stamps
+      visible: !!card.info && !!card.info.stamps && card.info.stamps.length > 0
       topPadding: 4
       textFormat: Text.PlainText
       text: "LEAGUE STAMPS"
@@ -370,7 +370,7 @@ Rectangle {
       font.letterSpacing: 1.5
     }
     Row {
-      visible: !!card.info && !!card.info.stamps
+      visible: !!card.info && !!card.info.stamps && card.info.stamps.length > 0
       spacing: 6
       Repeater {
         model: card.info && card.info.stamps ? card.info.stamps : []

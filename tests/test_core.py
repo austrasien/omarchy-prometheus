@@ -482,8 +482,7 @@ class CoreTest(unittest.TestCase):
         self.assertTrue(card["firstDay"])
         self.assertTrue(card["seasons"][0]["running"])
         self.assertEqual(card["format"], "gif")
-        self.assertEqual([st["name"] for st in card["stamps"]], ["Emerald", "Amethyst", "Pearl", "Obsidian", "Diamond"])
-        self.assertEqual(sum(st["count"] for st in card["stamps"]), 0)
+        self.assertEqual(card["stamps"], [])          # none earned: none shown
         self.core.set_share_format("apng")
         self.assertEqual(self.core.share(self.at(61))["format"], "apng")
         with self.assertRaises(Refused):

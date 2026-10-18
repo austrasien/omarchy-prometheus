@@ -645,9 +645,12 @@ class Core:
         leagues = C.leagues(ledger)
         league = leagues["current"]
         # A stamp for each shining league, inked once per round finished in it.
+        # Only leagues with at least one round finished in them, the rarest
+        # (highest) first.
         stamps = [{"index": i, "name": C.LEAGUES[i], "color": C.LEAGUE_COLORS[i],
                    "count": sum(1 for w in leagues["history"] if w["before"] == i)}
-                  for i in range(C.SHINING_FROM, len(C.LEAGUES))]
+                  for i in reversed(range(C.SHINING_FROM, len(C.LEAGUES)))]
+        stamps = [st for st in stamps if st["count"] > 0]
         seasons = C.seasons(ledger)
         first = ledger.first_day
         return {
