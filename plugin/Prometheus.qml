@@ -32,6 +32,7 @@ Item {
   property bool idle: false
   property var profile: null      // { xp, level, levelXp, levelCost, focusXp, taskXp, challengeXp }
   property var challenge: null    // { id, state: offered | active, minutes, xp, remainingSeconds }
+  property var presence: null     // { askedAt, flashing, pauseAt } while "still there?" is asked
   property var history: []        // seven { date, minutes }, oldest first
   property var apps: []           // today's top five { app, seconds }
   property int trackedSeconds: 0
@@ -158,6 +159,7 @@ Item {
     assign("idle", !!state.idle)
     assign("profile", state.profile || null)
     assign("challenge", state.challenge || null)
+    assign("presence", state.presence || null)
     assign("history", state.history || [])
     assign("apps", state.apps || [])
     assign("trackedSeconds", state.trackedSeconds || 0)
@@ -175,6 +177,7 @@ Item {
     idle = false
     profile = null
     challenge = null
+    presence = null
     history = []
     apps = []
     trackedSeconds = 0
@@ -223,6 +226,8 @@ Item {
   function acceptChallenge() { if (challenge) act("challenge:accept", [challenge.id], "Défi") }
   function declineChallenge() { if (challenge) act("challenge:decline", [challenge.id], "Défi") }
   function abandonChallenge() { act("challenge:abandon", [], "Défi") }
+
+  function confirmPresence() { act("presence:confirm", [], "Présence") }
 
   // ------------------------------------------------------------------ idle
 

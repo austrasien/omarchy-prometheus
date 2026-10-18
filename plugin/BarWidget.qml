@@ -248,6 +248,7 @@ BarWidget {
 
   visible: p.live
   implicitWidth: button.implicitWidth
+    + (presencePill.width > 0 ? presencePill.width + Style.space(2) : 0)
     + (pill.width > 0 ? pill.width + Style.space(2) : 0)
     + (toastPill.width > 0 ? toastPill.width + Style.space(4) : 0)
   implicitHeight: button.implicitHeight
@@ -316,6 +317,78 @@ BarWidget {
     Behavior on width { NumberAnimation { duration: 400; easing.type: Easing.OutCubic } }
   }
 
+  // ---- presence check: "Toujours là ?" unrolls after the timer. Hovered it
+  // turns green; a click says yes. Unanswered for 3 min it flashes white and
+  // green; at 4 min the daemon pauses the session.
+
+  readonly property bool presenceWanted: !!p.presence && !root.vertical
+  property real presenceShown: presenceWanted ? 1 : 0
+  Behavior on presenceShown { NumberAnimation { duration: 450; easing.type: Easing.OutCubic } }
+
+  // The daemon pushes state every 2 s; the flash starts on time from the clock.
+  property bool presenceFlashing: false
+  property bool flashOn: false
+  Timer {
+    interval: 500
+    repeat: true
+    running: root.presenceWanted
+    onTriggered: {
+      root.presenceFlashing = !!p.presence && (p.presence.flashing || Date.now() - p.presence.askedAt >= 180000)
+      root.flashOn = root.presenceFlashing ? !root.flashOn : false
+    }
+    onRunningChanged: if (!running) { root.presenceFlashing = false; root.flashOn = false }
+  }
+
+  TextMetrics {
+    id: presenceMetrics
+    font.family: root.fontFamily
+    font.pixelSize: Style.font.caption
+    font.bold: true
+    text: "Toujours là ?"
+  }
+
+  Item {
+    id: presencePill
+    anchors.left: button.right
+    anchors.leftMargin: Style.space(2)
+    anchors.verticalCenter: button.verticalCenter
+    readonly property real fullWidth: presenceMetrics.advanceWidth + Style.space(22)
+    readonly property bool hovered: presenceArea.containsMouse
+    width: Math.round(fullWidth * root.presenceShown)
+    height: Math.round(button.height * 0.62)
+    visible: width > 0
+    clip: true
+
+    Rectangle {
+      anchors.fill: parent
+      radius: height / 2
+      color: presencePill.hovered ? Util.alpha(root.green, 0.35)
+        : root.flashOn ? Util.alpha("white", 0.85)
+        : root.presenceFlashing ? Util.alpha(root.green, 0.55)
+        : Util.alpha(root.fg, 0.1)
+      border.width: 1
+      border.color: presencePill.hovered || root.presenceFlashing ? root.green : Util.alpha(root.fg, 0.4)
+      Behavior on color { ColorAnimation { duration: 150 } }
+    }
+
+    Text {
+      anchors.centerIn: parent
+      textFormat: Text.PlainText
+      text: "Toujours là ?"
+      color: root.flashOn && !presencePill.hovered ? "#1a1b26" : presencePill.hovered || root.presenceFlashing ? root.green : root.fg
+      font: presenceMetrics.font
+    }
+
+    MouseArea {
+      id: presenceArea
+      anchors.fill: parent
+      enabled: root.presenceWanted
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onClicked: p.confirmPresence()
+    }
+  }
+
   // ---- extension challenge offer: a pill that unrolls after the timer.
   // Hovered, it splits in two: a red cross to decline, a green check to
   // accept. Horizontal bars only.
@@ -337,7 +410,7 @@ BarWidget {
 
   Item {
     id: pill
-    anchors.left: button.right
+    anchors.left: presencePill.width > 0 ? presencePill.right : button.right
     anchors.leftMargin: Style.space(2)
     anchors.verticalCenter: button.verticalCenter
     readonly property real fullWidth: pillMetrics.advanceWidth + Style.space(22)
@@ -447,7 +520,7 @@ BarWidget {
   }
 
   function toastColor(kind) {
-    return kind === "error" ? root.red : kind === "ended" ? root.green : root.gold
+    return kind === "error" || kind === "absent" ? root.red : kind === "ended" ? root.green : root.gold
   }
 
   Timer {

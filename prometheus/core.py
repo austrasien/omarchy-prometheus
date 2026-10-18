@@ -26,6 +26,13 @@ CHALLENGE_BASE_XP = 2               # bonus of the first challenge of a session
 CHALLENGE_XP_GROWTH = 1.5           # each chained challenge is worth 1.5x the previous
 CHALLENGE_MAX_PER_SESSION = 3
 CHALLENGE_OFFER_TTL_MS = 5 * 60 * 1000
+
+# Presence check: a running session asks "still there?" every so often (a
+# playing video keeps idle away, so idle alone cannot tell). Unanswered, the
+# pill flashes, then the session pauses, backdated to when it asked.
+PRESENCE_EVERY_MS = 45 * 60 * 1000
+PRESENCE_FLASH_AFTER_MS = 3 * 60 * 1000
+PRESENCE_TIMEOUT_MS = 4 * 60 * 1000
 GOAL_LIMITS = {"day": (0.5, 16), "week": (1, 80), "month": (1, 368)}
 
 
@@ -48,6 +55,8 @@ class Core:
         self.idle = False
         self.locked = False
         self.last_resume_at = 0       # a backdated auto-pause never reaches before this
+        self.presence_since = None    # last proof of presence for the running session
+        self.presence_asked_at = None
         self.span_id: int | None = None
         self.span_app: str | None = None
         self.last_tick: int | None = None
@@ -209,6 +218,7 @@ class Core:
             total = s["total_pause_ms"] + max(0, at - s["pause_started_at"])
             self.store.set_pause(s["id"], None, total)
             self.last_resume_at = at
+            self._present(at)
 
     def _sleep_gap(self, last: int, at: int) -> None:
         s = self._session()
@@ -230,6 +240,7 @@ class Core:
         self.store.create_session(task, at)
         self.store.set_setting("autoPause", {})
         self.last_resume_at = at
+        self._present(at)
         self._split(at)
         return {"success": True}
 
@@ -255,6 +266,7 @@ class Core:
         self.store.set_pause(s["id"], None, total)
         self.store.set_setting("autoPause", {})
         self.last_resume_at = at
+        self._present(at)
         self._split(at)
         return {"success": True}
 
@@ -328,6 +340,7 @@ class Core:
             "authenticated": True,
             "profile": self.profile(at),
             "challenge": self.challenge_state(at),
+            "presence": self.presence_state(at),
             "session": self._session_state(),
             "today": {"sessions": len(closed), "seconds": sum(session_seconds(r) for r in closed)},
             "window": {"app": self.alias(w.app), "title": w.title} if w else None,
@@ -677,4 +690,43 @@ class Core:
         """Remove an open task, without checking it (so without its XP)."""
         if not isinstance(tid, str) or not self.store.delete_open_task(tid):
             raise Refused("Tâche introuvable ou déjà faite")
+        return {"success": True}
+
+    # ------------------------------------------------------------- presence
+
+    def _present(self, at: int) -> None:
+        self.presence_since = at
+        self.presence_asked_at = None
+
+    def presence_state(self, at: int) -> dict | None:
+        if self.presence_asked_at is None:
+            return None
+        waited = at - self.presence_asked_at
+        return {"askedAt": self.presence_asked_at, "flashing": waited >= PRESENCE_FLASH_AFTER_MS,
+                "pauseAt": self.presence_asked_at + PRESENCE_TIMEOUT_MS}
+
+    def update_presence(self, at: int) -> list[tuple[str, dict]]:
+        """Ask, then pause after the timeout. Returns events to announce."""
+        s = self._session()
+        if s is None or s["pause_started_at"] is not None:
+            self.presence_asked_at = None
+            return []
+        if self.presence_since is None:
+            self.presence_since = at
+        if self.presence_asked_at is None:
+            if at - self.presence_since >= PRESENCE_EVERY_MS:
+                self.presence_asked_at = at
+                return [("presence", {})]
+            return []
+        if at - self.presence_asked_at >= PRESENCE_TIMEOUT_MS:
+            start = max(self.presence_asked_at, s["started_at"], self.last_resume_at)
+            self.store.set_pause(s["id"], start, s["total_pause_ms"])
+            self.store.set_setting("autoPause", {})   # a plain pause: resumed by hand
+            self.presence_asked_at = None
+            self._split(at)
+            return [("absent", {})]
+        return []
+
+    def presence_confirm(self, at: int) -> dict:
+        self._present(at)
         return {"success": True}

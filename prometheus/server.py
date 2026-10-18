@@ -83,6 +83,7 @@ class Daemon:
             "challenge:accept": lambda a: self.core.challenge_accept(a[0] if a else None, self.clock()),
             "challenge:decline": lambda a: self.core.challenge_decline(a[0] if a else None, self.clock()),
             "challenge:abandon": lambda a: self.core.challenge_abandon(self.clock()),
+            "presence:confirm": lambda a: self.core.presence_confirm(self.clock()),
             "tasks:list": lambda a: self.core.tasks_list(self.clock()),
             "tasks:add": lambda a: self.core.task_add(a[0] if a else "", a[1] if len(a) > 1 else "manual", self.clock()),
             "tasks:complete": lambda a: self.core.task_complete(a[0] if a else None, self.clock()),
@@ -207,7 +208,8 @@ class Daemon:
         while True:
             await asyncio.sleep(PUSH_INTERVAL)
             try:
-                for kind, info in self.core.update_challenge(self.clock()):
+                now = self.clock()
+                for kind, info in self.core.update_challenge(now) + self.core.update_presence(now):
                     self.announce(kind, info)
             except Exception:
                 log.exception("challenge update failed")
@@ -220,6 +222,8 @@ class Daemon:
         # challenge is told in the bar too.
         if kind == "won":
             self.toast("won", "Défi réussi", f"+{info['xp']} XP")
+        elif kind == "absent":
+            self.toast("absent", "Session en pause", "pas de réponse à « Toujours là ? »")
 
     # ---------------------------------------------------------------- toasts
     # Short messages for the bar plugin to show next to the timer; no

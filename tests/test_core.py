@@ -423,6 +423,28 @@ class CoreTest(unittest.TestCase):
         with self.assertRaises(Refused):
             c.task_delete(t["id"])
 
+    def test_presence_check(self):
+        from prometheus import core as K
+        c = self.core
+        c.on_window(Window("YouTube"), self.at(0))
+        c.start("s", self.at(0))
+        self.assertEqual(c.update_presence(self.at(44)), [])
+        self.assertEqual(c.update_presence(self.at(45))[0][0], "presence")
+        self.assertFalse(c.state(self.at(46))["presence"]["flashing"])
+        self.assertTrue(c.state(self.at(48))["presence"]["flashing"])
+        c.presence_confirm(self.at(48))                        # still there
+        self.assertIsNone(c.state(self.at(48))["presence"])
+        self.assertEqual(c.update_presence(self.at(48 + 44)), [])
+        self.assertEqual(c.update_presence(self.at(48 + 45))[0][0], "presence")
+        ev = c.update_presence(self.at(48 + 49))               # no answer in 4 min
+        self.assertEqual(ev[0][0], "absent")
+        st = c.state(self.at(100))["session"]
+        self.assertEqual(st["pauseStartedAt"], self.at(48 + 45))   # backdated to the question
+        self.assertEqual(st["autoPaused"], [])                     # resumed by hand only
+        c.resume(self.at(110))
+        recap = c.end(self.at(110))["recap"]
+        self.assertEqual(recap["durationSeconds"], (48 + 45) * 60)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -20,6 +20,10 @@ only what was actually used.
   are never attributed to an app. They also pause the running session by
   themselves; such a pause resumes by itself when you are back, while a
   pause you make by hand never does.
+- **Presence check**: every 45 min of running session, a pill asks "Toujours
+  là ?". A click keeps going; unanswered, it flashes from the 3rd minute and
+  the session pauses at the 4th, backdated to the question (a playing video
+  keeps idle away, so idle alone cannot tell).
 - **Privacy**: apps that are never recorded, and words that keep a window
   out of the records when its title contains them (a bank, say).
 - **Aliases**: rename or merge apps; applied when reading, so they rewrite
@@ -97,6 +101,7 @@ bar (session ended, challenge won).
 | `activity:idle` | `[bool, idleSeconds]` | Idle since `idleSeconds` ago |
 | `challenge:accept`, `challenge:decline` | `[id]` | Answer the extension challenge offer |
 | `challenge:abandon` | | Give up a running challenge (no bonus) |
+| `presence:confirm` | | Answer "Toujours là ?" |
 | `tasks:list` | | Open tasks with their XP, and the ones done today |
 | `tasks:add` | `[text, source]` | `source`: manual, obsidian, procrastinated; an open duplicate is not added |
 | `tasks:complete` | `[id]` | Only during a session |
