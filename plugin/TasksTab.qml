@@ -65,9 +65,13 @@ Column {
     else add(addField.text, "manual")
   }
 
-  function complete(task) {
+  // `from`: the item the XP flies from (the row's laurel).
+  function complete(task, from) {
     if (!active) return
-    p.act("tasks:complete", [task.id], "Task", tab.refresh)
+    p.act("tasks:complete", [task.id], "Task", function(d) {
+      if (from && d && d.xp) w.xpGained(from, d.xp)
+      tab.refresh()
+    })
   }
 
   // Deleting drops a task without checking it, so without its XP.
@@ -361,7 +365,7 @@ Column {
               anchors.fill: parent
               hoverEnabled: true
               cursorShape: Qt.PointingHandCursor
-              onClicked: row.isDone ? tab.reopen(row.task) : tab.complete(row.task)
+              onClicked: row.isDone ? tab.reopen(row.task) : tab.complete(row.task, laurel)
             }
           }
         }

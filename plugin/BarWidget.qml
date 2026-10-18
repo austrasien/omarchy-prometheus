@@ -226,6 +226,10 @@ BarWidget {
   property bool panelOpen: false
   // Panel tab, kept across openings.
   property string tab: "session"
+
+  // XP just earned from an item of the panel (e.g. a task's laurel): the
+  // panel flies it up into the XP bar, which then pulses.
+  signal xpGained(var source, int xp)
   property bool popoutSwitchClosing: false
   readonly property bool opened: panelOpen
 
@@ -713,6 +717,64 @@ BarWidget {
           }
         }
 
+        // Flying "+N XP" labels, above the panel content.
+        Item {
+          id: fxLayer
+          anchors.fill: parent
+          z: 20
+        }
+
+        Component {
+          id: xpFlyer
+
+          Text {
+            id: flyer
+            property real fromX: 0
+            property real fromY: 0
+            property real toX: 0
+            property real toY: 0
+            x: fromX
+            y: fromY
+            textFormat: Text.PlainText
+            color: root.gold
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.body
+            font.bold: true
+            style: Text.Outline
+            styleColor: Util.alpha("black", 0.5)
+
+            SequentialAnimation {
+              running: true
+              // A little hop, then an arc up into the bar, shrinking.
+              ParallelAnimation {
+                NumberAnimation { target: flyer; property: "y"; to: flyer.fromY - Style.space(14); duration: 180; easing.type: Easing.OutQuad }
+                NumberAnimation { target: flyer; property: "scale"; from: 0.6; to: 1.35; duration: 180; easing.type: Easing.OutBack }
+              }
+              ParallelAnimation {
+                NumberAnimation { target: flyer; property: "x"; to: flyer.toX; duration: 650; easing.type: Easing.InOutCubic }
+                NumberAnimation { target: flyer; property: "y"; to: flyer.toY; duration: 650; easing.type: Easing.InBack }
+                NumberAnimation { target: flyer; property: "scale"; to: 0.5; duration: 650; easing.type: Easing.InQuad }
+                NumberAnimation { target: flyer; property: "opacity"; to: 0.2; duration: 650; easing.type: Easing.InQuad }
+              }
+              ScriptAction { script: { xpPulse.restart(); flyer.destroy() } }
+            }
+          }
+        }
+
+        Connections {
+          target: root
+          function onXpGained(source, xp) {
+            if (!source || xp <= 0) return
+            var from = source.mapToItem(fxLayer, source.width / 2, source.height / 2)
+            var target = xpFill.mapToItem(fxLayer, xpFill.width, xpFill.height / 2)
+            var f = xpFlyer.createObject(fxLayer, { text: "+" + xp + " XP" })
+            f.fromX = from.x - f.implicitWidth / 2
+            f.fromY = from.y - f.implicitHeight / 2
+            f.toX = Math.max(0, target.x - f.implicitWidth / 2)
+            f.toY = target.y - f.implicitHeight / 2
+          }
+        }
+
         Flickable {
           id: scroller
           anchors.fill: parent
@@ -836,17 +898,45 @@ BarWidget {
               }
 
               Rectangle {
+                id: xpBar
                 width: parent.width
                 height: Style.space(5)
                 radius: height / 2
                 color: Util.alpha(root.fg, 0.12)
 
                 Rectangle {
+                  id: xpFill
                   height: parent.height
                   radius: parent.radius
                   width: p.profile ? parent.width * Math.min(1, p.profile.levelXp / Math.max(1, p.profile.levelCost)) : 0
                   color: root.gold
-                  Behavior on width { NumberAnimation { duration: 400; easing.type: Easing.OutCubic } }
+                  Behavior on width { NumberAnimation { duration: 700; easing.type: Easing.OutBack } }
+                }
+
+                // The pulse: a glow over the bar, flashing twice.
+                Rectangle {
+                  id: xpGlow
+                  anchors.centerIn: parent
+                  width: parent.width + Style.space(6)
+                  height: parent.height + Style.space(6)
+                  radius: height / 2
+                  color: "transparent"
+                  border.width: Style.space(2)
+                  border.color: root.gold
+                  opacity: 0
+                }
+
+                SequentialAnimation {
+                  id: xpPulse
+                  loops: 2
+                  ParallelAnimation {
+                    NumberAnimation { target: xpGlow; property: "opacity"; to: 0.9; duration: 120; easing.type: Easing.OutQuad }
+                    ColorAnimation { target: xpFill; property: "color"; to: "white"; duration: 120 }
+                  }
+                  ParallelAnimation {
+                    NumberAnimation { target: xpGlow; property: "opacity"; to: 0; duration: 380; easing.type: Easing.InQuad }
+                    ColorAnimation { target: xpFill; property: "color"; to: root.gold; duration: 380 }
+                  }
                 }
               }
             }
