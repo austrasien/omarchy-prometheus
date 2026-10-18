@@ -13,7 +13,7 @@ import sqlite3
 import uuid
 from pathlib import Path
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
@@ -83,6 +83,35 @@ CREATE TABLE IF NOT EXISTS events (
   kind       TEXT NOT NULL,      -- e.g. absent: paused for not answering "Still there?"
   at         INTEGER NOT NULL,
   session_id TEXT
+);
+
+-- Quests: goals that span days. Only one is active at a time. Deleting one
+-- only hides it, so the XP it earned stays in the profile.
+CREATE TABLE IF NOT EXISTS quests (
+  id           TEXT PRIMARY KEY,
+  title        TEXT NOT NULL,
+  kind         TEXT NOT NULL,      -- daily, short, long
+  created_at   INTEGER NOT NULL,
+  active       INTEGER NOT NULL DEFAULT 0,
+  done_at      INTEGER,            -- short and long only
+  xp           INTEGER,            -- short and long: what completing it earned
+  deleted_at   INTEGER
+);
+
+-- A logical day on which a session ran while the quest was active.
+CREATE TABLE IF NOT EXISTS quest_work (
+  quest_id TEXT NOT NULL,
+  day      TEXT NOT NULL,
+  PRIMARY KEY (quest_id, day)
+);
+
+-- Daily quests: one row per day they were completed.
+CREATE TABLE IF NOT EXISTS quest_done (
+  quest_id TEXT NOT NULL,
+  day      TEXT NOT NULL,
+  done_at  INTEGER NOT NULL,
+  xp       INTEGER NOT NULL,
+  PRIMARY KEY (quest_id, day)
 );
 
 CREATE TABLE IF NOT EXISTS settings (

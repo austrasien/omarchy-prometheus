@@ -37,6 +37,13 @@ only what was actually used.
   freezes when it is checked. Optionally, the todos of an Obsidian daily note
   (`## Tasks`) are offered as suggestions when adding one; nothing is ever
   written back to the note.
+- **Quests**: goals that take more than one sitting. A quest is daily (back
+  every day, each day's completion kept), short (a few days) or long (more than
+  a week). One quest at a time is active: a red bookmark hangs on the panel and
+  the quest shows under the title. Each day a session runs while it is active
+  counts as a day worked. Rewards: daily 5 XP, +1 per day in a row before it (up
+  to 10); short 10 XP + 5 per day worked (up to 40); long 30 XP + 5 per day
+  worked (up to 150). Deleting a quest keeps the XP it already earned.
 - **XP and levels**: 1 XP per 10 min of session (pauses excluded), plus done
   tasks, plus won challenges. Level 2 costs 100 XP, each next level 50 more.
 - **Achievements**: 81 families with 608 tiers, plus a calendar of 126
@@ -140,6 +147,13 @@ bar (session ended, challenge won).
 | `tasks:complete` | `[id]` | Only during a session |
 | `tasks:reopen` | `[id]` | Back to the list, during a session |
 | `tasks:delete` | `[id]` | Drop an open task without its XP |
+| `quests:list` | | Open quests, the last completed ones, quest XP |
+| `quests:add` | `[title, kind]` | New quest; kind is `daily`, `short` or `long` |
+| `quests:activate` | `[id]` | Make it the active quest (only one at a time) |
+| `quests:deactivate` | `[id?]` | Put the active quest aside |
+| `quests:complete` | `[id]` | Done: for today if daily, for good otherwise |
+| `quests:uncomplete` | `[id]` | Undo a completion (today's, if daily) |
+| `quests:delete` | `[id]` | Hide a quest; the XP it earned stays |
 | `hoursGoal:get`, `hoursGoal:set` | `[{hours, period} \| "off"]` | `period`: day, week, month |
 | `settings:getDayStart`, `settings:setDayStart` | `[hour]` | 0–12, default 5 |
 | `stats:summary` | `[{fromMs, toMs}]` | Focus, sessions, 2 h+ sessions, switches/h, apps |

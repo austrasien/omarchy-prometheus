@@ -93,6 +93,13 @@ class Daemon:
             "tasks:complete": lambda a: self.core.task_complete(a[0] if a else None, self.clock()),
             "tasks:reopen": lambda a: self.core.task_reopen(a[0] if a else None),
             "tasks:delete": lambda a: self.core.task_delete(a[0] if a else None),
+            "quests:list": lambda a: self.core.quests_list(self.clock()),
+            "quests:add": lambda a: self.core.quest_add(a[0] if a else "", a[1] if len(a) > 1 else "", self.clock()),
+            "quests:activate": lambda a: self.core.quest_activate(a[0] if a else None, self.clock()),
+            "quests:deactivate": lambda a: self.core.quest_deactivate(a[0] if a else None),
+            "quests:complete": self._quest_complete,
+            "quests:uncomplete": lambda a: self.core.quest_uncomplete(a[0] if a else None, self.clock()),
+            "quests:delete": lambda a: self.core.quest_delete(a[0] if a else None, self.clock()),
         }
         self.channels["channels"] = lambda a: sorted(self.channels)
 
@@ -106,6 +113,13 @@ class Daemon:
         reply["recap"]["reason"] = reason
         r = reply["recap"]
         self.toast("ended", self.END_REASONS[reason], f"{r.get('task') or 'Session'} · {format_short(r['durationSeconds'])}")
+        return reply
+
+    QUEST_DONE = {"daily": "Daily quest done", "short": "Quest complete", "long": "Long quest complete"}
+
+    def _quest_complete(self, args) -> dict:
+        reply = self.core.quest_complete(args[0] if args else None, self.clock())
+        self.toast("quest", self.QUEST_DONE[reply["kind"]], f"{reply['title']} · +{reply['xp']} XP")
         return reply
 
     def _idle(self, args) -> dict:

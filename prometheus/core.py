@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from . import achievements as A
 from . import env
 from . import medals as M
+from . import quests as Q
 from . import timeutil as T
 from .store import Store, clipped_seconds, session_seconds
 
@@ -54,6 +55,7 @@ class Refused(Exception):
 class Core:
     def __init__(self, store: Store):
         self.store = store
+        self.quests = Q.Quests(store)
         T.set_day_start_hour(self.store.get_setting("dayStartHour", T.DEFAULT_DAY_START_HOUR))
         self.window: Window | None = None
         self.idle = False
@@ -187,6 +189,15 @@ class Core:
             return
         if self.span_id is not None:
             self.store.extend_span(self.span_id, at)
+        self._quest_work(at)
+
+    def _working(self) -> bool:
+        s = self._session()
+        return s is not None and s["pause_started_at"] is None
+
+    def _quest_work(self, at: int) -> None:
+        if self._working():
+            self.quests.mark_work(at)
 
     # ---------------------------------------------------------- auto-pause
     # Away from the machine (idle, locked, asleep), the session clock stops
@@ -253,6 +264,7 @@ class Core:
         self.last_resume_at = at
         self._present(at)
         self._split(at)
+        self._quest_work(at)
         return {"success": True}
 
     def pause(self, at: int) -> dict:
@@ -357,6 +369,7 @@ class Core:
             "challenge": self.challenge_state(at),
             "presence": self.presence_state(at),
             "medals": M.placard(self.store, at),
+            "quest": self.quests.active(at),
             "session": self._session_state(),
             "today": {"sessions": len(closed), "seconds": sum(session_seconds(r) for r in closed)},
             "window": {"app": self.alias(w.app), "title": w.title} if w else None,
@@ -703,9 +716,39 @@ class Core:
         bonus = self.challenge_xp()
         trophies = self.store.achievement_xp_total()
         decorations = self.store.medal_xp_total()
-        total = focus_xp + task_xp + bonus + trophies + decorations
+        quest_xp = self.quests.xp_total()
+        total = focus_xp + task_xp + bonus + trophies + decorations + quest_xp
         return dict(self.level_for(total), xp=total, focusXp=focus_xp, taskXp=task_xp,
-                    challengeXp=bonus, achievementXp=trophies, medalXp=decorations)
+                    challengeXp=bonus, achievementXp=trophies, medalXp=decorations, questXp=quest_xp)
+
+    # --------------------------------------------------------------- quests
+
+    def _quest(self, fn, *args):
+        try:
+            return fn(*args)
+        except Q.QuestError as e:
+            raise Refused(str(e)) from None
+
+    def quests_list(self, at: int) -> dict:
+        return self.quests.listing(at)
+
+    def quest_add(self, title, kind, at: int) -> dict:
+        return self._quest(self.quests.add, title, kind, at)
+
+    def quest_activate(self, qid, at: int) -> dict:
+        return self._quest(self.quests.activate, qid, at, self._working())
+
+    def quest_deactivate(self, qid=None) -> dict:
+        return self._quest(self.quests.deactivate, qid)
+
+    def quest_delete(self, qid, at: int) -> dict:
+        return self._quest(self.quests.delete, qid, at)
+
+    def quest_complete(self, qid, at: int) -> dict:
+        return self._quest(self.quests.complete, qid, at)
+
+    def quest_uncomplete(self, qid, at: int) -> dict:
+        return self._quest(self.quests.uncomplete, qid, at)
 
     # ---------------------------------------------------------------- medals
 

@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Shapes
 import Quickshell
 import Quickshell.Io
 import qs.Commons
@@ -624,16 +625,18 @@ BarWidget {
       readonly property var tabs: [
         { value: "session", label: "Session" },
         { value: "tasks", label: "Tasks", tooltip: p.session ? "" : "Available during a session" },
+        { value: "quests", label: "Quests" },
         { value: "stats", label: "Stats" },
         { value: "achievements", label: "Achievements" },
         { value: "settings", label: "Settings" }
       ]
       readonly property var current: root.tab === "tasks" ? tasksTab
+        : root.tab === "quests" ? questsTab
         : root.tab === "stats" ? statsTab
         : root.tab === "achievements" ? achievementsTab
         : root.tab === "settings" ? settingsTab
         : sessionTab
-      readonly property bool editing: sessionTab.editing || tasksTab.editing
+      readonly property bool editing: sessionTab.editing || tasksTab.editing || questsTab.editing
 
       Component.onCompleted: Qt.callLater(function() { panel.armed = true })
 
@@ -661,6 +664,50 @@ BarWidget {
         onActivateRequested: {
           if (root.tab === "session" && p.session) p.toggle()
           else panel.focusContent()
+        }
+
+        // A red bookmark hangs from the top edge while a quest is active,
+        // like a ribbon left in a book.
+        Item {
+          id: bookmark
+          visible: !!p.quest
+          z: 5
+          width: Style.space(14)
+          height: Style.space(30)
+          anchors.right: parent.right
+          anchors.rightMargin: Style.space(6)
+          anchors.top: parent.top
+          anchors.topMargin: -panel.padding - 2
+
+          Shape {
+            anchors.fill: parent
+            preferredRendererType: Shape.CurveRenderer
+            ShapePath {
+              strokeWidth: 0
+              fillColor: root.red
+              startX: 0; startY: 0
+              PathLine { x: bookmark.width; y: 0 }
+              PathLine { x: bookmark.width; y: bookmark.height }
+              PathLine { x: bookmark.width / 2; y: bookmark.height - bookmark.width * 0.45 }
+              PathLine { x: 0; y: bookmark.height }
+              PathLine { x: 0; y: 0 }
+            }
+          }
+
+          // A darker fold down the middle gives it some depth.
+          Rectangle {
+            x: bookmark.width * 0.2
+            width: 1
+            height: bookmark.height - bookmark.width * 0.6
+            color: Qt.darker(root.red, 1.35)
+            opacity: 0.6
+          }
+
+          MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.tab = "quests"
+          }
         }
 
         Flickable {
@@ -696,6 +743,7 @@ BarWidget {
 
               Text {
                 anchors.right: parent.right
+                anchors.rightMargin: p.quest ? bookmark.width + Style.space(10) : 0
                 anchors.verticalCenter: title.verticalCenter
                 textFormat: Text.PlainText
                 visible: p.session !== null && root.tab !== "session"
@@ -704,6 +752,50 @@ BarWidget {
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
                 font.bold: true
+              }
+            }
+
+            // ---- the active quest, wrapped when long; a click opens the Quests tab
+            Item {
+              width: parent.width - (p.quest ? bookmark.width + Style.space(10) : 0)
+              height: questLines.implicitHeight
+              visible: !!p.quest
+
+              Column {
+                id: questLines
+                width: parent.width
+                spacing: Style.space(1)
+
+                Text {
+                  width: parent.width
+                  wrapMode: Text.Wrap
+                  textFormat: Text.PlainText
+                  text: p.quest ? p.quest.title : ""
+                  color: p.quest && p.quest.doneToday ? Util.alpha(root.fg, 0.5) : root.fg
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.body
+                  font.strikeout: !!p.quest && !!p.quest.doneToday
+                }
+
+                Text {
+                  width: parent.width
+                  wrapMode: Text.Wrap
+                  textFormat: Text.PlainText
+                  text: !p.quest ? ""
+                    : p.quest.kind === "daily"
+                      ? "Daily quest" + (p.quest.doneToday ? "  ·  done today" : p.quest.streak > 0 ? "  ·  " + p.quest.streak + " in a row" : "")
+                      : (p.quest.kind === "long" ? "Long quest" : "Short quest") + "  ·  day " + Math.max(1, p.quest.daysWorked)
+                        + "  ·  " + p.quest.xp + " XP"
+                  color: Util.alpha(root.red, 0.85)
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                }
+              }
+
+              MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.tab = "quests"
               }
             }
 
@@ -894,6 +986,7 @@ BarWidget {
 
             SessionTab { id: sessionTab; width: parent.width; w: root; p: root.client; visible: root.tab === "session" }
             TasksTab { id: tasksTab; width: parent.width; w: root; p: root.client; o: root.journal; visible: root.tab === "tasks" }
+            QuestsTab { id: questsTab; width: parent.width; w: root; p: root.client; visible: root.tab === "quests" }
             StatsTab { id: statsTab; width: parent.width; w: root; p: root.client; visible: root.tab === "stats" }
             AchievementsTab { id: achievementsTab; width: parent.width; w: root; p: root.client; visible: root.tab === "achievements" }
             SettingsTab { id: settingsTab; width: parent.width; w: root; p: root.client; visible: root.tab === "settings" }
