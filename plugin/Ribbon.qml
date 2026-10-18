@@ -11,6 +11,7 @@ Item {
   property int dots: 1             // 1 daily, 2 weekly, 3 monthly
   property string edges: "none"    // none, left, both
   property real size: 1            // scale: 1 is 30 x 10 px
+  property bool star: false        // a star in the middle instead of the dots
 
   implicitWidth: Math.round(30 * size)
   implicitHeight: Math.round(10 * size)
@@ -44,7 +45,18 @@ Item {
       color: root.edgeColor
     }
 
+    Text {
+      visible: root.star
+      anchors.centerIn: parent
+      text: "★"
+      color: root.dot
+      font.pixelSize: Math.round(root.height * 0.95)
+      style: Text.Outline
+      styleColor: Qt.darker(root.color, 1.6)
+    }
+
     Row {
+      visible: !root.star
       anchors.centerIn: parent
       spacing: Math.max(1, Math.round(root.height * 0.18))
 

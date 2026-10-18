@@ -378,7 +378,7 @@ def _rolling(c: Context, days: int) -> float | None:
 def _week_focus(c: Context) -> float | None:
     weeks = defaultdict(float)
     for d, s in c.day_focus.items():
-        y, w, _ = _date(d).isocalendar()
+        y, w = T.week_key(_date(d))
         weeks[(y, w)] += s
     return max(weeks.values()) if weeks else None
 
@@ -516,7 +516,7 @@ def _goal_hits(period: str):
         buckets = defaultdict(float)
         for d, s in c.day_focus.items():
             day = _date(d)
-            key = d if period == "day" else day.isocalendar()[:2] if period == "week" else d[:7]
+            key = d if period == "day" else T.week_key(day) if period == "week" else d[:7]
             buckets[key] += s
         return sum(1 for s in buckets.values() if s >= c.goal["hours"] * H) or None
     return measure
@@ -526,7 +526,7 @@ def _personal_bests(c: Context) -> float | None:
     """Weeks that beat every week before them (the first week is no record)."""
     weeks = defaultdict(float)
     for d, s in c.day_focus.items():
-        weeks[_date(d).isocalendar()[:2]] += s
+        weeks[T.week_key(_date(d))] += s
     best, records = None, 0
     for key in sorted(weeks):
         if best is not None and weeks[key] > best:
@@ -625,7 +625,7 @@ def _yes_man(c: Context) -> float | None:
 def _perfect_weeks(c: Context) -> float | None:
     weeks = defaultdict(set)
     for d in c.day_sessions:
-        weeks[_date(d).isocalendar()[:2]].add(d)
+        weeks[T.week_key(_date(d))].add(d)
     return sum(1 for days in weeks.values() if len(days) == 7) or None
 
 
@@ -837,7 +837,7 @@ FAMILIES: list[Family] = [
            ["{n} tasks in a day. Bureaucracies measure that per fiscal year.",
             "{n} in a day. Move fast and finish things.",
             "{n} tasks today. Your to-do list is filing for bankruptcy."]),
-    Family("tasksweek", "Weekly burn", lambda c: _tasks_per(c, lambda d: d.isocalendar()[:2]),
+    Family("tasksweek", "Weekly burn", lambda c: _tasks_per(c, lambda d: T.week_key(d)),
            list(range(30, 201, 10)),
            lambda t: f"Weekly Burn {t:g}", lambda t: f"Finish {t:g} tasks in one week (Mon–Sun).",
            ["{n} tasks this week. Velocity is a moral virtue.",

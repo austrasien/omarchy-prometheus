@@ -7,7 +7,7 @@ Earned XP, the currency of all three, is XP from the work itself: focus,
 tasks, challenges won and quests. Achievements and medals are left out, so a
 reward never feeds the race that grants it.
 
-- Leagues: ten, Bronze to Diamond. Each week (Monday to Sunday, logical days)
+- Leagues: ten, Bronze to Diamond. Each week (Sunday to Saturday, logical days)
   is settled against your own recent weeks: up one league at most, down one
   at most. Promotion needs both 10 % more than the average of the four weeks
   before and the next league's floor. Relegation comes when the week falls
@@ -45,9 +45,28 @@ REFERENCE_WEEKS = 4
 RIVALS = 9                   # plus you: ten players a week
 PROMOTED = 3                 # the top 3 go up
 RELEGATED = 3                # the bottom 3 go down
-RIVAL_NAMES = ["Lovelace", "Turing", "Hopper", "vonNeumann", "Shannon", "Dijkstra", "Knuth", "Ritchie",
-               "Torvalds", "Carmack", "Wozniak", "Hamilton", "Feynman", "Babbage", "Engelbart", "Kay",
-               "Tesla", "Curie", "Noether", "Ramanujan", "Euler", "Gauss", "Lamarr", "Satoshi"]
+# Scientists and pioneers. Each season draws its own nine rivals from them
+# (by lot, seeded by the season), never two with the same first name.
+RIVAL_NAMES = ["Ada Lovelace", "Alan Turing", "Grace Hopper", "John von Neumann", "Claude Shannon",
+    "Edsger Dijkstra", "Donald Knuth", "Dennis Ritchie", "Linus Torvalds", "John Carmack", "Steve Wozniak",
+    "Margaret Hamilton", "Richard Feynman", "Charles Babbage", "Douglas Engelbart", "Alan Kay",
+    "Nikola Tesla", "Marie Curie", "Emmy Noether", "Srinivasa Ramanujan", "Leonhard Euler",
+    "Carl Friedrich Gauss", "Hedy Lamarr", "Satoshi Nakamoto", "Isaac Newton", "Albert Einstein",
+    "Niels Bohr", "Max Planck", "Werner Heisenberg", "Erwin Schrodinger", "Paul Dirac", "Enrico Fermi",
+    "Lise Meitner", "Rosalind Franklin", "Barbara McClintock", "Dorothy Hodgkin", "Katherine Johnson",
+    "Mary Jackson", "Dorothy Vaughan", "Annie Easley", "Galileo Galilei", "Johannes Kepler",
+    "Nicolaus Copernicus", "Tycho Brahe", "Edwin Hubble", "Carl Sagan", "Vera Rubin", "Henrietta Leavitt",
+    "Cecilia Payne", "Jocelyn Bell", "Michael Faraday", "James Clerk Maxwell", "Ernest Rutherford",
+    "Dmitri Mendeleev", "Louis Pasteur", "Antoine Lavoisier", "Gregor Mendel", "Charles Darwin",
+    "Alfred Wallace", "Rachel Carson", "Jane Goodall", "Alexander Fleming", "Jonas Salk", "Tim Berners-Lee",
+    "Vint Cerf", "Bob Kahn", "Ken Thompson", "Bjarne Stroustrup", "Guido van Rossum", "John McCarthy",
+    "Marvin Minsky", "Barbara Liskov", "Frances Allen", "Radia Perlman", "Shafi Goldwasser",
+    "Whitfield Diffie", "Ralph Merkle", "Ron Rivest", "Adi Shamir", "Leslie Lamport", "Butler Lampson",
+    "Ivan Sutherland", "Seymour Cray", "Gordon Moore", "Robert Noyce", "Jack Kilby", "John Bardeen",
+    "William Shockley", "Hans Bethe", "Robert Oppenheimer", "Wernher von Braun", "Sergei Korolev",
+    "Konstantin Tsiolkovsky", "Robert Goddard", "Yuri Gagarin", "Valentina Tereshkova", "Sally Ride",
+    "Neil Armstrong", "Buzz Aldrin", "John Glenn", "Wilbur Wright", "Orville Wright", "Amelia Earhart",
+    "Elon Musk"]
 
 # --------------------------------------------------------------- seasons
 
@@ -63,7 +82,8 @@ def _date(s: str) -> dt.date:
 
 
 def _monday(d: dt.date) -> dt.date:
-    return d - dt.timedelta(days=d.weekday())
+    """The first day of the week of `d`: a Sunday (the name stayed)."""
+    return T.week_first(d)
 
 
 def _quarter(d: dt.date) -> tuple[int, int]:
@@ -132,6 +152,23 @@ class Ledger:
 # --------------------------------------------------------------- leagues
 
 
+def season_roster(key: str) -> list[str]:
+    """The nine rivals of a season (key "2026-Q4"): drawn by lot, first names
+    all different."""
+    rng = random.Random("roster:" + key)
+    pool = RIVAL_NAMES[:]
+    rng.shuffle(pool)
+    roster, firsts = [], set()
+    for name in pool:
+        first = name.split()[0]
+        if first not in firsts:
+            roster.append(name)
+            firsts.add(first)
+        if len(roster) == RIVALS:
+            break
+    return roster
+
+
 def _rivals(week: dt.date, league: int, prev: list[int], progress: float) -> list[dict]:
     """Nine made-up players for a league week, drawn from a Gaussian fitted to
     your last four weeks (stronger each league up). Seeded by week and league,
@@ -144,7 +181,8 @@ def _rivals(week: dt.date, league: int, prev: list[int], progress: float) -> lis
     if len(prev) >= 2:
         spread = (sum((x - ref) ** 2 for x in prev) / (len(prev) - 1)) ** 0.5
     sd = max(spread, 0.25 * mean)
-    names = rng.sample(RIVAL_NAMES, RIVALS)
+    y, q = _quarter(week + dt.timedelta(days=3))     # the season of the week's middle
+    names = season_roster(f"{y}-Q{q}")
     out = []
     for name in names:
         final = max(0, round(rng.gauss(mean, sd)))
@@ -261,21 +299,44 @@ def seasons(ledger: Ledger) -> list[dict]:
     return out
 
 
-def _random_color(rng: random.Random, sat: tuple, val: tuple, hue: float | None = None) -> str:
-    """A muted or pale color, never one of the ten vivid medal hues (those are
-    saturated about 85 % and bright about 95 %)."""
-    h = rng.random() if hue is None else hue % 1.0
-    r, g, b = colorsys.hsv_to_rgb(h, rng.uniform(*sat), rng.uniform(*val))
-    return "#%02x%02x%02x" % (round(r * 255), round(g * 255), round(b * 255))
+# The ten vivid hues of the other medals: a season medal never uses them.
+BASE_COLORS = ["#f22424", "#ea9a23", "#c2ea23", "#4bea23", "#24f276",
+               "#24f2f2", "#2476f2", "#4d24f2", "#c924f2", "#f2249f"]
+MIN_BASE_DISTANCE = 70     # RGB distance a season color keeps from each of them
+
+
+def _rgb(c: str) -> tuple[int, int, int]:
+    return int(c[1:3], 16), int(c[3:5], 16), int(c[5:7], 16)
+
+
+def _far_from_base(c: str) -> bool:
+    r, g, b = _rgb(c)
+    return all(((r - R) ** 2 + (g - G) ** 2 + (b - B) ** 2) ** 0.5 >= MIN_BASE_DISTANCE
+               for R, G, B in map(_rgb, BASE_COLORS))
+
+
+def _random_color(rng: random.Random, hue: float, sat: tuple, val: tuple) -> str:
+    """A color of about `hue`, kept away from the ten base hues (drawn again
+    until it is)."""
+    for _ in range(200):
+        h = (hue + rng.uniform(-0.03, 0.03)) % 1.0
+        r, g, b = colorsys.hsv_to_rgb(h, rng.uniform(*sat), rng.uniform(*val))
+        c = "#%02x%02x%02x" % (round(r * 255), round(g * 255), round(b * 255))
+        if _far_from_base(c):
+            return c
+        hue = rng.random()
+    return "#5a4a7a"
 
 
 def season_colors(rng: random.Random | None = None) -> dict:
+    """Contrasted colors: a deep, rich ribbon, a near-white star, and vivid
+    edge bars of another hue; none close to the ten base medal hues."""
     rng = rng or random.Random()
     hue = rng.random()
     return {
-        "bg": _random_color(rng, (0.30, 0.55), (0.30, 0.50), hue),
-        "dot": _random_color(rng, (0.10, 0.35), (0.85, 0.95), hue + rng.uniform(0.25, 0.75)),
-        "edge": _random_color(rng, (0.35, 0.60), (0.60, 0.78), hue + rng.uniform(0.15, 0.35)),
+        "bg": _random_color(rng, hue, (0.60, 0.90), (0.26, 0.44)),
+        "dot": _random_color(rng, hue + rng.uniform(0.35, 0.65), (0.05, 0.30), (0.93, 1.00)),
+        "edge": _random_color(rng, hue + rng.uniform(0.25, 0.45), (0.55, 0.80), (0.70, 0.85)),
     }
 
 

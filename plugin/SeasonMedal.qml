@@ -1,7 +1,8 @@
 import QtQuick
 import QtQuick.Effects
 
-// A season medal: one or two holographic bars. Won, it shines in its colors.
+// A season medal: a holographic ribbon with a star, an edge bar on the left
+// for the season goal, on both sides for the hard one. Won, it shines in its colors.
 // Still to win, it sits grey and dull; under the mouse it wakes up: the colors
 // flood back in, it grows with a bounce, a halo of its own color breathes
 // around it, sparks burst out and the foil starts shining. Enough to want it.
@@ -12,8 +13,11 @@ Item {
   property var colors: null        // { bg, dot, edge }
   property bool won: false
   property real size: 1.2
+  // Set from outside so that hovering one medal wakes them all.
+  property bool hot: false
+  readonly property bool hovering: hover.hovered
 
-  readonly property bool lit: won || hover.hovered
+  readonly property bool lit: won || hot
   readonly property color bg: colors ? colors.bg : "#666"
   readonly property color dotColor: colors ? colors.dot : "#ccc"
   readonly property color edgeColor: colors ? colors.edge : "#999"
@@ -21,7 +25,7 @@ Item {
   implicitWidth: bars_.implicitWidth
   implicitHeight: bars_.implicitHeight
 
-  HoverHandler { id: hover; enabled: !root.won }
+  HoverHandler { id: hover }
 
   // The effect's knobs, animated here and read by the layer effect below.
   property real fxSaturation: lit ? 0 : -1
@@ -39,9 +43,10 @@ Item {
     opacity: root.lit ? 1 : 0.55
     Behavior on opacity { NumberAnimation { duration: 300 } }
     Repeater {
-      model: root.bars
+      model: 1
       HoloRibbon {
         size: root.size
+        edges: root.bars === 2 ? "both" : "left"
         color: root.bg
         dot: root.dotColor
         edge: root.edgeColor
@@ -66,7 +71,7 @@ Item {
   // Waking up: a bounce, a little wiggle, then the halo breathes.
   states: State {
     name: "tempted"
-    when: hover.hovered && !root.won
+    when: root.hot && !root.won
   }
   transitions: [
     Transition {
@@ -96,7 +101,7 @@ Item {
   ]
 
   SequentialAnimation {
-    running: hover.hovered && !root.won
+    running: root.hot && !root.won
     loops: Animation.Infinite
     NumberAnimation { target: root; property: "fxGlowScale"; to: 1.45; duration: 700; easing.type: Easing.InOutSine }
     NumberAnimation { target: root; property: "fxGlowScale"; to: 1.15; duration: 700; easing.type: Easing.InOutSine }

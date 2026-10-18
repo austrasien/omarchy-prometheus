@@ -63,10 +63,23 @@ def days_between(earlier_ms: int, later_ms: int) -> int:
     return (_logical_date(later_ms) - _logical_date(earlier_ms)).days
 
 
+# Weeks run Sunday to Saturday.
+
+def week_first(d: dt.date) -> dt.date:
+    """The Sunday opening the week of date `d`."""
+    return d - dt.timedelta(days=(d.weekday() + 1) % 7)
+
+
+def week_key(d: dt.date) -> tuple[int, int]:
+    """(year, week number) of a Sunday-to-Saturday week: the ISO week of its
+    Monday, so the Sunday counts with the days after it."""
+    y, w, _ = (d + dt.timedelta(days=1)).isocalendar()
+    return y, w
+
+
 def week_start(ms: int) -> int:
-    """Monday's day start, for the week containing `ms`."""
-    d = _logical_date(ms)
-    return _start_of(d - dt.timedelta(days=d.weekday()))
+    """Sunday's day start, for the week containing `ms`."""
+    return _start_of(week_first(_logical_date(ms)))
 
 
 def month_start(ms: int) -> int:
@@ -82,4 +95,4 @@ def period_window(period: str, ms: int) -> tuple[int, int]:
 
 
 def iso_week(ms: int) -> int:
-    return _logical_date(ms).isocalendar()[1]
+    return week_key(_logical_date(ms))[1]

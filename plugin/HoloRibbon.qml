@@ -1,7 +1,7 @@
 import QtQuick
 
-// A season ribbon: a plain ribbon under a holographic foil, like a rare
-// trading card. A rainbow sheen drifts across it, fine diagonal lines catch
+// A season ribbon: a ribbon with a star, edge bars for the goals reached, under
+// a holographic foil, like a rare trading card. A rainbow sheen drifts across it, fine diagonal lines catch
 // the light, and a bright band sweeps over it every few seconds.
 Item {
   id: root
@@ -10,6 +10,7 @@ Item {
   property color dot: "white"
   property color edge: "#999"
   property real size: 1
+  property string edges: "both"    // left: season goal, both: hard goal
   property bool shining: true
 
   implicitWidth: ribbon.implicitWidth
@@ -22,8 +23,8 @@ Item {
     color: root.color
     dot: root.dot
     edgeColor: root.edge
-    dots: 1
-    edges: "both"
+    star: true
+    edges: root.edges
   }
 
   Item {
@@ -43,7 +44,7 @@ Item {
       width: foil.width * 3
       height: foil.height
       x: -foil.width * 2 * (1 - foil.phase)
-      opacity: 0.32
+      opacity: 0.13
       gradient: Gradient {
         orientation: Gradient.Horizontal
         GradientStop { position: 0.00; color: "#ff4d4d" }
@@ -70,7 +71,7 @@ Item {
           width: 1
           height: parent.height
           color: "white"
-          opacity: 0.16
+          opacity: 0.06
         }
       }
     }
@@ -85,7 +86,7 @@ Item {
       gradient: Gradient {
         orientation: Gradient.Horizontal
         GradientStop { position: 0.0; color: "#00ffffff" }
-        GradientStop { position: 0.5; color: "#ccffffff" }
+        GradientStop { position: 0.5; color: "#66ffffff" }
         GradientStop { position: 1.0; color: "#00ffffff" }
       }
     }

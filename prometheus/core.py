@@ -470,7 +470,7 @@ class Core:
         return {"date": T.date_str(start), "fromMs": start, "focusSeconds": focus, "trackedSeconds": tracked}
 
     def days(self, week_offset: int, at: int) -> dict:
-        """Mon-Sun of the week `week_offset` weeks back (0 = this week)."""
+        """Sun-Sat of the week `week_offset` weeks back (0 = this week)."""
         offset = max(0, min(520, int(week_offset or 0)))
         monday = T.add_days(T.week_start(at), -7 * offset)
         today = T.day_start(at)

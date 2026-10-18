@@ -1030,20 +1030,16 @@ BarWidget {
                         opacity: medal.modelData.current ? 1 : 0.75
                       }
 
-                      // One bar for the season goal, two for the hard one.
-                      Row {
+                      // An edge bar on the left for the season goal, on
+                      // both sides for the hard one.
+                      HoloRibbon {
                         id: seasonBars
                         visible: medal.season
-                        spacing: 1
-                        Repeater {
-                          model: medal.season ? medal.modelData.bars : 0
-                          HoloRibbon {
-                            size: 1.15
-                            color: medal.modelData.color
-                            dot: medal.modelData.dot
-                            edge: medal.modelData.edge
-                          }
-                        }
+                        size: 1.15
+                        color: medal.season ? medal.modelData.color : "#555"
+                        dot: medal.season ? medal.modelData.dot : "white"
+                        edge: medal.season ? medal.modelData.edge : "#999"
+                        edges: medal.season && medal.modelData.bars === 2 ? "both" : "left"
                       }
 
                       MouseArea {

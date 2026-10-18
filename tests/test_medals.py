@@ -48,7 +48,7 @@ class MedalsTest(unittest.TestCase):
         self.assertEqual(placard["dayshift"]["dots"], 1)
 
     def test_weekly_seven_for_seven_and_history(self):
-        for d in range(4, 11):                                   # Mon 4 to Sun 10 March 2030
+        for d in range(3, 10):                                   # Sun 3 to Sat 9 March 2030
             self.session(at(2030, 3, d, 14), 20)
         new = self.core.check_medals(at(2030, 3, 20), history=True)
         ids = {(m["id"], m["key"]) for m in new}

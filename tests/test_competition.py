@@ -85,13 +85,30 @@ class CompetitionTest(unittest.TestCase):
         self.assertEqual((row2["bars"], row2["bg"]), (2, row["bg"]))   # same colors, two bars
         self.assertEqual(self.core.state(self.at(10))["seasonMedals"][0]["bars"], 2)
 
-    def test_season_colors_never_vivid(self):
+    def test_season_colors_contrasted_and_off_palette(self):
         rng = random.Random(1)
+        lum = lambda c: 0.2126 * C._rgb(c)[0] + 0.7152 * C._rgb(c)[1] + 0.0722 * C._rgb(c)[2]
         for _ in range(500):
-            for c in C.season_colors(rng).values():
-                r, g, b = (int(c[i:i + 2], 16) for i in (1, 3, 5))
-                hi, lo = max(r, g, b), min(r, g, b)
-                self.assertLess((hi - lo) / hi if hi else 0, 0.62)   # saturation under the palette's
+            c = C.season_colors(rng)
+            for v in c.values():
+                self.assertTrue(C._far_from_base(v), v)
+            self.assertGreater(lum(c["dot"]) - lum(c["bg"]), 90)      # the star stands out
+
+    def test_rosters_change_each_season_with_distinct_first_names(self):
+        self.assertGreaterEqual(len(C.RIVAL_NAMES), 100)
+        self.assertEqual(len(set(C.RIVAL_NAMES)), len(C.RIVAL_NAMES))
+        rosters = [C.season_roster(f"{y}-Q{q}") for y in (2026, 2027, 2028) for q in (1, 2, 3, 4)]
+        for r in rosters:
+            self.assertEqual(len(r), 9)
+            self.assertEqual(len({n.split()[0] for n in r}), 9)
+        self.assertGreater(len({tuple(r) for r in rosters}), 10)
+        self.assertEqual(C.season_roster("2026-Q4"), C.season_roster("2026-Q4"))
+
+    def test_weeks_start_on_sunday(self):
+        import datetime as dt
+        self.assertEqual(T.week_first(dt.date(2026, 10, 18)), dt.date(2026, 10, 18))   # a Sunday
+        self.assertEqual(T.week_first(dt.date(2026, 10, 24)), dt.date(2026, 10, 18))   # the Saturday after
+        self.assertEqual(T.week_key(dt.date(2026, 10, 18)), T.week_key(dt.date(2026, 10, 24)))
 
     def test_leaderboard_and_records(self):
         self.work(0, 100)

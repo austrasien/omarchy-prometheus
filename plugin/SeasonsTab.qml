@@ -64,16 +64,6 @@ Column {
         font.bold: true
       }
 
-      // The medal as it stands: grey until the goal is reached, and
-      // tempting under the mouse.
-      SeasonMedal {
-        anchors.right: parent.right
-        anchors.verticalCenter: seasonTitle.verticalCenter
-        bars: tab.cur ? Math.max(1, tab.cur.bars) : 1
-        won: !!tab.cur && tab.cur.bars > 0
-        colors: tab.cur ? tab.cur.colors : null
-        size: 1.4
-      }
     }
 
     Text {
@@ -84,8 +74,10 @@ Column {
       font.pixelSize: Style.font.caption
     }
 
-    // What each goal wins: one bar, then two, above its mark.
+    // What each goal wins, above its mark: the medal with an edge bar on the
+    // left, then on both sides. Grey until won; hovering either wakes both.
     Item {
+      readonly property bool hot: goalMedal.hovering || hardMedal.hovering
       width: parent.width
       height: goalMedal.implicitHeight + Style.space(10)
 
@@ -95,16 +87,19 @@ Column {
         anchors.bottom: parent.bottom
         anchors.bottomMargin: Style.space(4)
         bars: 1
+        hot: parent.hot
         won: !!tab.cur && tab.cur.bars >= 1
         colors: tab.cur ? tab.cur.colors : null
         size: 1.2
       }
 
       SeasonMedal {
+        id: hardMedal
         x: tab.cur ? Math.max(0, Math.min(parent.width - width, goals.px(tab.cur.hardGoal) - width / 2)) : 0
         anchors.bottom: parent.bottom
         anchors.bottomMargin: Style.space(4)
         bars: 2
+        hot: parent.hot
         won: !!tab.cur && tab.cur.bars >= 2
         colors: tab.cur ? tab.cur.colors : null
         size: 1.2
@@ -268,14 +263,13 @@ Column {
           anchors.right: parent.right
           anchors.verticalCenter: parent.verticalCenter
           spacing: 1
-          Repeater {
-            model: pastRow.medal ? pastRow.medal.bars : 0
-            HoloRibbon {
-              size: 1.2
-              color: pastRow.medal.color
-              dot: pastRow.medal.dot
-              edge: pastRow.medal.edge
-            }
+          HoloRibbon {
+            visible: !!pastRow.medal
+            size: 1.2
+            color: pastRow.medal ? pastRow.medal.color : "#555"
+            dot: pastRow.medal ? pastRow.medal.dot : "white"
+            edge: pastRow.medal ? pastRow.medal.edge : "#999"
+            edges: pastRow.medal && pastRow.medal.bars === 2 ? "both" : "left"
           }
         }
       }

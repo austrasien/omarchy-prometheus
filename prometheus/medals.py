@@ -63,7 +63,7 @@ def period_key(period: str, date: dt.date) -> str:
     if period == "day":
         return date.isoformat()
     if period == "week":
-        y, w, _ = date.isocalendar()
+        y, w = T.week_key(date)
         return f"{y}-W{w:02d}"
     return date.strftime("%Y-%m")
 
@@ -72,8 +72,8 @@ def period_days(period: str, date: dt.date) -> list[dt.date]:
     if period == "day":
         return [date]
     if period == "week":
-        monday = date - dt.timedelta(days=date.weekday())
-        return [monday + dt.timedelta(days=i) for i in range(7)]
+        sunday = T.week_first(date)
+        return [sunday + dt.timedelta(days=i) for i in range(7)]
     first = date.replace(day=1)
     nxt = (first + dt.timedelta(days=32)).replace(day=1)
     return [first + dt.timedelta(days=i) for i in range((nxt - first).days)]

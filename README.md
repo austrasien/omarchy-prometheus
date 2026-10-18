@@ -54,8 +54,9 @@ only what was actually used.
 - **XP and levels**: 1 XP per 10 min of session (pauses excluded), plus done
   tasks, plus won challenges. Level 2 costs 100 XP, each next level 50 more.
 - **Leagues**: ten, Bronze, Silver, Gold, Sapphire, Ruby, Emerald, Amethyst,
-  Pearl, Obsidian, Diamond. Each week (Monday to Sunday) you play nine made-up
-  rivals, drawn from a Gaussian fitted to your last four weeks (5 % stronger
+  Pearl, Obsidian, Diamond. Each week (Sunday to Saturday, like every week in
+  Prometheus) you play nine rivals, scientists and pioneers drawn by lot each
+  season from a pool of 104 (never two with the same first name), drawn from a Gaussian fitted to your last four weeks (5 % stronger
   each league up, never under the league's floor) and seeded by week and
   league, so a week always replays the same. They earn their XP as the week
   goes. Top 3 go up a league, bottom 3 go down one, an empty week always goes
@@ -68,7 +69,9 @@ only what was actually used.
   The first wins a season medal with one bar (75 XP), the second a second bar
   (200 XP in all). Season medals are permanent, on their own row at the top of
   the placard, in random muted colors (never one of the ten medal hues) under a
-  holographic shine; the colors are drawn as the season starts, so the medal to
+  holographic shine and a star: an edge bar on the left for the goal, on both
+  sides for the hard goal. Colors are contrasted (a deep ribbon, a near-white
+  star, vivid edge bars) and kept away from the ten medal hues; they are drawn as the season starts, so the medal to
   win shows grey above each goal and comes alive under the mouse. A finished
   season gets a grade (A hard goal, B goal, C
   75 %, D 50 %, F below) and a recap.
