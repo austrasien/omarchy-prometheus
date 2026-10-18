@@ -767,8 +767,13 @@ class Core:
                                                 zip(C.LEAGUES, C.LEAGUE_COLORS, C.LEAGUE_FLOORS)])
 
     def seasons(self, at: int) -> dict:
-        return {"success": True, "seasons": C.seasons(C.Ledger(self.store, at)),
-                "medals": C.season_medals(self.store)}
+        seasons = C.seasons(C.Ledger(self.store, at))
+        for s in seasons:      # the medal's colors, won or still to win
+            s["colors"] = C.pending_colors(self.store, s["key"])
+        return {"success": True, "seasons": seasons, "medals": C.season_medals(self.store)}
+
+    def leaderboard_remove_quest(self, qid, at: int) -> dict:
+        return self._quest(self.quests.remove_from_board, qid, at)
 
     def leaderboard(self, board, at: int) -> dict:
         board = board if board in C.BOARDS else "days"

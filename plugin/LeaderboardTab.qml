@@ -38,6 +38,11 @@ Column {
     return h > 0 ? h + "h" + String(m % 60).padStart(2, "0") : m + " min"
   }
 
+  // Quests can be taken off the board (an open one is deleted); the XP stays.
+  function removeQuest(e) {
+    p.act("leaderboard:removeQuest", [e.id], "Remove", tab.refresh)
+  }
+
   function rankColor(r) {
     return r === 1 ? "#ffd700" : r === 2 ? "#c0c0c0" : r === 3 ? "#cd7f32" : Util.alpha(w.fg, 0.5)
   }
@@ -93,6 +98,8 @@ Column {
           font.pixelSize: Style.font.caption
         }
 
+        HoverHandler { id: rowHover; enabled: !entry.gap }
+
         Rectangle {
           visible: !entry.gap && entry.modelData.current
           anchors.fill: parent
@@ -119,7 +126,7 @@ Column {
           id: label
           visible: !entry.gap
           anchors.left: rank.right
-          anchors.right: amount.left
+          anchors.right: removeGlyph.left
           anchors.rightMargin: Style.space(6)
           anchors.verticalCenter: parent.verticalCenter
           textFormat: Text.PlainText
@@ -128,6 +135,32 @@ Column {
           font.family: w.fontFamily
           font.pixelSize: Style.font.caption
           elide: Text.ElideRight
+        }
+
+        // On a quest, a cross to take it off the board.
+        Text {
+          id: removeGlyph
+          readonly property bool usable: !entry.gap && tab.board === "quests" && !!entry.modelData.id
+          anchors.right: amount.left
+          anchors.rightMargin: usable ? Style.space(8) : 0
+          anchors.verticalCenter: parent.verticalCenter
+          width: usable ? implicitWidth : 0
+          textFormat: Text.PlainText
+          text: String.fromCodePoint(0xF0156)
+          opacity: usable && (rowHover.hovered || removeArea.containsMouse) ? 1 : 0
+          color: removeArea.containsMouse ? w.red : Util.alpha(w.fg, 0.55)
+          font.family: w.fontFamily
+          font.pixelSize: Style.font.body
+
+          MouseArea {
+            id: removeArea
+            anchors.fill: parent
+            anchors.margins: -Style.space(4)
+            enabled: removeGlyph.usable
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: tab.removeQuest(entry.modelData)
+          }
         }
 
         Text {

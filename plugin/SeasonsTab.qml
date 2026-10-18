@@ -64,29 +64,15 @@ Column {
         font.bold: true
       }
 
-      // The medal as it stands: dim until the goal is reached.
-      Row {
-        id: curMedal
+      // The medal as it stands: grey until the goal is reached, and
+      // tempting under the mouse.
+      SeasonMedal {
         anchors.right: parent.right
         anchors.verticalCenter: seasonTitle.verticalCenter
-        spacing: 1
-        readonly property var medal: tab.cur ? tab.medalOf(tab.cur) : null
-        Repeater {
-          model: curMedal.medal ? curMedal.medal.bars : 0
-          HoloRibbon {
-            size: 1.4
-            color: curMedal.medal.color
-            dot: curMedal.medal.dot
-            edge: curMedal.medal.edge
-          }
-        }
-        Ribbon {
-          visible: !curMedal.medal
-          size: 1.4
-          color: Util.alpha(w.fg, 0.15)
-          dot: Util.alpha(w.fg, 0.3)
-          edges: "both"
-        }
+        bars: tab.cur ? Math.max(1, tab.cur.bars) : 1
+        won: !!tab.cur && tab.cur.bars > 0
+        colors: tab.cur ? tab.cur.colors : null
+        size: 1.4
       }
     }
 
@@ -96,6 +82,33 @@ Column {
       color: Util.alpha(w.fg, 0.55)
       font.family: w.fontFamily
       font.pixelSize: Style.font.caption
+    }
+
+    // What each goal wins: one bar, then two, above its mark.
+    Item {
+      width: parent.width
+      height: goalMedal.implicitHeight + Style.space(10)
+
+      SeasonMedal {
+        id: goalMedal
+        x: tab.cur ? Math.max(0, Math.min(parent.width - width, goals.px(tab.cur.goal) - width / 2)) : 0
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: Style.space(4)
+        bars: 1
+        won: !!tab.cur && tab.cur.bars >= 1
+        colors: tab.cur ? tab.cur.colors : null
+        size: 1.2
+      }
+
+      SeasonMedal {
+        x: tab.cur ? Math.max(0, Math.min(parent.width - width, goals.px(tab.cur.hardGoal) - width / 2)) : 0
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: Style.space(4)
+        bars: 2
+        won: !!tab.cur && tab.cur.bars >= 2
+        colors: tab.cur ? tab.cur.colors : null
+        size: 1.2
+      }
     }
 
     // XP against the two goals.

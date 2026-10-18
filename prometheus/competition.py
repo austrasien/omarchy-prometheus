@@ -37,11 +37,17 @@ FOCUS_SECONDS_PER_XP = 600
 LEAGUES = ["Bronze", "Silver", "Gold", "Sapphire", "Ruby", "Emerald", "Amethyst", "Pearl", "Obsidian", "Diamond"]
 LEAGUE_COLORS = ["#cd7f32", "#c0c0c0", "#ffd700", "#2f6fdb", "#e0115f", "#50c878", "#9966cc", "#eae0c8",
                  "#6b6b85", "#b9f2ff"]
-# Weekly XP needed to enter each league (about 6 XP per hour of focus).
-LEAGUE_FLOORS = [0, 30, 50, 75, 100, 130, 160, 200, 240, 300]
-PROMOTE_FACTOR = 1.10
-RELEGATE_FACTOR = 0.90
+# The rivals' average weekly XP never goes under the league's floor (about
+# 6 XP per hour of focus), and each league up makes them 5 % stronger.
+LEAGUE_FLOORS = [10, 30, 50, 75, 100, 130, 160, 200, 240, 300]
+LEAGUE_STEP = 0.05
 REFERENCE_WEEKS = 4
+RIVALS = 9                   # plus you: ten players a week
+PROMOTED = 3                 # the top 3 go up
+RELEGATED = 3                # the bottom 3 go down
+RIVAL_NAMES = ["Lovelace", "Turing", "Hopper", "vonNeumann", "Shannon", "Dijkstra", "Knuth", "Ritchie",
+               "Torvalds", "Carmack", "Wozniak", "Hamilton", "Feynman", "Babbage", "Engelbart", "Kay",
+               "Tesla", "Curie", "Noether", "Ramanujan", "Euler", "Gauss", "Lamarr", "Satoshi"]
 
 # --------------------------------------------------------------- seasons
 
@@ -126,22 +132,40 @@ class Ledger:
 # --------------------------------------------------------------- leagues
 
 
-def _thresholds(league: int, ref: float | None) -> tuple[int | None, int | None]:
-    promote = None
-    if league < len(LEAGUES) - 1:
-        promote = max(math.ceil(round(PROMOTE_FACTOR * ref, 6)) if ref else 0, LEAGUE_FLOORS[league + 1])
-    relegate = None
-    if league > 0:
-        relegate = LEAGUE_FLOORS[league] if ref is None else min(int(RELEGATE_FACTOR * ref), LEAGUE_FLOORS[league])
-    return promote, relegate
+def _rivals(week: dt.date, league: int, prev: list[int], progress: float) -> list[dict]:
+    """Nine made-up players for a league week, drawn from a Gaussian fitted to
+    your last four weeks (stronger each league up). Seeded by week and league,
+    so a week always replays the same. `progress` (0 to 1): how much of the
+    week has gone by; each rival earns its total at its own pace."""
+    rng = random.Random(f"{week.isoformat()}:{league}")
+    ref = sum(prev) / len(prev) if prev else LEAGUE_FLOORS[min(league + 1, len(LEAGUES) - 1)]
+    mean = max(ref * (1 + LEAGUE_STEP * league), LEAGUE_FLOORS[league])
+    spread = 0.0
+    if len(prev) >= 2:
+        spread = (sum((x - ref) ** 2 for x in prev) / (len(prev) - 1)) ** 0.5
+    sd = max(spread, 0.25 * mean)
+    names = rng.sample(RIVAL_NAMES, RIVALS)
+    out = []
+    for name in names:
+        final = max(0, round(rng.gauss(mean, sd)))
+        pace = rng.uniform(0.7, 1.4)                # under 1 starts fast, over 1 finishes strong
+        out.append({"name": name, "xp": round(final * min(1.0, max(0.0, progress)) ** pace), "final": final})
+    return out
 
 
-def _zone(xp: int, promote, relegate, league: int) -> str:
-    if promote is not None and xp >= promote:
-        return "promotion"
-    if league > 0 and (xp == 0 or (relegate is not None and xp < relegate)):
-        return "relegation"
-    return "stagnation"
+def _standings(xp: int, rivals: list[dict], league: int) -> tuple[list[dict], int, str]:
+    """The ten players ranked (ties go to you), your rank and your zone."""
+    players = [dict(r, you=False) for r in rivals] + [{"name": "You", "xp": xp, "you": True}]
+    players.sort(key=lambda r: (-r["xp"], not r["you"]))
+    for i, r in enumerate(players):
+        r["rank"] = i + 1
+        r["zone"] = ("promotion" if i < PROMOTED else
+                     "relegation" if i >= len(players) - RELEGATED else "stagnation")
+    rank = next(r["rank"] for r in players if r["you"])
+    zone = players[rank - 1]["zone"]
+    if xp == 0:
+        zone = "relegation"                        # an empty week never stays put
+    return players, rank, zone
 
 
 def leagues(ledger: Ledger) -> dict:
@@ -155,22 +179,31 @@ def leagues(ledger: Ledger) -> dict:
     while True:
         xp = weeks.get(w, 0)
         prev = xps[-REFERENCE_WEEKS:]
-        ref = sum(prev) / len(prev) if prev else None
-        promote, relegate = _thresholds(league, ref)
-        zone = _zone(xp, promote, relegate, league)
-        if w == this_monday:
+        current = w == this_monday
+        progress = 1.0
+        if current:
+            week_ms = 7 * 86_400_000
+            progress = (ledger.now - T.week_start(ledger.now)) / week_ms
+        players, rank, zone = _standings(xp, _rivals(w, league, prev, progress), league)
+        top, bottom = league == len(LEAGUES) - 1, league == 0
+        moves = {"promotion": 0 if top else 1, "relegation": 0 if bottom else -1, "stagnation": 0}[zone]
+        if current:
+            others = sorted((r["xp"] for r in players if not r["you"]), reverse=True)
             end = w + dt.timedelta(days=7)
             return {
                 "history": history,
                 "current": {"week": w.isoformat(), "league": league, "name": LEAGUES[league],
-                            "color": LEAGUE_COLORS[league], "xp": xp, "reference": ref,
-                            "promoteAt": promote, "relegateBelow": relegate, "zone": zone,
+                            "color": LEAGUE_COLORS[league], "xp": xp, "rank": rank, "zone": zone,
+                            "players": [{k: r[k] for k in ("name", "xp", "you", "rank", "zone")} for r in players],
+                            # XP to pass the 3rd rival (promotion) and the 7th (out of relegation).
+                            "toPromotion": max(0, others[PROMOTED - 1] + 1 - xp),
+                            "toSafety": max(0, others[len(others) - RELEGATED] + 1 - xp),
+                            "top": top, "bottom": bottom, "reference": sum(prev) / len(prev) if prev else None,
                             "daysLeft": (end - ledger.today).days},
             }
-        after = league + 1 if zone == "promotion" else league - 1 if zone == "relegation" else league
-        history.append({"week": w.isoformat(), "before": league, "after": after, "xp": xp,
-                        "outcome": "up" if after > league else "down" if after < league else "stay",
-                        "promoteAt": promote, "relegateBelow": relegate})
+        after = league + moves
+        history.append({"week": w.isoformat(), "before": league, "after": after, "xp": xp, "rank": rank,
+                        "outcome": "up" if after > league else "down" if after < league else "stay"})
         league = after
         xps.append(xp)
         w += dt.timedelta(days=7)
@@ -246,6 +279,16 @@ def season_colors(rng: random.Random | None = None) -> dict:
     }
 
 
+def pending_colors(store, key: str) -> dict:
+    """The colors the season's medal will have: drawn once, as the season
+    starts, so the preview shows the very medal to win."""
+    saved = store.get_setting("seasonColors") or {}
+    if key not in saved:
+        saved[key] = season_colors()
+        store.set_setting("seasonColors", saved)
+    return saved[key]
+
+
 def check_season_medals(store, ledger: Ledger, now: int) -> list[dict]:
     """Award (or upgrade to two bars) the season medals the records justify."""
     new = []
@@ -255,7 +298,7 @@ def check_season_medals(store, ledger: Ledger, now: int) -> list[dict]:
             continue
         row = have.get(s["key"])
         if row is None:
-            c = season_colors()
+            c = pending_colors(store, s["key"])
             store.db.execute(
                 "INSERT INTO season_medals(season, number, bars, bg, dot, edge, awarded_at, xp) "
                 "VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
@@ -312,8 +355,10 @@ def leaderboard(store, ledger: Ledger, board: str, quests: list[dict] | None = N
                                 "value": sec, "unit": "s", "date": T.date_str(start), "current": is_open})
     elif board == "quests":
         for q in quests or []:
+            if q.get("board_hidden"):
+                continue
             if q["activity"]["xp"] > 0 or q.get("active"):
-                entries.append({"label": q["title"], "value": q["activity"]["xp"], "unit": "XP",
+                entries.append({"id": q["id"], "label": q["title"], "value": q["activity"]["xp"], "unit": "XP",
                                 "date": T.date_str(q["created"]), "current": bool(q.get("active"))})
     else:
         board = "days"

@@ -54,23 +54,27 @@ only what was actually used.
 - **XP and levels**: 1 XP per 10 min of session (pauses excluded), plus done
   tasks, plus won challenges. Level 2 costs 100 XP, each next level 50 more.
 - **Leagues**: ten, Bronze, Silver, Gold, Sapphire, Ruby, Emerald, Amethyst,
-  Pearl, Obsidian, Diamond. Each week (Monday to Sunday) is settled against your
-  own recent weeks, one league up or down at most: promotion needs 10 % more XP
-  than the average of the four weeks before and the next league's floor
-  (30, 50, 75, 100, 130, 160, 200, 240, 300 XP); relegation comes under 90 % of
-  that average and under the league's floor, or with an empty week. The tab
-  shows the ladder, the week's zone (relegation, stagnation, promotion) and the
-  settled weeks. League XP is XP from the work: focus, tasks, challenges,
-  quests; achievements and medals are left out.
+  Pearl, Obsidian, Diamond. Each week (Monday to Sunday) you play nine made-up
+  rivals, drawn from a Gaussian fitted to your last four weeks (5 % stronger
+  each league up, never under the league's floor) and seeded by week and
+  league, so a week always replays the same. They earn their XP as the week
+  goes. Top 3 go up a league, bottom 3 go down one, an empty week always goes
+  down. The tab shows the ten players with the promotion, stagnation and
+  relegation zones, green chevrons streaming up or red ones streaming down.
+  League XP is XP from the work: focus, tasks, challenges, quests;
+  achievements and medals are left out.
 - **Seasons**: calendar quarters, numbered from the first with any work. Two
   goals: the previous season's XP (300 at least) and 25 % more (600 at least).
   The first wins a season medal with one bar (75 XP), the second a second bar
   (200 XP in all). Season medals are permanent, on their own row at the top of
   the placard, in random muted colors (never one of the ten medal hues) under a
-  holographic shine. A finished season gets a grade (A hard goal, B goal, C
+  holographic shine; the colors are drawn as the season starts, so the medal to
+  win shows grey above each goal and comes alive under the mouse. A finished
+  season gets a grade (A hard goal, B goal, C
   75 %, D 50 %, F below) and a recap.
 - **Leaderboard**: your best days and weeks (XP), sessions (focus) and quests
-  (XP while active), top 10, with the current one highlighted.
+  (XP while active), top 10, with the current one highlighted. A quest can be
+  taken off the board (an open one is deleted); its XP stays.
 - **Achievements** (a family not started yet shows only dots; tiers after the next one too): 111 families with 724 tiers (17 on quests, 13 on leagues, seasons and leaderboards), plus a calendar of 126
   dated achievements (one per date: Roman festivals, geek days, scientists
   and writers, SpaceX and Tesla milestones, each unlocked by finishing a
@@ -175,6 +179,7 @@ bar (session ended, challenge won).
 | `leagues:get` | | League ladder, settled weeks, the current week's zone |
 | `seasons:get` | | Every season (goals, grade, recap) and the season medals |
 | `leaderboard:get` | `[board]` | Top 10 of `days`, `weeks`, `sessions` or `quests` |
+| `leaderboard:removeQuest` | `[id]` | Take a quest off the board (an open one is deleted); XP stays |
 | `quests:list` | | Open quests, the last completed ones, quest XP |
 | `quests:add` | `[title, kind]` | New quest; kind is `daily`, `short` or `long` |
 | `quests:activate` | `[id]` | Make it the active quest (only one at a time) |

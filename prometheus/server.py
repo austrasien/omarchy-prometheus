@@ -96,6 +96,7 @@ class Daemon:
             "leagues:get": lambda a: self.core.leagues(self.clock()),
             "seasons:get": lambda a: self.core.seasons(self.clock()),
             "leaderboard:get": lambda a: self.core.leaderboard(a[0] if a else "days", self.clock()),
+            "leaderboard:removeQuest": lambda a: self.core.leaderboard_remove_quest(a[0] if a else None, self.clock()),
             "quests:list": lambda a: self.core.quests_list(self.clock()),
             "quests:add": lambda a: self.core.quest_add(a[0] if a else "", a[1] if len(a) > 1 else "", self.clock()),
             "quests:activate": lambda a: self.core.quest_activate(a[0] if a else None, self.clock()),

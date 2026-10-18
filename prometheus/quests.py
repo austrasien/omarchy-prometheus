@@ -151,6 +151,7 @@ class Quests:
             periods = self.periods(r["id"], at)
             out.append({
                 "id": r["id"], "title": r["title"], "active": bool(r["active"]),
+                "board_hidden": bool(r["board_hidden"]),
                 "kind": r["kind"], "color": r["color"] or FIRST_COLOR,
                 "created": r["created_at"], "done": r["done_at"], "deleted": r["deleted_at"],
                 "first_active": periods[0][0] if periods else None,
@@ -304,6 +305,19 @@ class Quests:
                                 (color, qid)).rowcount
         if n == 0:
             raise QuestError("Quest not done")
+        return {"success": True}
+
+    def remove_from_board(self, qid, at: int) -> dict:
+        """Take a quest off the leaderboard; an open one is deleted too. The
+        XP it earned stays."""
+        if not isinstance(qid, str):
+            raise QuestError("Quest not found")
+        r = self.db.execute("SELECT * FROM quests WHERE id=?", (qid,)).fetchone()
+        if r is None:
+            raise QuestError("Quest not found")
+        if r["deleted_at"] is None and r["done_at"] is None:
+            self.delete(qid, at)
+        self.db.execute("UPDATE quests SET board_hidden=1 WHERE id=?", (qid,))
         return {"success": True}
 
     def mark_work(self, at: int) -> None:

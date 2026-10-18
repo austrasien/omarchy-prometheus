@@ -28,28 +28,35 @@ class CompetitionTest(unittest.TestCase):
         self.core.start(None, self.at(day))
         self.core.end(self.at(day, minutes))
 
-    def test_thresholds_bronze_and_diamond(self):
-        self.assertEqual(C._thresholds(0, None), (30, None))
-        self.assertEqual(C._thresholds(9, 1000), (None, 300))
-        self.assertEqual(C._thresholds(3, 200), (220, 75))
+    def test_rivals_are_seeded_and_gaussian(self):
+        w = C._monday(C._date(T.date_str(self.at(0))))
+        a = C._rivals(w, 3, [100, 120, 80, 100], 1.0)
+        self.assertEqual(a, C._rivals(w, 3, [100, 120, 80, 100], 1.0))
+        self.assertEqual(len(a), 9)
+        mean = sum(r["final"] for r in a) / 9
+        self.assertTrue(60 < mean < 170)                 # around 100 x 1.15
+        half = C._rivals(w, 3, [100, 120, 80, 100], 0.5)
+        self.assertTrue(all(h["xp"] <= r["xp"] for h, r in zip(half, a)))
+
+    def test_standings_zones(self):
+        rivals = [{"name": str(i), "xp": 10 * i, "final": 10 * i} for i in range(1, 10)]
+        self.assertEqual(C._standings(1000, rivals, 4)[1:], (1, "promotion"))
+        self.assertEqual(C._standings(55, rivals, 4)[1:], (5, "stagnation"))
+        self.assertEqual(C._standings(15, rivals, 4)[1:], (9, "relegation"))
+        self.assertEqual(C._standings(0, [dict(r, xp=0) for r in rivals], 4)[2], "relegation")
 
     def test_one_league_at_a_time_up_and_down(self):
-        # Week 0: 600 min = 60 XP, way past Silver's floor: still one league only.
-        self.work(0, 600)
-        # Week 1: 70 XP, needs max(1.1 * 60, 50) = 66: up again, to Gold.
-        self.work(7, 700)
-        # Week 2: nothing at all: down one league.
-        hist = C.leagues(C.Ledger(self.store, self.at(21)))["history"]
-        self.assertEqual([(w["before"], w["after"]) for w in hist[:3]], [(0, 1), (1, 2), (2, 1)])
+        self.work(0, 6000)          # 600 XP: top of any table, but one league up only
+        hist = C.leagues(C.Ledger(self.store, self.at(14)))["history"]
+        self.assertEqual([(w["before"], w["after"]) for w in hist[:2]], [(0, 1), (1, 0)])   # then an empty week
 
-    def test_current_zone(self):
+    def test_current_week_players(self):
         self.work(0, 600)
         cur = C.leagues(C.Ledger(self.store, self.at(7, 1)))["current"]
-        self.assertEqual(cur["league"], 1)
-        self.assertEqual(cur["zone"], "relegation")       # Monday, 0 XP so far
-        self.work(7, 400)                                  # 40 XP < 66 to promote
-        cur = C.leagues(C.Ledger(self.store, self.at(8)))["current"]
-        self.assertEqual(cur["zone"], "stagnation")
+        self.assertEqual(len(cur["players"]), 10)
+        self.assertEqual(cur["zone"], "relegation")       # Monday morning, 0 XP so far
+        self.assertEqual(sum(p["you"] for p in cur["players"]), 1)
+        self.assertGreater(cur["toSafety"], 0)
 
     def test_seasons_goal_bars_grade(self):
         ledger = C.Ledger(self.store, self.at(0))
@@ -95,9 +102,28 @@ class CompetitionTest(unittest.TestCase):
         self.assertEqual(C.records([(1, 10), (2, 30), (3, 20), (4, 40)]), 2)
         self.assertEqual(C.podiums([(i, v) for i, v in enumerate([5, 4, 3, 2, 1, 9, 0, 4])]), 2)
 
+    def test_season_preview_colors_are_the_medal_colors(self):
+        preview = self.core.seasons(self.at(0))["seasons"][-1]["colors"]
+        for d in range(5):
+            self.work(d, 600)
+        self.core.check_medals(self.at(5))
+        row = self.store.db.execute("SELECT bg, dot, edge FROM season_medals").fetchone()
+        self.assertEqual((row["bg"], row["dot"], row["edge"]), (preview["bg"], preview["dot"], preview["edge"]))
+
+    def test_leaderboard_quest_removal_keeps_xp(self):
+        q = self.core.quest_add("Ship it", "short", self.at(0))["quest"]["id"]
+        self.core.quest_activate(q, self.at(0))
+        self.work(0, 120)
+        self.assertEqual(len(self.core.leaderboard("quests", self.at(1))["entries"]), 1)
+        xp = self.core.profile(self.at(1))["xp"]
+        self.core.leaderboard_remove_quest(q, self.at(1))
+        self.assertEqual(self.core.leaderboard("quests", self.at(1))["entries"], [])
+        self.assertEqual(self.core.profile(self.at(1))["xp"], xp)
+        self.assertEqual(self.core.quests_list(self.at(1))["quests"], [])     # an open quest is deleted too
+
     def test_achievements(self):
-        self.work(0, 600)
-        self.work(7, 700)
+        self.work(0, 6000)
+        self.work(7, 9000)
         self.core.check_medals(self.at(14))
         got = set(self.store.unlocked_achievements()) | {a["id"] for a in self.core.check_achievements(self.at(14))}
         for aid in ("promoted:1", "leagueclimb:2", "promostreak:2"):
