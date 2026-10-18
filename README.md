@@ -86,7 +86,9 @@ only what was actually used.
   (XP while active), top 10, with the current one highlighted. A quest can be
   taken off the board (an open one is deleted); its XP stays.
 - **Share**: the "share" button by the panel's title renders a service ID card
-  as an animated PNG (24 frames, every shine looping; about 1 MB at 900 px):
+  as an animated PNG (18 frames, a hologram and a glint on the ribbons
+  looping, 256 colors; under 1 MB at 900 px; the first frame is mid-shine, for
+  viewers that show only it):
   @handle (set in Settings), service number, rank, XP, league, enlistment
   date, service record (every season's grade), decorations (every medal) and
   legendary achievements, with a holographic seal. It asks where to save it

@@ -639,15 +639,17 @@ BarWidget {
   // makes an animated PNG of the frames, then a save dialog asks where it
   // goes, and it is copied there.
   readonly property string shareTemp: Quickshell.env("XDG_RUNTIME_DIR") + "/prometheus-share.png"
-  readonly property int shareFrames: 24          // one loop of every shine
-  readonly property real shareScale: 1.5         // 900 px wide: sharp, still light
+  readonly property int shareFrames: 18          // one loop of every shine
+  readonly property real shareScale: 1.2         // about 900 px wide on a 1.25 screen: sharp, still light
   function shareFrame(k) {
     return Quickshell.env("XDG_RUNTIME_DIR") + "/prometheus-share-" + (k < 10 ? "0" : "") + k + ".png"
   }
 
   function encodeShare() {
-    encodeProc.command = ["ffmpeg", "-loglevel", "error", "-y", "-framerate", "12",
+    // 256 colors, one palette for the whole loop: under 1 MB, no visible loss.
+    encodeProc.command = ["ffmpeg", "-loglevel", "error", "-y", "-framerate", "9",
       "-i", Quickshell.env("XDG_RUNTIME_DIR") + "/prometheus-share-%02d.png",
+      "-vf", "split[a][b];[a]palettegen=max_colors=256:stats_mode=full[p];[b][p]paletteuse=dither=sierra2_4a",
       "-plays", "0", "-f", "apng", root.shareTemp]
     encodeProc.running = true
   }
@@ -932,7 +934,8 @@ BarWidget {
 
       function grabFrame(k) {
         if (k >= root.shareFrames) { root.encodeShare(); return }
-        shareCard.frame = k / root.shareFrames
+        // Shifted so the first frame (all a still viewer shows) is mid-shine.
+        shareCard.frame = (k / root.shareFrames + 0.45) % 1
         Qt.callLater(function() {
           shareCard.grabToImage(function(result) {
             if (!result.saveToFile(root.shareFrame(k))) {

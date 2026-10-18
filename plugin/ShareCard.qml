@@ -338,6 +338,29 @@ Rectangle {
           readonly property bool season: modelData.period === "season"
           width: season ? holo.width : plain.width
           height: season ? holo.height : plain.height
+          // A band of light sweeps across the whole rack, seen only on the
+          // ribbons themselves.
+          Item {
+            id: medalCell
+            anchors.fill: parent
+            z: 2
+            clip: true
+            Rectangle {
+              readonly property real sweep: rack.width + 120
+              width: 26
+              height: medalCell.height * 3
+              anchors.verticalCenter: parent.verticalCenter
+              rotation: 25
+              x: -60 + sweep * card.frame - medalCell.parent.x
+              gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop { position: 0.0; color: "#00ffffff" }
+                GradientStop { position: 0.5; color: "#d8ffffff" }
+                GradientStop { position: 1.0; color: "#00ffffff" }
+              }
+            }
+          }
+
           HoloRibbon {
             id: holo
             visible: parent.season
@@ -440,6 +463,30 @@ Rectangle {
       font.bold: true
       style: Text.Outline
       styleColor: Qt.rgba(0, 0, 0, 0.35)
+    }
+  }
+
+  // ---- a hologram sweeping the whole card: a wide rainbow-tinted band of
+  // light crossing it diagonally once per loop
+  Item {
+    anchors.fill: parent
+    z: 10
+    Rectangle {
+      width: 170
+      height: card.height * 2.2
+      y: -card.height * 0.6
+      rotation: 24
+      x: -260 + (card.width + 420) * card.frame
+      opacity: 0.22
+      gradient: Gradient {
+        orientation: Gradient.Horizontal
+        GradientStop { position: 0.00; color: "#00ffffff" }
+        GradientStop { position: 0.30; color: "#66ff9ad5" }
+        GradientStop { position: 0.45; color: "#ffffffff" }
+        GradientStop { position: 0.55; color: "#ff9adfff" }
+        GradientStop { position: 0.70; color: "#66b4ff9a" }
+        GradientStop { position: 1.00; color: "#00ffffff" }
+      }
     }
   }
 

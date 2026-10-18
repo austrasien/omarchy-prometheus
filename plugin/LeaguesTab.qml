@@ -125,9 +125,9 @@ Column {
               SequentialAnimation on x {
                 running: index >= 5 && tab.visible
                 loops: Animation.Infinite
-                PauseAnimation { duration: (index - 5) * 180 }
+                PauseAnimation { duration: Math.max(0, (index - 5) * 180) }
                 NumberAnimation { from: -glint.width; to: glint.parent.width + glint.width * 0.2; duration: 650; easing.type: Easing.InOutQuad }
-                PauseAnimation { duration: 1800 - (index - 5) * 180 }
+                PauseAnimation { duration: Math.max(0, 1800 - (index - 5) * 180) }
               }
             }
           }
