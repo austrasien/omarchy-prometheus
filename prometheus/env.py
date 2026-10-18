@@ -31,6 +31,21 @@ def on_battery(root: Path = POWER_SUPPLY) -> bool:
     return bool(mains) and not any(mains)
 
 
+def battery_percent(root: Path = POWER_SUPPLY) -> float | None:
+    """Charge of the first battery, in %, or None without one."""
+    try:
+        entries = sorted(root.iterdir())
+    except OSError:
+        return None
+    for d in entries:
+        try:
+            if (d / "type").read_text().strip() == "Battery":
+                return float((d / "capacity").read_text().strip())
+        except (OSError, ValueError):
+            continue
+    return None
+
+
 # WMO weather codes (Open-Meteo) and wttr.in codes, folded into a few kinds.
 _WMO = {
     "storm": {95, 96, 99},

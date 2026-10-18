@@ -90,6 +90,10 @@ class Context:
     goal_hours: float | None = None                          # daily goal, if any
     level: int = 1
     monotask: float = 0.0                                    # longest one-app stretch in a session, s
+    reflexes: int = 0                                        # "Toujours là ?" answered in < 10 s
+    inbox_zero: int = 0                                      # times the to-do list was emptied
+    put_off: list = field(default_factory=list)              # (task text, when) of procrastinated sessions
+    switches: dict = field(default_factory=dict)             # session id -> app changes
 
 
 def _date(s: str) -> dt.date:
@@ -112,6 +116,7 @@ def build_context(store, now: int, level: int) -> Context:
             "open": r["ended_at"] is None, "focus": focus, "pause_ms": r["total_pause_ms"] or 0,
             "reason": r["end_reason"], "battery": r["on_battery"], "weather": r["weather"],
             "temp": r["temp_c"], "date": T.date_str(r["started_at"]),
+            "battery_pct": r["battery_pct"],
         }
         ctx.sessions.append(s)
         if not s["open"]:
@@ -124,8 +129,13 @@ def build_context(store, now: int, level: int) -> Context:
     for r in store.all_sessions():
         if r["end_reason"] == "procrastinated" and r["task"]:
             ctx.procrastinations[r["task"]] = ctx.procrastinations.get(r["task"], 0) + 1
+            ctx.put_off.append((r["task"], r["ended_at"] or now))
 
-    ctx.tasks_done = [{"created": r["created_at"], "done": r["done_at"]} for r in store.done_tasks()]
+    ctx.tasks_done = [{"text": r["text"], "created": r["created_at"], "done": r["done_at"]}
+                      for r in store.done_tasks()]
+    ctx.reflexes = store.count_events("reflex")
+    ctx.inbox_zero = store.count_events("inbox_zero")
+    ctx.switches = _app_switches(store)
     ctx.challenges_won = int(store.db.execute("SELECT COUNT(*) FROM challenges WHERE state='won'").fetchone()[0])
     ctx.triples = int(store.db.execute(
         "SELECT COUNT(*) FROM (SELECT session_id FROM challenges WHERE state='won' "
@@ -136,6 +146,21 @@ def build_context(store, now: int, level: int) -> Context:
         ctx.goal_hours = float(goal["hours"])
     ctx.monotask = _longest_single_app(store)
     return ctx
+
+
+def _app_switches(store) -> dict:
+    """App changes per session (a pause or an idle cut in one app is not a switch)."""
+    out, sid, app = {}, None, None
+    for r in store.db.execute(
+        "SELECT session_id, app FROM focus_spans WHERE session_id IS NOT NULL ORDER BY session_id, started_at"
+    ):
+        if r["session_id"] != sid:
+            sid, app = r["session_id"], r["app"]
+            out[sid] = 0
+        elif r["app"] != app:
+            out[sid] += 1
+            app = r["app"]
+    return out
 
 
 def _longest_single_app(store, gap_ms: int = 60_000) -> float:
@@ -272,6 +297,57 @@ def _anniversary(c: Context) -> float | None:
 
 def _weather(kind: str):
     return lambda c: sum(1 for s in c.closed if s["weather"] == kind) or None
+
+
+def _same_day_tasks(c: Context) -> float | None:
+    return sum(1 for t in c.tasks_done if T.date_str(t["created"]) == T.date_str(t["done"])) or None
+
+
+def _redemptions(c: Context) -> float | None:
+    """Tasks finished after a session on them had been procrastinated."""
+    n = sum(1 for t in c.tasks_done if any(task == t["text"] and when <= t["done"] for task, when in c.put_off))
+    return n or None
+
+
+def _months(c: Context) -> dict:
+    counts = defaultdict(int)
+    for d in c.day_sessions:
+        counts[d[:7]] += 1
+    return counts
+
+
+def _calm_sessions(c: Context) -> float | None:
+    """Sessions of 1 h+ with fewer than 5 app switches per hour."""
+    n = 0
+    for s in c.closed:
+        if s["focus"] >= H and c.switches.get(s["id"], 0) / (s["focus"] / H) < 5:
+            n += 1
+    return n or None
+
+
+def _bookends(c: Context) -> float | None:
+    early, late = set(), set()
+    for s in c.sessions:
+        t = _local(s["start"])
+        if 4 <= t.hour < 7:
+            early.add(s["date"])
+        if _night_hour(s) > 22:
+            late.add(s["date"])
+    return len(early & late) or None
+
+
+def _midnight_crossings(c: Context) -> float | None:
+    return sum(1 for s in c.sessions if _local(s["start"]).date() != _local(s["end"]).date()) or None
+
+
+def _on_dates(dates: set[tuple[int, int]]):
+    def measure(c: Context) -> float | None:
+        for s in c.sessions:
+            t = _local(s["start"])
+            if (t.month, t.day) in dates:
+                return 1
+        return None
+    return measure
 
 
 def _goal_streak(c: Context) -> float | None:
@@ -472,13 +548,84 @@ FAMILIES: list[Family] = [
     # ---- calendar
     Family("newyear", "Day one", _new_year, [1],
            lambda t: "Day One", lambda t: "Hold a session on January 1st.",
-           ["New year, same mission. Resolutions are for people without roadmaps."]),
+           ["New year, same mission. Resolutions are for people without roadmaps."], secret=True),
+    Family("christmas", "Ghost of Christmas future", _on_dates({(12, 25)}), [1],
+           lambda t: "Ghost of Christmas Future", lambda t: "Hold a session on December 25th.",
+           ["A session on Christmas. Santa runs a logistics monopoly; you run a one-person moonshot."],
+           secret=True),
+    Family("orthodox", "Julian calendar", _on_dates({(1, 6), (1, 7)}), [1],
+           lambda t: "Julian Calendar", lambda t: "Hold a session on Orthodox Christmas (January 6th or 7th).",
+           ["Two Christmases, zero days off. Calendar arbitrage."], secret=True),
+    Family("bookends", "Bookends", _bookends, [1, 5, 10, 25, 50],
+           lambda t: f"Bookends ×{t:g}", lambda t: f"Start before 7:00 and still be in session after 22:00, the same day, {t:g} times.",
+           ["Dawn to dark, {n} times. Work-life balance is a cope.",
+            "{n} days bookended. The sun clocks fewer hours than you."], secret=True),
+    Family("midnight", "Date line", _midnight_crossings, [1, 5, 10, 25, 50],
+           lambda t: f"Date Line ×{t:g}", lambda t: f"Cross midnight in session {t:g} times.",
+           ["You started yesterday and finished today. Time zones are a social construct.",
+            "{n} midnights crossed mid-flow. Calendars can't contain you."], secret=True),
     Family("fullmoon", "Lunar shift", _full_moon, [1],
            lambda t: "Lunar Shift", lambda t: "Hold a session under a full moon.",
            ["Full moon session. Next one from Mars."]),
     Family("anniversary", "Year one", _anniversary, [1],
            lambda t: "Year One", lambda t: "Still lighting fires 365 days after your first session.",
            ["One year of stolen fire. Zeus is suing; a billionaire is funding your defense."]),
+
+    # ---- more tasks
+    Family("sameday", "Same-day delivery", _same_day_tasks, [5, 10, 25, 50, 100, 200],
+           lambda t: f"Same-Day Delivery {t:g}", lambda t: f"Finish {t:g} tasks the day you added them.",
+           ["{n} tasks shipped same day. Amazon Prime wishes.",
+            "{n} same-day finishes. Backlogs are where ideas go to get regulated.",
+            "{n}. Your to-do list has a half-life of hours."]),
+    Family("inboxzero", "Inbox zero", lambda c: c.inbox_zero or None, [1, 5, 20, 40, 80, 160],
+           lambda t: f"Inbox Zero ×{t:g}", lambda t: f"Empty your to-do list by finishing the last task, {t:g} times.",
+           ["Nothing left to do. Go invent something.",
+            "{n} empty lists. Scarcity of tasks: the only scarcity you enjoy.",
+            "{n} times at zero. The backlog is a myth you keep debunking."]),
+    Family("redemption", "Redemption arc", _redemptions, [1, 5, 20, 40, 80, 160],
+           lambda t: f"Redemption Arc ×{t:g}", lambda t: f"Finish {t:g} tasks you had procrastinated.",
+           ["Procrastinated, then crushed. Optionality, exercised.",
+            "{n} comebacks. Every delay was just a strategic pivot.",
+            "{n} redemptions. Your past self owes you equity."]),
+
+    # ---- more regularity
+    Family("activedays", "Days in orbit", lambda c: len(c.day_sessions) or None, [30, 100, 365, 1000, 2000, 3000],
+           lambda t: f"Days in Orbit {t:g}", lambda t: f"Hold a session on {t:g} different days.",
+           ["{n} days in orbit. Gravity is optional.",
+            "{n} active days. You don't show up; you persist.",
+            "{n} days. Lindy effect: the longer you last, the longer you'll last."], unit="days"),
+    Family("fullmonth", "Full month", lambda c: max(_months(c).values(), default=None), [20, 25, 30],
+           lambda t: f"Full Month {t:g}", lambda t: f"{t:g} active days in the same month.",
+           ["{n} days this month. Holidays are a rounding error.",
+            "{n} days. You've annexed the calendar."], unit="days"),
+    Family("dailymax", "Session spree", lambda c: max(c.day_sessions.values(), default=None), [5, 8, 12],
+           lambda t: f"Session Spree {t:g}", lambda t: f"Hold {t:g} sessions in one day.",
+           ["{n} sessions in a day. Context switches are cheap when you own the context.",
+            "{n} in one day. Ship, reset, ship again."]),
+    Family("goodmonths", "Monthly cadence",
+           lambda c: sum(1 for k in _months(c).values() if k >= 20) or None, [1, 2, 3, 4, 5, 10, 25, 50, 100, 200],
+           lambda t: f"Monthly Cadence {t:g}", lambda t: f"{t:g} months with at least 20 active days.",
+           ["{n} strong months. Quarterly reports are for people who need permission.",
+            "{n} months at 20+ days. Consistency, compounding, conquest.",
+            "{n} months. Your work ethic has a longer track record than most startups."]),
+
+    # ---- focus quality and reflexes
+    Family("calm", "Deep water", _calm_sessions, [1, 5, 10, 25, 50],
+           lambda t: f"Deep Water {t:g}", lambda t: f"{t:g} sessions of 1 h+ with fewer than 5 app switches an hour.",
+           ["One hour, barely a switch. Attention is the new oil and you're OPEC.",
+            "{n} calm sessions. The attention economy wants a refund."]),
+    Family("reflexes", "Quick draw", lambda c: c.reflexes or None, [1, 5, 10, 25, 50, 100, 200, 300, 400, 500],
+           lambda t: f"Quick Draw {t:g}", lambda t: f"Answer « Toujours là ? » in under 10 seconds, {t:g} times.",
+           ["Under ten seconds. Still here, still shipping.",
+            "{n} quick answers. Your latency beats most governments' by a decade.",
+            "{n} times in under 10 s. Neuralink, call this person."]),
+    Family("fumes", "Running on fumes",
+           lambda c: sum(1 for s in c.closed if s["battery"] and s["battery_pct"] is not None and s["battery_pct"] < 10) or None,
+           [1, 5, 10, 25, 50, 100, 200, 300, 400, 500],
+           lambda t: f"Running on Fumes {t:g}", lambda t: f"End {t:g} sessions with the battery under 10 %.",
+           ["Under 10 % and still shipping. Energy scarcity is a skill issue.",
+            "{n} sessions on fumes. Your charger is a crutch.",
+            "{n} near-dead finishes. Living dangerously, efficiently."]),
 
     # ---- the world outside
     Family("battery", "Off-grid", lambda c: sum(1 for s in c.closed if s["battery"]) or None,

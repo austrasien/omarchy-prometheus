@@ -16,7 +16,9 @@ class AchievementsTest(unittest.TestCase):
         self.core = Core(self.store)
         self.battery = False
         self.weather = (None, None)
+        self.pct = 50.0
         self.core.on_battery = lambda: self.battery
+        self.core.battery_percent = lambda: self.pct
         self.core.weather_now = lambda at: self.weather
         # A Wednesday at 10:00 local, so weekdays and clocks are predictable.
         base = T.day_start(T.now_ms())
@@ -98,6 +100,39 @@ class AchievementsTest(unittest.TestCase):
         self.assertEqual([fam.xp(i) for i in (0, 1, 9, 10, 99)], [5, 10, 50, 50, 50])
         self.assertEqual(next(f for f in A.FAMILIES if f.id == "comeback").xp(0), 10)
         self.assertEqual(next(f for f in A.FAMILIES if f.id == "monk").xp(0), 25)
+
+    def test_task_families(self):
+        c = self.core
+        c.start("Ship it", self.t0)
+        a = c.task_add("Ship it", "manual", self.t0)["task"]
+        c.end(self.t0 + 20 * MIN, reason="procrastinated")       # put off once
+        c.start("again", self.t0 + H)
+        c.task_complete(a["id"], self.t0 + H + MIN)              # same day, list now empty
+        c.end(self.t0 + H + 20 * MIN)
+        self.check(self.t0 + 2 * H)
+        got = self.unlocked()
+        self.assertIn("inboxzero:1", got)
+        self.assertIn("redemption:1", got)
+        self.assertNotIn("sameday:5", got)
+
+    def test_reflex_fumes_and_midnight(self):
+        c = self.core
+        midnight = T.add_days(T.day_start(self.t0), 1) - 5 * H     # next calendar midnight
+        self.battery, self.pct = True, 7.0
+        c.start("late", midnight - 30 * MIN)
+        c.presence_asked_at = midnight - 20 * MIN
+        c.presence_confirm(midnight - 20 * MIN + 4000)            # answered in 4 s
+        c.end(midnight + 15 * MIN)
+        self.check(midnight + H)
+        got = self.unlocked()
+        self.assertIn("reflexes:1", got)
+        self.assertIn("fumes:1", got)
+        self.assertIn("midnight:1", got)
+
+    def test_secret_holidays(self):
+        cat = {f["id"]: f for f in self.core.achievements_list(self.t0)["families"]}
+        for fid in ("christmas", "orthodox", "newyear", "bookends", "midnight"):
+            self.assertEqual(cat[fid]["title"], "???")
 
     def test_moon(self):
         full = 947182440000 + int(14.77 * DAY)          # 2000-01-06 new moon + 14.77 days

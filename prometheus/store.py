@@ -13,7 +13,7 @@ import sqlite3
 import uuid
 from pathlib import Path
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
@@ -129,8 +129,9 @@ class Store:
         if "xp" not in cols:  # v1 -> v2: XP a task was worth when it was done
             self.db.execute("ALTER TABLE tasks ADD COLUMN xp INTEGER")
         cols = {r["name"] for r in self.db.execute("PRAGMA table_info(sessions)")}
-        for name, kind in (("on_battery", "INTEGER"), ("weather", "TEXT"), ("temp_c", "REAL")):
-            if name not in cols:  # v2 -> v3: the world around a session
+        for name, kind in (("on_battery", "INTEGER"), ("weather", "TEXT"), ("temp_c", "REAL"),
+                           ("battery_pct", "REAL")):
+            if name not in cols:  # v2 -> v3 (v4: battery_pct): the world around a session
                 self.db.execute(f"ALTER TABLE sessions ADD COLUMN {name} {kind}")
 
     def close(self) -> None:

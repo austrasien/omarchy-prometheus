@@ -62,6 +62,7 @@ class Core:
         self.presence_asked_at = None
         # The world around a session; replaced in tests.
         self.on_battery = env.on_battery
+        self.battery_percent = env.battery_percent
         self.weather_now = env.weather_now
         self.span_id: int | None = None
         self.span_app: str | None = None
@@ -295,7 +296,8 @@ class Core:
         self.store.set_setting("autoPause", {})
         weather, temp = self.weather_now(at)
         battery = 1 if (s["on_battery"] or self.on_battery()) else 0  # on battery at either end
-        self.store.set_session_env(s["id"], on_battery=battery, weather=weather, temp_c=temp)
+        self.store.set_session_env(s["id"], on_battery=battery, weather=weather, temp_c=temp,
+                                   battery_pct=self.battery_percent())
         self._open_span(at)
         done = self.store.get_session(s["id"])
         seconds = session_seconds(done)
@@ -533,6 +535,8 @@ class Core:
         xp = self.task_xp(row["created_at"], at) if row is not None else 0
         if row is None or not self.store.complete_task(tid, at, self._session()["id"], xp):
             raise Refused("Tâche introuvable ou déjà faite")
+        if not self.store.open_tasks():  # the list just went empty by finishing, not deleting
+            self.store.add_event("inbox_zero", at, self._session()["id"])
         return {"success": True, "xp": xp}
 
     def task_reopen(self, tid) -> dict:
@@ -761,6 +765,12 @@ class Core:
         self.store.set_setting("presenceEveryMinutes", int(minutes))
         return {"success": True, "minutes": int(minutes)}
 
+    REFLEX_MS = 10_000
+
     def presence_confirm(self, at: int) -> dict:
+        asked = self.presence_asked_at
+        if asked is not None and at - asked < self.REFLEX_MS:
+            s = self._session()
+            self.store.add_event("reflex", at, s["id"] if s is not None else None)
         self._present(at)
         return {"success": True}
