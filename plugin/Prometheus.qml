@@ -33,6 +33,7 @@ Item {
   property var profile: null      // { xp, level, levelXp, levelCost, focusXp, taskXp, challengeXp }
   property var challenge: null    // { id, state: offered | active, minutes, xp, remainingSeconds }
   property var presence: null     // { askedAt, flashing, pauseAt } while "still there?" is asked
+  property var medals: []         // the placard: [{ id, name, desc, period, color, dots, dot, edges, count, current }]
   property var history: []        // seven { date, minutes }, oldest first
   property var apps: []           // today's top five { app, seconds }
   property int trackedSeconds: 0
@@ -160,6 +161,7 @@ Item {
     assign("profile", state.profile || null)
     assign("challenge", state.challenge || null)
     assign("presence", state.presence || null)
+    assign("medals", state.medals || [])
     assign("history", state.history || [])
     assign("apps", state.apps || [])
     assign("trackedSeconds", state.trackedSeconds || 0)
@@ -178,6 +180,7 @@ Item {
     profile = null
     challenge = null
     presence = null
+    medals = []
     history = []
     apps = []
     trackedSeconds = 0

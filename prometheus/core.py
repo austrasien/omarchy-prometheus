@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 from . import achievements as A
 from . import env
+from . import medals as M
 from . import timeutil as T
 from .store import Store, clipped_seconds, session_seconds
 
@@ -355,6 +356,7 @@ class Core:
             "profile": self.profile(at),
             "challenge": self.challenge_state(at),
             "presence": self.presence_state(at),
+            "medals": M.placard(self.store, at),
             "session": self._session_state(),
             "today": {"sessions": len(closed), "seconds": sum(session_seconds(r) for r in closed)},
             "window": {"app": self.alias(w.app), "title": w.title} if w else None,
@@ -700,9 +702,18 @@ class Core:
         task_xp = sum(self._task(r)["xp"] for r in self.store.done_tasks())
         bonus = self.challenge_xp()
         trophies = self.store.achievement_xp_total()
-        total = focus_xp + task_xp + bonus + trophies
+        decorations = self.store.medal_xp_total()
+        total = focus_xp + task_xp + bonus + trophies + decorations
         return dict(self.level_for(total), xp=total, focusXp=focus_xp, taskXp=task_xp,
-                    challengeXp=bonus, achievementXp=trophies)
+                    challengeXp=bonus, achievementXp=trophies, medalXp=decorations)
+
+    # ---------------------------------------------------------------- medals
+
+    def check_medals(self, at: int, history: bool = False) -> list[dict]:
+        return M.evaluate(self.store, at, history=history)
+
+    def medals_list(self, at: int) -> dict:
+        return M.catalogue(self.store, at)
 
     # ---------------------------------------------------------- achievements
 

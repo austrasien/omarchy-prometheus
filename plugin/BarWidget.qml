@@ -754,6 +754,69 @@ BarWidget {
               }
             }
 
+            // ---- medals: the ribbon placard, like on an officer's jacket.
+            // Rows of up to 6, centered; the line under it describes the
+            // ribbon under the mouse.
+            Column {
+              id: placard
+              width: parent.width
+              spacing: Style.space(3)
+              visible: p.medals.length > 0
+              property string hovered: ""
+
+              readonly property int perRow: 6
+              readonly property var rows: {
+                var out = [], list = p.medals
+                for (var i = 0; i < list.length; i += perRow) out.push(list.slice(i, i + perRow))
+                return out
+              }
+
+              Repeater {
+                model: placard.rows
+
+                Row {
+                  required property var modelData
+                  anchors.horizontalCenter: parent.horizontalCenter
+                  spacing: Style.space(2)
+
+                  Repeater {
+                    model: parent.modelData
+
+                    Ribbon {
+                      required property var modelData
+                      size: 1.15
+                      color: modelData.color
+                      dot: modelData.dot
+                      dots: modelData.dots
+                      edges: modelData.edges
+                      opacity: modelData.current ? 1 : 0.75
+
+                      MouseArea {
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onEntered: placard.hovered = modelData.name + (modelData.count > 1 ? " ×" + modelData.count : "")
+                          + " · " + modelData.desc
+                          + (modelData.current ? " · won " + (modelData.period === "day" ? "today" : modelData.period === "week" ? "this week" : "this month") : "")
+                        onExited: placard.hovered = ""
+                      }
+                    }
+                  }
+                }
+              }
+
+              Text {
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
+                textFormat: Text.PlainText
+                text: placard.hovered
+                visible: text !== ""
+                color: Util.alpha(root.fg, 0.6)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                elide: Text.ElideRight
+              }
+            }
+
             ButtonGroup {
               anchors.horizontalCenter: parent.horizontalCenter
               options: panel.tabs

@@ -59,6 +59,16 @@ only what was actually used.
   XP reward: 5 XP per tier up to the 10th, then 2 more per tier; 10 for a
   single achievement; times the family's weight (x1, x2 or x3, by
   difficulty). Secret ones are worth 25 XP. Sessions under 10 min count for nothing.
+- **Medals**: 24 recurring decorations, put back in play every day, week or
+  month: won as soon as the condition holds in the running period, and again
+  the next period (2 h / 4 h / 6 h days, 5 tasks, early and late sessions,
+  challenges, daily goal, pure focus; 7-for-7 weeks, 30 h and 50 h weeks, 25
+  tasks, record week, weekend; 20-day months, 100 h, 80 tasks, record month,
+  14-day streak, three kinds of weather...). Each is a military ribbon: dots
+  for the period (1 daily, 2 weekly, 3 monthly), edge stripes for the
+  difficulty, a color per theme. Rewards 5 / 20 / 60 XP by period, x1.5 or x2
+  with stripes. The panel shows the ribbons won under the level bar, with how
+  many times each was won.
 - **Extension challenge**: after 1 h of focus, a pill in the bar offers 20
   min more. Hovered, it splits into decline and accept. Accepted, the session
   cannot be ended before those 20 min of focus are done, unless the challenge
@@ -124,6 +134,7 @@ bar (session ended, challenge won).
 | `presence:confirm` | | Answer "Toujours là ?" |
 | `settings:getPresenceEvery`, `settings:setPresenceEvery` | `[minutes]` | How often to ask, 5 to 120, default 20 |
 | `achievements:list` | | Every family, its tiers, what is unlocked and the progress |
+| `medals:list` | | Every medal, its ribbon, how many times won, won this period or not |
 | `tasks:list` | | Open tasks with their XP, and the ones done today |
 | `tasks:add` | `[text, source]` | `source`: manual, obsidian, procrastinated; an open duplicate is not added |
 | `tasks:complete` | `[id]` | Only during a session |

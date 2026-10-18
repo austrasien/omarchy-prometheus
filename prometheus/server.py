@@ -87,6 +87,7 @@ class Daemon:
             "settings:getPresenceEvery": lambda a: {"success": True, "minutes": self.core.presence_every_minutes()},
             "settings:setPresenceEvery": lambda a: self.core.set_presence_every(a[0] if a else None),
             "achievements:list": lambda a: self.core.achievements_list(self.clock()),
+            "medals:list": lambda a: self.core.medals_list(self.clock()),
             "tasks:list": lambda a: self.core.tasks_list(self.clock()),
             "tasks:add": lambda a: self.core.task_add(a[0] if a else "", a[1] if len(a) > 1 else "manual", self.clock()),
             "tasks:complete": lambda a: self.core.task_complete(a[0] if a else None, self.clock()),
@@ -222,9 +223,28 @@ class Daemon:
             if new:
                 xp = sum(a["xp"] for a in new)
                 self.toast("achievement", f"{len(new)} achievements from your history", f"+{xp} XP")
+            self.check_medals()
             return
         for a in new:
             self.toast("achievement", a["name"], f"+{a['xp']} XP · {a['quip']}")
+        self.check_medals()
+
+    def check_medals(self) -> None:
+        """Award medals for the running periods. The first run awards the
+        whole history at once, with a single toast."""
+        try:
+            seeded = self.core.store.get_setting("medalsSeeded", False)
+            new = self.core.check_medals(self.clock(), history=not seeded)
+        except Exception:
+            log.exception("medal check failed")
+            return
+        if not seeded:
+            self.core.store.set_setting("medalsSeeded", True)
+            if new:
+                self.toast("medal", f"{len(new)} medals from your history", f"+{sum(m['xp'] for m in new)} XP")
+            return
+        for m in new:
+            self.toast("medal", m["name"], f"+{m['xp']} XP · {m['quip']}")
 
     async def _pusher(self) -> None:
         ticks = 0

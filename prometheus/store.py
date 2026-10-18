@@ -71,6 +71,14 @@ CREATE TABLE IF NOT EXISTS achievements (
   xp          INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS medals (
+  id          TEXT NOT NULL,
+  period_key  TEXT NOT NULL,      -- 2026-10-18, 2026-W42 or 2026-10
+  awarded_at  INTEGER NOT NULL,
+  xp          INTEGER NOT NULL,
+  PRIMARY KEY (id, period_key)
+);
+
 CREATE TABLE IF NOT EXISTS events (
   kind       TEXT NOT NULL,      -- e.g. absent: paused for not answering "Toujours là ?"
   at         INTEGER NOT NULL,
@@ -285,6 +293,24 @@ class Store:
 
     def unlock(self, aid: str, at: int, xp: int) -> None:
         self.db.execute("INSERT OR IGNORE INTO achievements(id, unlocked_at, xp) VALUES(?, ?, ?)", (aid, at, xp))
+
+    def medal_awards(self) -> set[tuple[str, str]]:
+        return {(r[0], r[1]) for r in self.db.execute("SELECT id, period_key FROM medals")}
+
+    def award_medal(self, mid: str, key: str, at: int, xp: int) -> None:
+        self.db.execute("INSERT OR IGNORE INTO medals(id, period_key, awarded_at, xp) VALUES(?, ?, ?, ?)",
+                        (mid, key, at, xp))
+
+    def medal_counts(self) -> dict:
+        out = {}
+        for r in self.db.execute(
+            "SELECT id, COUNT(*) AS n, MAX(period_key) AS last_key FROM medals GROUP BY id"
+        ):
+            out[r["id"]] = {"count": r["n"], "last_key": r["last_key"]}
+        return out
+
+    def medal_xp_total(self) -> int:
+        return int(self.db.execute("SELECT COALESCE(SUM(xp), 0) FROM medals").fetchone()[0])
 
     def achievement_xp_total(self) -> int:
         return int(self.db.execute("SELECT COALESCE(SUM(xp), 0) FROM achievements").fetchone()[0])
