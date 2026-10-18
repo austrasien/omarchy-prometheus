@@ -13,7 +13,7 @@ Column {
   property var w: null
   property var p: null
 
-  property var quests: []     // open quests, active first
+  property var quests: []     // open quests, active first; each has its own color
   property var done: []       // completed short and long quests, latest first
   property bool showDone: false
   property string kind: "short"
@@ -260,7 +260,8 @@ Column {
               width: parent.width
               textFormat: Text.PlainText
               text: row.quest.title
-              color: row.checked ? Util.alpha(w.fg, 0.45) : w.fg
+              // Each quest has its own color; dimmed once done.
+              color: Util.alpha(row.quest.color || w.fg, row.checked ? 0.45 : 1)
               font.family: w.fontFamily
               font.pixelSize: Style.font.body
               font.strikeout: row.isDone

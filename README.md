@@ -44,6 +44,10 @@ only what was actually used.
   counts as a day worked. Rewards: daily 5 XP, +1 per day in a row before it (up
   to 10); short 10 XP + 5 per day worked (up to 40); long 30 XP + 5 per day
   worked (up to 150). Deleting a quest keeps the XP it already earned.
+  Each open quest has its own color among the ten vivid hues of the medals:
+  the first one, and any new one while no open quest is red, is red; the others
+  draw a color left, so no two open quests share one (ten at most). The active
+  quest's title is shown in its color.
 - **XP and levels**: 1 XP per 10 min of session (pauses excluded), plus done
   tasks, plus won challenges. Level 2 costs 100 XP, each next level 50 more.
 - **Achievements**: 81 families with 608 tiers, plus a calendar of 126

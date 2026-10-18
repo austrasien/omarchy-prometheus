@@ -771,7 +771,8 @@ BarWidget {
                   wrapMode: Text.Wrap
                   textFormat: Text.PlainText
                   text: p.quest ? p.quest.title : ""
-                  color: p.quest && p.quest.doneToday ? Util.alpha(root.fg, 0.5) : root.fg
+                  // The quest's own color; dimmed once done for the day.
+                  color: !p.quest ? root.fg : p.quest.doneToday ? Util.alpha(p.quest.color, 0.5) : p.quest.color
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.body
                   font.strikeout: !!p.quest && !!p.quest.doneToday

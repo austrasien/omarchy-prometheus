@@ -13,7 +13,7 @@ import sqlite3
 import uuid
 from pathlib import Path
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
@@ -95,7 +95,8 @@ CREATE TABLE IF NOT EXISTS quests (
   active       INTEGER NOT NULL DEFAULT 0,
   done_at      INTEGER,            -- short and long only
   xp           INTEGER,            -- short and long: what completing it earned
-  deleted_at   INTEGER
+  deleted_at   INTEGER,
+  color        TEXT                -- from the medal palette; unique among open quests
 );
 
 -- A logical day on which a session ran while the quest was active.
@@ -170,6 +171,10 @@ class Store:
                            ("battery_pct", "REAL")):
             if name not in cols:  # v2 -> v3 (v4: battery_pct): the world around a session
                 self.db.execute(f"ALTER TABLE sessions ADD COLUMN {name} {kind}")
+
+        cols = {r["name"] for r in self.db.execute("PRAGMA table_info(quests)")}
+        if "color" not in cols:  # v5 -> v6: each quest has its own color
+            self.db.execute("ALTER TABLE quests ADD COLUMN color TEXT")
 
     def close(self) -> None:
         self.db.close()

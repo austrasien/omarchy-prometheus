@@ -13,9 +13,11 @@ so the reward follows the effort actually put in, not the calendar.
 
 from __future__ import annotations
 
+import random
 import uuid
 
 from . import timeutil as T
+from .medals import AZURE, CYAN, GREEN, INDIGO, LIME, ORANGE, PINK, RED, SPRING, VIOLET
 
 KINDS = ("daily", "short", "long")
 TITLE_MAX = 300
@@ -26,6 +28,13 @@ DAILY_XP = 5
 DAILY_STREAK_MAX = 5
 SHORT_BASE, SHORT_PER_DAY, SHORT_CAP = 10, 5, 40
 LONG_BASE, LONG_PER_DAY, LONG_CAP = 30, 5, 150
+
+# Each open quest has its own color, from the medals' ten vivid hues. The
+# first quest is red, and so is any new quest while no open one is red; the
+# others draw one of the colors left. So no two open quests share a color,
+# and there can be at most ten of them.
+FIRST_COLOR = RED
+COLORS = (RED, ORANGE, LIME, GREEN, SPRING, CYAN, AZURE, INDIGO, VIOLET, PINK)
 
 
 class QuestError(Exception):
@@ -66,7 +75,8 @@ class Quests:
         return n
 
     def _view(self, r, at: int) -> dict:
-        out = {"id": r["id"], "title": r["title"], "kind": r["kind"], "active": bool(r["active"]),
+        out = {"id": r["id"], "title": r["title"], "kind": r["kind"], "color": r["color"] or FIRST_COLOR,
+               "active": bool(r["active"]),
                "createdAt": r["created_at"], "daysWorked": self.days_worked(r["id"])}
         if r["kind"] == "daily":
             today = self.db.execute("SELECT xp FROM quest_done WHERE quest_id=? AND day=?",
@@ -113,9 +123,24 @@ class Quests:
             raise QuestError("Quest too long")
         if kind not in KINDS:
             raise QuestError("Invalid quest duration (daily, short or long)")
+        color = self._free_color()
         qid = str(uuid.uuid4())
-        self.db.execute("INSERT INTO quests(id, title, kind, created_at) VALUES(?, ?, ?, ?)", (qid, title, kind, at))
+        self.db.execute("INSERT INTO quests(id, title, kind, created_at, color) VALUES(?, ?, ?, ?, ?)",
+                        (qid, title, kind, at, color))
         return {"success": True, "quest": self._view(self._row(qid), at)}
+
+    def _taken_colors(self) -> set[str]:
+        return {r[0] for r in self.db.execute(
+            "SELECT color FROM quests WHERE deleted_at IS NULL AND done_at IS NULL AND color IS NOT NULL")}
+
+    def _free_color(self) -> str:
+        taken = self._taken_colors()
+        if FIRST_COLOR not in taken:
+            return FIRST_COLOR
+        left = [c for c in COLORS if c not in taken]
+        if not left:
+            raise QuestError("Ten quests at most: finish or delete one first")
+        return random.choice(left)
 
     def activate(self, qid, at: int, working: bool) -> dict:
         r = self._row(qid)
@@ -166,8 +191,11 @@ class Quests:
         if r["kind"] == "daily":
             n = self.db.execute("DELETE FROM quest_done WHERE quest_id=? AND day=?", (qid, T.date_str(at))).rowcount
         else:
-            n = self.db.execute("UPDATE quests SET done_at=NULL, xp=NULL WHERE id=? AND done_at IS NOT NULL",
-                                (qid,)).rowcount
+            if r["done_at"] is None:
+                raise QuestError("Quest not done")
+            color = r["color"] if r["color"] and r["color"] not in self._taken_colors() else self._free_color()
+            n = self.db.execute("UPDATE quests SET done_at=NULL, xp=NULL, color=? WHERE id=? AND done_at IS NOT NULL",
+                                (color, qid)).rowcount
         if n == 0:
             raise QuestError("Quest not done")
         return {"success": True}

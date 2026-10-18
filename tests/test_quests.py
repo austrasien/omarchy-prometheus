@@ -93,6 +93,23 @@ class QuestTest(unittest.TestCase):
         self.assertEqual(self.core.profile(self.day(0))["questXp"], 0)
         self.assertEqual(len(self.core.quests_list(self.day(0))["quests"]), 1)
 
+    def test_colors_first_red_then_unique(self):
+        ids = [self.add("short", f"Q{i}") for i in range(10)]
+        colors = [r["color"] for r in self.core.quests_list(self.day(0))["quests"]]
+        self.assertEqual(colors[0], Q.RED)
+        self.assertEqual(len(set(colors)), 10)
+        self.assertEqual(set(colors), set(Q.COLORS))
+        with self.assertRaises(Refused):
+            self.add("short", "Eleventh")
+        # Red gone: the next quest is red again.
+        self.core.quest_delete(ids[0], self.day(0))
+        q = self.core.quest_add("New", "short", self.day(0))["quest"]
+        self.assertEqual(q["color"], Q.RED)
+        # A done quest frees its color.
+        self.core.quest_complete(ids[1], self.day(0))
+        q = self.core.quest_add("Another", "daily", self.day(0))["quest"]
+        self.assertNotEqual(q["color"], Q.RED)
+
     def test_refusals(self):
         with self.assertRaises(Refused):
             self.core.quest_add("  ", "short", self.day(0))
