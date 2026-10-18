@@ -6,7 +6,10 @@ and can be won again the next period. Each one is drawn as a military ribbon:
 
   - dots in the middle tell the period: 1 daily, 2 weekly, 3 monthly;
   - stripes on the edges tell the difficulty: none, left, left and right;
-  - the background color tells the theme (focus, tasks, challenges, clock...).
+  - the colors come from a pool of 10 vivid hues: the background tells the
+    theme (azure and indigo focus, green tasks, pink challenges, orange
+    morning, cyan regularity, red goals and records...), the dots stand well
+    apart from it on the color wheel.
 
 Rewards: 5 / 20 / 60 XP for a daily / weekly / monthly medal, x1.5 with a
 left stripe, x2 with both.
@@ -24,9 +27,9 @@ from . import timeutil as T
 
 H = 3600
 
-# Ribbon colors, by theme.
-BLUE, NAVY, GREEN, GOLD, RED = "#3b5bdb", "#1e3a8a", "#2f9e44", "#e0a800", "#c92a2a"
-CRIMSON, ORANGE, PURPLE, TEAL, WHITE = "#a61e4d", "#e8590c", "#7048e8", "#0c8599", "#dee2e6"
+# Ribbon colors: a pool of 10 vivid hues, 36° apart on the color wheel.
+RED, ORANGE, LIME, GREEN, SPRING = "#f22424", "#ea9a23", "#c2ea23", "#4bea23", "#24f276"
+CYAN, AZURE, INDIGO, VIOLET, PINK = "#24f2f2", "#2476f2", "#4d24f2", "#c924f2", "#f2249f"
 
 BASE_XP = {"day": 5, "week": 20, "month": 60}
 EDGE_FACTOR = {"none": 1.0, "left": 1.5, "both": 2.0}
@@ -181,80 +184,80 @@ MEDALS: list[Medal] = [
     # ---- daily: one dot
     Medal("dayshift", "Day Shift", "day", "2 h of focus in a day.",
           "Two hours. The bare minimum for a civilization-scale ambition.",
-          BLUE, WHITE, "none", lambda p: p.focus() >= 2 * H),
+          AZURE, ORANGE, "none", lambda p: p.focus() >= 2 * H),
     Medal("deepday", "Deep Day", "day", "4 h of focus in a day.",
           "Four hours deep. Most people never touch the bottom.",
-          BLUE, GOLD, "left", lambda p: p.focus() >= 4 * H),
+          AZURE, LIME, "left", lambda p: p.focus() >= 4 * H),
     Medal("ironday", "Iron Day", "day", "6 h of focus in a day.",
           "Six hours. The day surrendered.",
-          NAVY, GOLD, "both", lambda p: p.focus() >= 6 * H),
+          INDIGO, ORANGE, "both", lambda p: p.focus() >= 6 * H),
     Medal("closer", "Closer", "day", "Finish 5 tasks in a day.",
           "Five closed. Always be closing.",
-          GREEN, WHITE, "none", lambda p: p.tasks_done() >= 5),
+          GREEN, VIOLET, "none", lambda p: p.tasks_done() >= 5),
     Medal("earlybird", "Early Bird", "day", "Start a session before 8:00.",
           "First mover advantage, daily.",
-          ORANGE, WHITE, "none", _early),
+          ORANGE, AZURE, "none", _early),
     Medal("nightwatch", "Night Watch", "day", "Still in session after 22:00.",
           "The night is dark and full of shipping.",
-          PURPLE, WHITE, "none", _late),
+          INDIGO, LIME, "none", _late),
     Medal("challenger", "Challenger", "day", "Win an extension challenge.",
           "Took the bet, won the bet.",
-          GOLD, RED, "none", lambda p: len(p.challenges()) >= 1),
+          PINK, LIME, "none", lambda p: len(p.challenges()) >= 1),
     Medal("hattrickday", "Hat Trick", "day", "Win all 3 challenges of a session.",
           "Three for three. Diminishing returns denied.",
-          GOLD, RED, "both", _hat_trick),
+          PINK, CYAN, "both", _hat_trick),
     Medal("quota", "On Quota", "day", "Reach your daily hours goal.",
           "Goal hit. Tomorrow, raise it.",
-          RED, WHITE, "left", _goal_day),
+          RED, CYAN, "left", _goal_day),
     Medal("purity", "Pure Focus", "day", "90 % of 2 h+ tracked time spent in session.",
           "No drift, no doomscroll. Pure signal.",
-          WHITE, BLUE, "left", _purity),
+          SPRING, VIOLET, "left", _purity),
 
     # ---- weekly: two dots
     Medal("sevenforseven", "Seven for Seven", "week", "A session every day of the week.",
           "Seven days, seven sessions. Weekends are a legacy protocol.",
-          TEAL, WHITE, "left", lambda p: p.active_days() == 7),
+          CYAN, RED, "left", lambda p: p.active_days() == 7),
     Medal("thirtyclub", "Thirty Club", "week", "30 h of focus in a week.",
           "Thirty hours of real focus. Most 40-hour weeks contain twelve.",
-          BLUE, WHITE, "none", lambda p: p.focus() >= 30 * H),
+          AZURE, PINK, "none", lambda p: p.focus() >= 30 * H),
     Medal("fiftyclub", "Fifty Club", "week", "50 h of focus in a week.",
           "Fifty hours. Hardcore mode, as requested by management (you).",
-          NAVY, GOLD, "both", lambda p: p.focus() >= 50 * H),
+          INDIGO, SPRING, "both", lambda p: p.focus() >= 50 * H),
     Medal("taskcrusher", "Task Crusher", "week", "Finish 25 tasks in a week.",
           "Twenty-five tasks down. The backlog filed for bankruptcy.",
-          GREEN, GOLD, "left", lambda p: p.tasks_done() >= 25),
+          GREEN, PINK, "left", lambda p: p.tasks_done() >= 25),
     Medal("recordweek", "Record Week", "week", "Beat your best week ever (10 h+).",
           "New all-time high. Up only.",
-          CRIMSON, GOLD, "both", _record("week", 10)),
+          RED, AZURE, "both", _record("week", 10)),
     Medal("challengemaster", "Challenge Master", "week", "Win 5 extension challenges in a week.",
           "Five challenges in a week. Comfort zones are for incumbents.",
-          GOLD, RED, "left", lambda p: len(p.challenges()) >= 5),
+          PINK, SPRING, "left", lambda p: len(p.challenges()) >= 5),
     Medal("weekendwarrior", "Weekend Warrior", "week", "Sessions on Saturday and Sunday.",
           "The weekend was a 20th-century regulation anyway.",
-          ORANGE, PURPLE, "none", _weekend),
+          VIOLET, LIME, "none", _weekend),
     Medal("noprocrastination", "Zero Procrastination", "week", "5+ sessions and none put off.",
           "Not a single 'later' all week. Optionality: declined.",
-          WHITE, GREEN, "left", _no_procrastination),
+          SPRING, RED, "left", _no_procrastination),
 
     # ---- monthly: three dots
     Medal("ironmonth", "Iron Month", "month", "20 active days in a month.",
           "Twenty days on. The month belongs to you.",
-          TEAL, GOLD, "left", lambda p: p.active_days() >= 20),
+          CYAN, VIOLET, "left", lambda p: p.active_days() >= 20),
     Medal("centurion", "Centurion", "month", "100 h of focus in a month.",
           "A hundred hours. Rome would have given you a legion.",
-          NAVY, GOLD, "both", lambda p: p.focus() >= 100 * H),
+          INDIGO, RED, "both", lambda p: p.focus() >= 100 * H),
     Medal("cleansweep", "Clean Sweep", "month", "Finish 80 tasks in a month.",
           "Eighty tasks in a month. Throughput is a moral virtue.",
-          GREEN, GOLD, "both", lambda p: p.tasks_done() >= 80),
+          LIME, INDIGO, "both", lambda p: p.tasks_done() >= 80),
     Medal("recordmonth", "Record Month", "month", "Beat your best month ever (40 h+).",
           "Best month on record. The chart only knows one direction.",
-          CRIMSON, GOLD, "both", _record("month", 40)),
+          RED, SPRING, "both", _record("month", 40)),
     Medal("streaklord", "Streak Lord", "month", "14 days in a row within the month.",
           "Two weeks unbroken. Momentum is a physical law.",
-          RED, GOLD, "left", lambda p: _streak_in(p, 14)),
+          CYAN, ORANGE, "left", lambda p: _streak_in(p, 14)),
     Medal("rainorshine", "Rain or Shine", "month", "Finish sessions in 3 kinds of weather.",
           "Rain, sun, snow: same output. Weather is not a KPI.",
-          TEAL, WHITE, "none", _weathers),
+          VIOLET, CYAN, "none", _weathers),
 ]
 
 BY_ID = {m.id: m for m in MEDALS}

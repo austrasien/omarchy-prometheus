@@ -66,7 +66,7 @@ only what was actually used.
   tasks, record week, weekend; 20-day months, 100 h, 80 tasks, record month,
   14-day streak, three kinds of weather...). Each is a military ribbon: dots
   for the period (1 daily, 2 weekly, 3 monthly), edge stripes for the
-  difficulty, a color per theme. Rewards 5 / 20 / 60 XP by period, x1.5 or x2
+  difficulty, a color per theme from a pool of 10 vivid hues. Rewards 5 / 20 / 60 XP by period, x1.5 or x2
   with stripes. The panel shows the ribbons won under the level bar, with how
   many times each was won.
 - **Extension challenge**: after 1 h of focus, a pill in the bar offers 20
