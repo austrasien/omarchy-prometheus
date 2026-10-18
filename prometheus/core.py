@@ -764,7 +764,7 @@ class Core:
     def leagues(self, at: int) -> dict:
         out = C.leagues(C.Ledger(self.store, at))
         return dict(out, success=True, leagues=[{"name": n, "color": c, "floor": f} for n, c, f in
-                                                zip(C.LEAGUES, C.LEAGUE_COLORS, C.LEAGUE_FLOORS)])
+                                                zip(C.LEAGUES, C.LEAGUE_COLORS, C.PROMOTION_MIN + [None])])
 
     def seasons(self, at: int) -> dict:
         seasons = C.seasons(C.Ledger(self.store, at))

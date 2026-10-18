@@ -50,7 +50,10 @@ Column {
       if (cur.bottom) return cur.toSafety + " XP more to climb out of the bottom 3. Bronze has no floor below, but still."
       return "If the week ended now, you would drop to " + below + ". " + cur.toSafety + " XP more to get out of the bottom 3."
     }
-    return "You stay in " + here + ". " + cur.toPromotion + " XP more to reach the top 3."
+    if (cur.top) return "You stay in Diamond, the top league."
+    if (cur.rank <= 3 && cur.promotionMin !== null)
+      return "Top 3, but promotion out of " + here + " takes " + cur.promotionMin + " XP this week: " + cur.toPromotion + " XP more."
+    return "You stay in " + here + ". " + cur.toPromotion + " XP more to be promoted (top 3 and " + cur.promotionMin + " XP)."
   }
 
   function weekLabel(iso) {
@@ -285,7 +288,7 @@ Column {
       textFormat: Text.PlainText
       text: "Your rivals are drawn each week from your last 4 weeks"
         + (tab.cur && tab.cur.reference !== null ? " (average " + Math.round(tab.cur.reference) + " XP)" : "")
-        + ", a little stronger each league up, and earn their XP as the week goes. Top 3 go up, bottom 3 go down, one league at most. An empty week always goes down."
+        + ", never weaker than the league's level, and earn their XP as the week goes. Top 3 go up if they reach the league's minimum (300 XP in Bronze, more above); bottom 3 go down; one league at most. An empty week always goes down."
       color: Util.alpha(w.fg, 0.45)
       font.family: w.fontFamily
       font.pixelSize: Style.font.caption

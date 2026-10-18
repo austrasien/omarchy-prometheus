@@ -59,22 +59,27 @@ only what was actually used.
   season from a pool of 104 (never two with the same first name; a click on a name shows a one-line bio), drawn from a Gaussian fitted to your last four weeks (5 % stronger
   each league up, never under the league's floor) and seeded by week and
   league, so a week always replays the same. They earn their XP as the week
-  goes. Top 3 go up a league, bottom 3 go down one, an empty week always goes
+  goes. Top 3 go up a league if they reach the league's minimum (300 XP in Bronze,
+  then 330, 365, 400, 440, 485, 535, 590, 650), bottom 3 go down one; the rivals
+  are never weaker than 87 % of that minimum, an empty week always goes
   down. The tab shows the ten players with the promotion, stagnation and
   relegation zones, green chevrons streaming up or red ones streaming down.
   League XP is XP from the work: focus, tasks, challenges, quests;
   achievements and medals are left out.
-- **Seasons**: calendar quarters, numbered from the first with any work. Two
-  goals: the previous season's XP (300 at least) and 25 % more (600 at least).
-  The first wins a season medal with one bar (75 XP), the second a second bar
-  (200 XP in all). Season medals are permanent, on their own row at the top of
-  the placard, in random muted colors (never one of the ten medal hues) under a
+- **Seasons**: the weather's: winter from December 1st, spring from March 1st,
+  summer from June 1st, autumn from September 1st, named "Autumn 2026" and so
+  on. Two goals, as weekly paces over the season's length (from your first day,
+  the first season): your good weeks (the better half of the 26 weeks before)
+  for the goal, 250 XP a week at least; 30 % above for the hard goal, 350 XP a
+  week at least. A full season: 3250 and 4550 XP at least. The goal wins a
+  season medal (75 XP), the hard goal its second edge bar (200 XP in all).
+  Season medals are permanent, on their own row at the top of the placard, under a
   holographic shine and a star: an edge bar on the left for the goal, on both
   sides for the hard goal. Colors are contrasted (a deep ribbon, a near-white
   star, vivid edge bars) and kept away from the ten medal hues; they are drawn as the season starts, so the medal to
   win shows grey above each goal and comes alive under the mouse. A finished
   season gets a grade (A hard goal, B goal, C
-  75 %, D 50 %, F below) and a recap.
+  80 %, D 60 %, F below) and a recap.
 - **Leaderboard**: your best days and weeks (XP), sessions (focus) and quests
   (XP while active), top 10, with the current one highlighted. A quest can be
   taken off the board (an open one is deleted); its XP stays.

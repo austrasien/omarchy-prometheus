@@ -57,7 +57,7 @@ Column {
         id: seasonTitle
         anchors.left: parent.left
         textFormat: Text.PlainText
-        text: tab.cur ? "Season " + tab.cur.number + "  ·  " + tab.cur.label : ""
+        text: tab.cur ? tab.cur.label : ""
         color: w.fg
         font.family: w.fontFamily
         font.pixelSize: Style.font.body + 2
@@ -179,7 +179,9 @@ Column {
       width: parent.width
       wrapMode: Text.WordWrap
       textFormat: Text.PlainText
-      text: "XP from focus, tasks, challenges and quests. The goals follow your last season: the first is its XP (300 at least), the hard one 25 % more (600 at least). Grades: A hard goal, B goal, C 75 %, D 50 %, F below."
+      text: !tab.cur ? "" : "XP from focus, tasks, challenges and quests. The goals are a weekly pace over the season: your good weeks (the better half of the last 26), "
+        + tab.cur.weeklyGoal + " XP a week for the goal (250 at least), " + tab.cur.weeklyHard
+        + " for the hard one (30 % more, 350 at least). Grades: A hard goal, B goal, C 80 %, D 60 %, F below."
       color: Util.alpha(w.fg, 0.45)
       font.family: w.fontFamily
       font.pixelSize: Style.font.caption
@@ -230,7 +232,7 @@ Column {
           Text {
             width: parent.width
             textFormat: Text.PlainText
-            text: "Season " + pastRow.modelData.number + "  ·  " + pastRow.modelData.label
+            text: pastRow.modelData.label
             color: w.fg
             font.family: w.fontFamily
             font.pixelSize: Style.font.body

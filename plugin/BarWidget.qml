@@ -322,9 +322,11 @@ BarWidget {
     Behavior on width { NumberAnimation { duration: 400; easing.type: Easing.OutCubic } }
   }
 
-  // ---- presence check: "Still there?" unrolls after the timer. Hovered it
-  // turns green; a click says yes. Unanswered for 3 min it flashes white and
-  // green; at 4 min the daemon pauses the session.
+  // ---- presence check: "Still there?" unrolls after the timer, in solid
+  // amber that breathes and nudges now and then, so it cannot be missed.
+  // Hovered it turns green; a click says yes. Unanswered for 3 min it flashes
+  // white and green; at 4 min the daemon pauses the session.
+  readonly property color presenceAmber: "#ffb020"
 
   readonly property bool presenceWanted: !!p.presence && !root.vertical
   property real presenceShown: presenceWanted ? 1 : 0
@@ -360,28 +362,52 @@ BarWidget {
     readonly property real fullWidth: presenceMetrics.advanceWidth + Style.space(22)
     readonly property bool hovered: presenceArea.containsMouse
     width: Math.round(fullWidth * root.presenceShown)
-    height: Math.round(button.height * 0.62)
+    height: Math.round(button.height * 0.72)
     visible: width > 0
     clip: true
 
     Rectangle {
+      id: presenceBg
       anchors.fill: parent
       radius: height / 2
+      readonly property bool calm: !presencePill.hovered && !root.flashOn && !root.presenceFlashing
       color: presencePill.hovered ? Util.alpha(root.green, 0.35)
-        : root.flashOn ? Util.alpha("white", 0.85)
+        : root.flashOn ? Util.alpha("white", 0.9)
         : root.presenceFlashing ? Util.alpha(root.green, 0.55)
-        : Util.alpha(root.fg, 0.1)
+        : root.presenceAmber
       border.width: 1
-      border.color: presencePill.hovered || root.presenceFlashing ? root.green : Util.alpha(root.fg, 0.4)
+      border.color: presencePill.hovered || root.presenceFlashing ? root.green : Qt.lighter(root.presenceAmber, 1.3)
       Behavior on color { ColorAnimation { duration: 150 } }
+
+      // Breathing, while it waits for an answer.
+      SequentialAnimation on opacity {
+        running: root.presenceWanted && presenceBg.calm
+        loops: Animation.Infinite
+        NumberAnimation { to: 0.6; duration: 650; easing.type: Easing.InOutSine }
+        NumberAnimation { to: 1.0; duration: 650; easing.type: Easing.InOutSine }
+        onRunningChanged: if (!running) presenceBg.opacity = 1
+      }
     }
 
     Text {
+      id: presenceText
       anchors.centerIn: parent
       textFormat: Text.PlainText
       text: "Still there?"
-      color: root.flashOn && !presencePill.hovered ? "#1a1b26" : presencePill.hovered || root.presenceFlashing ? root.green : root.fg
+      color: presencePill.hovered ? root.green
+        : root.flashOn || presenceBg.calm ? "#1a1b26" : root.green
       font: presenceMetrics.font
+    }
+
+    // A little shake every few seconds, like a tap on the shoulder.
+    SequentialAnimation {
+      running: root.presenceWanted && !presencePill.hovered && root.presenceShown >= 1
+      loops: Animation.Infinite
+      PauseAnimation { duration: 2600 }
+      NumberAnimation { target: presenceText; property: "anchors.horizontalCenterOffset"; to: -3; duration: 60 }
+      NumberAnimation { target: presenceText; property: "anchors.horizontalCenterOffset"; to: 3; duration: 90 }
+      NumberAnimation { target: presenceText; property: "anchors.horizontalCenterOffset"; to: -2; duration: 80 }
+      NumberAnimation { target: presenceText; property: "anchors.horizontalCenterOffset"; to: 0; duration: 70 }
     }
 
     MouseArea {

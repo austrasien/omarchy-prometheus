@@ -158,7 +158,9 @@ Column {
     width: parent.width
     wrapMode: Text.WordWrap
     textFormat: Text.PlainText
-    text: tab.rule(tab.kind) + "  " + tab.doneToday + " / " + tab.perDay + " quests completed today."
+    text: tab.rule(tab.kind) + "  " + (tab.doneToday >= tab.perDay
+      ? tab.perDay + "/" + tab.perDay + " quests completed today, come back tomorrow."
+      : tab.doneToday + (tab.doneToday === 1 ? " quest" : " quests") + " completed today.")
     color: Util.alpha(w.fg, 0.55)
     font.family: w.fontFamily
     font.pixelSize: Style.font.caption

@@ -38,10 +38,16 @@ FOCUS_SECONDS_PER_XP = 600
 LEAGUES = ["Bronze", "Silver", "Gold", "Sapphire", "Ruby", "Emerald", "Amethyst", "Pearl", "Obsidian", "Diamond"]
 LEAGUE_COLORS = ["#cd7f32", "#c0c0c0", "#ffd700", "#2f6fdb", "#e0115f", "#50c878", "#9966cc", "#eae0c8",
                  "#6b6b85", "#b9f2ff"]
-# The rivals' average weekly XP never goes under the league's floor (about
-# 6 XP per hour of focus), and each league up makes them 5 % stronger.
-LEAGUE_FLOORS = [10, 30, 50, 75, 100, 130, 160, 200, 240, 300]
+# Promotion takes a top-3 finish and at least this much weekly XP (Bronze to
+# Obsidian; Diamond has nowhere higher). About 6 XP per hour of focus: 300 XP
+# is a strong week.
+PROMOTION_MIN = [300, 330, 365, 400, 440, 485, 535, 590, 650]
+# The rivals' average never goes under 87 % of the league's promotion minimum
+# (so the third of nine sits about there), whatever your history; above it,
+# your last four weeks set it, 5 % stronger each league up.
+RIVAL_FLOOR_SHARE = 0.87
 LEAGUE_STEP = 0.05
+LEAGUE_FLOORS = [round(RIVAL_FLOOR_SHARE * m) for m in PROMOTION_MIN] + [round(RIVAL_FLOOR_SHARE * 715)]
 REFERENCE_WEEKS = 4
 RIVALS = 9                   # plus you: ten players a week
 PROMOTED = 3                 # the top 3 go up
@@ -71,11 +77,20 @@ RIVAL_NAMES = ["Ada Lovelace", "Alan Turing", "Grace Hopper", "John von Neumann"
 
 # --------------------------------------------------------------- seasons
 
-SEASON_GOAL = 300            # the first goal, at least
-SEASON_HARD_GOAL = 600       # the second goal, at least
-SEASON_HARD_FACTOR = 1.25    # the second goal: the previous season's XP + 25 %
+# Seasons follow the weather: winter from December 1st, spring from March 1st,
+# summer from June 1st, autumn from September 1st. Goals are weekly rates over
+# the season's length (from your first day, the first season): the goal is
+# your good weeks' pace (the better half of the 26 weeks before), 250 XP a
+# week at least; the hard goal 30 % above it, 350 XP a week at least.
+SEASON_NAMES = ["Winter", "Spring", "Summer", "Autumn"]
+SEASON_START_MONTH = [12, 3, 6, 9]
+SEASON_WEEKLY_GOAL = 250
+SEASON_WEEKLY_HARD = 350
+SEASON_HARD_FACTOR = 1.30
+SEASON_LOOKBACK_WEEKS = 26
+SEASON_MIN_WEEKS = 4         # fewer weeks of history: the minimums decide
 SEASON_MEDAL_XP = {1: 75, 2: 200}   # one bar, two bars (in all)
-GRADES = [("A", "hard"), ("B", "goal"), ("C", 0.75), ("D", 0.5)]   # else F
+GRADES = [("A", "hard"), ("B", "goal"), ("C", 0.8), ("D", 0.6)]   # else F
 
 
 def _date(s: str) -> dt.date:
@@ -87,16 +102,32 @@ def _monday(d: dt.date) -> dt.date:
     return T.week_first(d)
 
 
-def _quarter(d: dt.date) -> tuple[int, int]:
-    return d.year, (d.month - 1) // 3 + 1
+def _season(d: dt.date) -> tuple[int, int]:
+    """(year, index) of the season of `d`: 0 winter (the year of its
+    December), 1 spring, 2 summer, 3 autumn."""
+    if d.month == 12:
+        return d.year, 0
+    if d.month <= 2:
+        return d.year - 1, 0
+    return d.year, (d.month - 3) // 3 + 1
 
 
-def _quarter_start(y: int, q: int) -> dt.date:
-    return dt.date(y, 3 * (q - 1) + 1, 1)
+def _season_start(y: int, i: int) -> dt.date:
+    return dt.date(y, SEASON_START_MONTH[i], 1)
 
 
-def _next_quarter(y: int, q: int) -> tuple[int, int]:
-    return (y + 1, 1) if q == 4 else (y, q + 1)
+def _next_season(y: int, i: int) -> tuple[int, int]:
+    return (y + 1, 1) if i == 0 else (y, 0) if i == 3 else (y, i + 1)
+
+
+def _season_key(y: int, i: int) -> str:
+    return f"{y}-{SEASON_NAMES[i].lower()}"
+
+
+def season_label(key: str) -> str:
+    """"2026-autumn" -> "Autumn 2026"."""
+    y, name = key.split("-", 1)
+    return f"{name.capitalize()} {y}"
 
 
 # ------------------------------------------------------------ the ledger
@@ -154,7 +185,7 @@ class Ledger:
 
 
 def season_roster(key: str) -> list[str]:
-    """The nine rivals of a season (key "2026-Q4"): drawn by lot, first names
+    """The nine rivals of a season (key "2026-autumn"): drawn by lot, first names
     all different."""
     rng = random.Random("roster:" + key)
     pool = RIVAL_NAMES[:]
@@ -176,14 +207,13 @@ def _rivals(week: dt.date, league: int, prev: list[int], progress: float) -> lis
     so a week always replays the same. `progress` (0 to 1): how much of the
     week has gone by; each rival earns its total at its own pace."""
     rng = random.Random(f"{week.isoformat()}:{league}")
-    ref = sum(prev) / len(prev) if prev else LEAGUE_FLOORS[min(league + 1, len(LEAGUES) - 1)]
+    ref = sum(prev) / len(prev) if prev else 0
     mean = max(ref * (1 + LEAGUE_STEP * league), LEAGUE_FLOORS[league])
     spread = 0.0
     if len(prev) >= 2:
         spread = (sum((x - ref) ** 2 for x in prev) / (len(prev) - 1)) ** 0.5
     sd = max(spread, 0.25 * mean)
-    y, q = _quarter(week + dt.timedelta(days=3))     # the season of the week's middle
-    names = season_roster(f"{y}-Q{q}")
+    names = season_roster(_season_key(*_season(week + dt.timedelta(days=3))))   # the week's middle
     out = []
     for name in names:
         final = max(0, round(rng.gauss(mean, sd)))
@@ -193,7 +223,8 @@ def _rivals(week: dt.date, league: int, prev: list[int], progress: float) -> lis
 
 
 def _standings(xp: int, rivals: list[dict], league: int) -> tuple[list[dict], int, str]:
-    """The ten players ranked (ties go to you), your rank and your zone."""
+    """The ten players ranked (ties go to you), your rank and your zone. The
+    top 3 without the league's promotion minimum is no promotion."""
     players = [dict(r, you=False) for r in rivals] + [{"name": "You", "xp": xp, "you": True}]
     players.sort(key=lambda r: (-r["xp"], not r["you"]))
     for i, r in enumerate(players):
@@ -202,6 +233,8 @@ def _standings(xp: int, rivals: list[dict], league: int) -> tuple[list[dict], in
                      "relegation" if i >= len(players) - RELEGATED else "stagnation")
     rank = next(r["rank"] for r in players if r["you"])
     zone = players[rank - 1]["zone"]
+    if zone == "promotion" and league < len(PROMOTION_MIN) and xp < PROMOTION_MIN[league]:
+        zone = "stagnation"
     if xp == 0:
         zone = "relegation"                        # an empty week never stays put
     return players, rank, zone
@@ -235,8 +268,11 @@ def leagues(ledger: Ledger) -> dict:
                             "color": LEAGUE_COLORS[league], "xp": xp, "rank": rank, "zone": zone,
                             "players": [dict({k: r[k] for k in ("name", "xp", "you", "rank", "zone")},
                                              bio=None if r["you"] else bio(r["name"])) for r in players],
-                            # XP to pass the 3rd rival (promotion) and the 7th (out of relegation).
-                            "toPromotion": max(0, others[PROMOTED - 1] + 1 - xp),
+                            # XP to pass the 3rd rival and reach the minimum (promotion),
+                            # and to pass the 7th (out of relegation).
+                            "toPromotion": max(0, others[PROMOTED - 1] + 1 - xp,
+                                               (PROMOTION_MIN[league] - xp) if league < len(PROMOTION_MIN) else 0),
+                            "promotionMin": PROMOTION_MIN[league] if league < len(PROMOTION_MIN) else None,
                             "toSafety": max(0, others[len(others) - RELEGATED] + 1 - xp),
                             "top": top, "bottom": bottom, "reference": sum(prev) / len(prev) if prev else None,
                             "daysLeft": (end - ledger.today).days},
@@ -260,28 +296,56 @@ def _grade(xp: int, goal: int, hard: int) -> str:
     return "F"
 
 
+def _round10(x: float) -> int:
+    return int(math.ceil(x / 10) * 10)
+
+
+def _good_weeks_pace(weeks: dict, before: dt.date) -> float | None:
+    """Average of the better half of the complete weeks in the 26 before
+    `before` (weeks with no XP count, from the first one with any)."""
+    start = _monday(before) - dt.timedelta(days=7 * SEASON_LOOKBACK_WEEKS)
+    first = min((w for w, x in weeks.items() if x > 0), default=None)
+    if first is None:
+        return None
+    vals, w = [], max(start, first)
+    while w + dt.timedelta(days=7) <= before:
+        vals.append(weeks.get(w, 0))
+        w += dt.timedelta(days=7)
+    if len(vals) < SEASON_MIN_WEEKS:
+        return None
+    vals.sort(reverse=True)
+    top = vals[:max(1, len(vals) // 2)]
+    return sum(top) / len(top)
+
+
 def seasons(ledger: Ledger) -> list[dict]:
     """Every season from the first with work, the current one last."""
     first = ledger.first_day or ledger.today
-    y, q = _quarter(first)
-    cur = _quarter(ledger.today)
-    out, prev_xp, number = [], None, 1
-    while (y, q) <= cur:
-        start = _quarter_start(y, q)
-        ny, nq = _next_quarter(y, q)
-        end = _quarter_start(ny, nq)
+    y, i = _season(first)
+    cur = _season(ledger.today)
+    weeks_xp = ledger.week_xp()
+    out, number = [], 1
+    while _season_start(y, i) <= _season_start(*cur):
+        start = _season_start(y, i)
+        ny, ni = _next_season(y, i)
+        end = _season_start(ny, ni)
         xp = ledger.between(ledger.xp, start, end)
-        goal = max(SEASON_GOAL, prev_xp or 0)
-        hard = max(SEASON_HARD_GOAL, math.ceil((prev_xp or 0) * SEASON_HARD_FACTOR / 10) * 10)
-        running = (y, q) == cur
+        played = (end - max(start, first)).days / 7          # weeks the season counts for you
+        pace = _good_weeks_pace(weeks_xp, start)
+        goal = _round10(played * max(SEASON_WEEKLY_GOAL, pace or 0))
+        hard = _round10(played * max(SEASON_WEEKLY_HARD, SEASON_HARD_FACTOR * (pace or 0)))
+        running = (y, i) == cur
         weeks = defaultdict(int)
         for d, x in ledger.xp.items():
             if start <= _date(d) < end:
                 weeks[_monday(_date(d))] += x
+        key = _season_key(y, i)
         season = {
-            "key": f"{y}-Q{q}", "number": number, "label": f"Q{q} {y}",
+            "key": key, "number": number, "label": season_label(key),
             "start": start.isoformat(), "end": (end - dt.timedelta(days=1)).isoformat(),
             "running": running, "xp": xp, "goal": goal, "hardGoal": hard,
+            "weeklyGoal": round(goal / played) if played else None,
+            "weeklyHard": round(hard / played) if played else None,
             "bars": 2 if xp >= hard else 1 if xp >= goal else 0,
             "grade": None if running else _grade(xp, goal, hard),
             "hours": round(ledger.between(ledger.focus, start, end) / 3600, 1),
@@ -291,13 +355,13 @@ def seasons(ledger: Ledger) -> list[dict]:
             "bestWeek": max(weeks.values(), default=0),
         }
         if running:
-            total = (end - start).days
-            elapsed = (ledger.today - start).days + 1
+            total = (end - max(start, first)).days
+            elapsed = (ledger.today - max(start, first)).days + 1
             season["daysLeft"] = (end - ledger.today).days
             season["projected"] = _grade(round(xp * total / max(1, elapsed)), goal, hard)
         out.append(season)
-        prev_xp, number = xp, number + 1
-        y, q = ny, nq
+        number += 1
+        y, i = ny, ni
     return out
 
 
@@ -366,12 +430,12 @@ def check_season_medals(store, ledger: Ledger, now: int) -> list[dict]:
                 "INSERT INTO season_medals(season, number, bars, bg, dot, edge, awarded_at, xp) "
                 "VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
                 (s["key"], s["number"], s["bars"], c["bg"], c["dot"], c["edge"], now, SEASON_MEDAL_XP[s["bars"]]))
-            new.append({"name": f"Season {s['number']} medal", "xp": SEASON_MEDAL_XP[s["bars"]],
+            new.append({"name": f"{s['label']} medal", "xp": SEASON_MEDAL_XP[s["bars"]],
                         "quip": "Two bars. The hard goal, cleared." if s["bars"] == 2 else "Season goal reached."})
         elif row["bars"] < s["bars"]:
             store.db.execute("UPDATE season_medals SET bars=?, xp=? WHERE season=?",
                              (s["bars"], SEASON_MEDAL_XP[s["bars"]], s["key"]))
-            new.append({"name": f"Season {s['number']} medal, second bar",
+            new.append({"name": f"{s['label']} medal, second bar",
                         "xp": SEASON_MEDAL_XP[s["bars"]] - row["xp"], "quip": "The hard goal, cleared."})
     return new
 
@@ -379,12 +443,12 @@ def check_season_medals(store, ledger: Ledger, now: int) -> list[dict]:
 def season_medals(store) -> list[dict]:
     """The permanent season medals, newest first, for the placard."""
     out = []
-    for r in store.db.execute("SELECT * FROM season_medals ORDER BY season DESC"):
-        y, q = r["season"].split("-Q")
+    for r in store.db.execute("SELECT * FROM season_medals ORDER BY number DESC"):
+        label = season_label(r["season"])
         out.append({"id": "season:" + r["season"], "season": r["season"], "number": r["number"],
                     "bars": r["bars"], "color": r["bg"], "dot": r["dot"], "edge": r["edge"],
-                    "name": f"Season {r['number']}", "period": "season", "count": 1, "current": False,
-                    "desc": f"Q{q} {y} · " + ("hard goal reached, two bars" if r["bars"] == 2 else "goal reached"),
+                    "name": label, "period": "season", "count": 1, "current": False,
+                    "desc": "season medal · " + ("hard goal reached, two bars" if r["bars"] == 2 else "goal reached"),
                     "xp": r["xp"]})
     return out
 
