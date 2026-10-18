@@ -765,22 +765,35 @@ BarWidget {
               property string hovered: ""
 
               readonly property int perRow: 6
+              // Monthly, weekly then daily medals (the daemon's order), each
+              // group on its own rows; a small gap opens between groups.
               readonly property var rows: {
-                var out = [], list = p.medals
-                for (var i = 0; i < list.length; i += perRow) out.push(list.slice(i, i + perRow))
+                var out = [], list = p.medals, groups = ["month", "week", "day"]
+                for (var g = 0; g < groups.length; g++) {
+                  var items = list.filter(function(m) { return m.period === groups[g] })
+                  for (var i = 0; i < items.length; i += perRow)
+                    out.push({ items: items.slice(i, i + perRow), newGroup: i === 0 && out.length > 0 })
+                }
                 return out
               }
 
               Repeater {
                 model: placard.rows
 
-                Row {
+                Item {
+                  id: placardRow
                   required property var modelData
+                  width: placard.width
+                  height: ribbonRow.implicitHeight + (modelData.newGroup ? Style.space(5) : 0)
+
+                Row {
+                  id: ribbonRow
                   anchors.horizontalCenter: parent.horizontalCenter
+                  anchors.bottom: parent.bottom
                   spacing: Style.space(2)
 
                   Repeater {
-                    model: parent.modelData
+                    model: placardRow.modelData.items
 
                     Ribbon {
                       required property var modelData
@@ -802,14 +815,16 @@ BarWidget {
                     }
                   }
                 }
+                }
               }
 
+              // Always laid out (a blank line when nothing is hovered): the
+              // space stays reserved, so the panel does not jump on hover.
               Text {
                 width: parent.width
                 horizontalAlignment: Text.AlignHCenter
                 textFormat: Text.PlainText
-                text: placard.hovered
-                visible: text !== ""
+                text: placard.hovered !== "" ? placard.hovered : " "
                 color: Util.alpha(root.fg, 0.6)
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
