@@ -84,6 +84,8 @@ class Daemon:
             "challenge:decline": lambda a: self.core.challenge_decline(a[0] if a else None, self.clock()),
             "challenge:abandon": lambda a: self.core.challenge_abandon(self.clock()),
             "presence:confirm": lambda a: self.core.presence_confirm(self.clock()),
+            "settings:getPresenceEvery": lambda a: {"success": True, "minutes": self.core.presence_every_minutes()},
+            "settings:setPresenceEvery": lambda a: self.core.set_presence_every(a[0] if a else None),
             "tasks:list": lambda a: self.core.tasks_list(self.clock()),
             "tasks:add": lambda a: self.core.task_add(a[0] if a else "", a[1] if len(a) > 1 else "manual", self.clock()),
             "tasks:complete": lambda a: self.core.task_complete(a[0] if a else None, self.clock()),

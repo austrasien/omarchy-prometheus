@@ -445,6 +445,18 @@ class CoreTest(unittest.TestCase):
         recap = c.end(self.at(70))["recap"]
         self.assertEqual(recap["durationSeconds"], (23 + 20) * 60)
 
+    def test_presence_interval_setting(self):
+        c = self.core
+        self.assertEqual(c.presence_every_minutes(), 20)
+        c.set_presence_every(10)
+        c.start("s", self.at(0))
+        self.assertEqual(c.update_presence(self.at(9)), [])
+        self.assertEqual(c.update_presence(self.at(10))[0][0], "presence")
+        with self.assertRaises(Refused):
+            c.set_presence_every(2)
+        with self.assertRaises(Refused):
+            c.set_presence_every(500)
+
 
 if __name__ == "__main__":
     unittest.main()

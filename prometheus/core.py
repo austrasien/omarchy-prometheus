@@ -30,7 +30,8 @@ CHALLENGE_OFFER_TTL_MS = 5 * 60 * 1000
 # Presence check: a running session asks "still there?" every so often (a
 # playing video keeps idle away, so idle alone cannot tell). Unanswered, the
 # pill flashes, then the session pauses, backdated to when it asked.
-PRESENCE_EVERY_MS = 20 * 60 * 1000
+PRESENCE_EVERY_MINUTES = 20        # default; a setting (5 to 120)
+PRESENCE_MINUTES_RANGE = (5, 120)
 PRESENCE_FLASH_AFTER_MS = 3 * 60 * 1000
 PRESENCE_TIMEOUT_MS = 4 * 60 * 1000
 GOAL_LIMITS = {"day": (0.5, 16), "week": (1, 80), "month": (1, 368)}
@@ -714,7 +715,7 @@ class Core:
         if self.presence_since is None:
             self.presence_since = at
         if self.presence_asked_at is None:
-            if at - self.presence_since >= PRESENCE_EVERY_MS:
+            if at - self.presence_since >= self.presence_every_minutes() * 60 * 1000:
                 self.presence_asked_at = at
                 return [("presence", {})]
             return []
@@ -726,6 +727,16 @@ class Core:
             self._split(at)
             return [("absent", {})]
         return []
+
+    def presence_every_minutes(self) -> int:
+        return int(self.store.get_setting("presenceEveryMinutes", PRESENCE_EVERY_MINUTES))
+
+    def set_presence_every(self, minutes) -> dict:
+        lo, hi = PRESENCE_MINUTES_RANGE
+        if not isinstance(minutes, (int, float)) or not lo <= int(minutes) <= hi:
+            raise Refused(f"Intervalle de présence invalide ({lo} à {hi} min)")
+        self.store.set_setting("presenceEveryMinutes", int(minutes))
+        return {"success": True, "minutes": int(minutes)}
 
     def presence_confirm(self, at: int) -> dict:
         self._present(at)

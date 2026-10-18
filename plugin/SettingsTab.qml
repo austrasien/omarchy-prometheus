@@ -18,6 +18,7 @@ Column {
   property var known: []       // [{ app, alias, seconds }] seen over 30 days
   property var words: []       // forbidden words in window titles
   property int dayStart: 5     // hour the day starts at
+  property int presenceEvery: 20   // minutes between "Toujours là ?" checks
 
   readonly property bool editing: hideField.activeFocus || wordField.activeFocus || aliasFrom.activeFocus || aliasTo.activeFocus
   spacing: Style.space(10)
@@ -33,6 +34,7 @@ Column {
     p.call("apps:getAliases", [], function(ok, d) { if (ok && d && d.success) tab.aliases = d.aliases || {} })
     p.call("apps:getHiddenWords", [], function(ok, d) { if (ok && d && d.success) tab.words = d.hiddenTitleWords || [] })
     p.call("settings:getDayStart", [], function(ok, d) { if (ok && d && d.success) tab.dayStart = d.dayStartHour })
+    p.call("settings:getPresenceEvery", [], function(ok, d) { if (ok && d && d.success) tab.presenceEvery = d.minutes })
     p.call("apps:known", [30], function(ok, d) { if (ok && d && d.success) tab.known = d.apps || [] })
   }
 
@@ -57,6 +59,12 @@ Column {
       if (d) tab.dayStart = d.dayStartHour
       w.refreshGoal()
     })
+  }
+
+  function setPresenceEvery(minutes) {
+    var m = Math.max(5, Math.min(120, minutes))
+    if (m === presenceEvery) return
+    p.act("settings:setPresenceEvery", [m], "Présence", function(d) { if (d) tab.presenceEvery = d.minutes })
   }
 
   function setWords(list) {
@@ -164,6 +172,57 @@ Column {
       accent: w.accent
       bordered: true
       onClicked: tab.setDayStart(tab.dayStart + 1)
+    }
+  }
+
+  PanelSeparator { width: parent.width; foreground: w.fg }
+
+  // ---- presence check
+  PanelSectionHeader {
+    text: "VÉRIFICATION DE PRÉSENCE"
+    foreground: w.fg
+    fontFamily: w.fontFamily
+  }
+
+  Text {
+    width: parent.width
+    wrapMode: Text.WordWrap
+    textFormat: Text.PlainText
+    text: "Pendant une session, « Toujours là ? » s'affiche à cet intervalle. Sans réponse en 4 min, la session se met en pause."
+    color: Util.alpha(w.fg, 0.55)
+    font.family: w.fontFamily
+    font.pixelSize: Style.font.caption
+  }
+
+  Row {
+    spacing: Style.space(6)
+
+    Button {
+      text: "−"
+      foreground: w.fg
+      accent: w.accent
+      bordered: true
+      onClicked: tab.setPresenceEvery(tab.presenceEvery - 5)
+    }
+
+    Text {
+      anchors.verticalCenter: parent.verticalCenter
+      width: Style.space(70)
+      horizontalAlignment: Text.AlignHCenter
+      textFormat: Text.PlainText
+      text: tab.presenceEvery + " min"
+      color: w.fg
+      font.family: w.fontFamily
+      font.pixelSize: Style.font.body
+      font.bold: true
+    }
+
+    Button {
+      text: "+"
+      foreground: w.fg
+      accent: w.accent
+      bordered: true
+      onClicked: tab.setPresenceEvery(tab.presenceEvery + 5)
     }
   }
 
