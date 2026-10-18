@@ -635,9 +635,44 @@ BarWidget {
     }
   }
 
+  // ---- share: the card is grabbed (in the panel) to a temporary PNG, then a
+  // save dialog asks where it goes, and it is copied there.
+  readonly property string shareTemp: Quickshell.env("XDG_RUNTIME_DIR") + "/prometheus-share.png"
+  property string shareTarget: ""
+
+  function askWhereToSave() {
+    var day = Qt.formatDate(new Date(), "yyyy-MM-dd")
+    saveDialog.command = ["zenity", "--file-selection", "--save", "--confirm-overwrite",
+      "--title=Save your Prometheus card", "--file-filter=PNG image | *.png",
+      "--filename=" + Quickshell.env("HOME") + "/Pictures/prometheus-" + day + ".png"]
+    saveDialog.running = true
+  }
+
+  Process {
+    id: saveDialog
+    stdout: StdioCollector {
+      onStreamFinished: {
+        var path = text.trim()
+        if (path === "") return               // cancelled
+        if (!/\.png$/i.test(path)) path += ".png"
+        root.shareTarget = path
+        copyShare.command = ["cp", "-f", root.shareTemp, path]
+        copyShare.running = true
+      }
+    }
+  }
+
+  Process {
+    id: copyShare
+    onExited: function(code) {
+      if (code === 0) root.showToast("ended", "Card saved", root.shareTarget, "")
+      else root.showToast("error", "Could not save the card", root.shareTarget, "")
+    }
+  }
+
   // ---- achievement unlocked: a capsule of the rarity's color. It snaps open,
   // flashes white to catch the eye, then glows with a light sweeping across it
-  // (and a rainbow sheen if legendary) for ten seconds, then closes up like a
+  // (and a rainbow sheen if legendary) for thirty seconds, then closes up like a
   // pill: down to a round dot, which shrinks away.
 
   TextMetrics {
@@ -686,7 +721,7 @@ BarWidget {
         PropertyAction { target: achPill; property: "flashOn"; value: false }
         PauseAnimation { duration: 90 }
       }
-      PauseAnimation { duration: 10000 - 560 - 1080 }
+      PauseAnimation { duration: 30000 - 560 - 1080 }
       ScriptAction { script: achPill.close() }
     }
 
@@ -862,6 +897,20 @@ BarWidget {
         if (!(panel.current && panel.current.focusEntry())) keyCatcher.forceActiveFocus()
       }
 
+      function share() {
+        p.call("share:get", [], function(ok, d) {
+          if (!ok || !d || !d.success) { root.showToast("error", "Could not build the card", "", ""); return }
+          shareCard.info = d
+          // Let it lay out, then grab it, then ask where to save it.
+          Qt.callLater(function() {
+            shareCard.grabToImage(function(result) {
+              if (result.saveToFile(root.shareTemp)) root.askWhereToSave()
+              else root.showToast("error", "Could not render the card", "", "")
+            }, Qt.size(shareCard.width * 2, shareCard.height * 2))
+          })
+        })
+      }
+
       function cycleTab(step) {
         var i = 0
         for (var k = 0; k < tabs.length; k++) if (tabs[k].value === root.tab) i = k
@@ -926,6 +975,13 @@ BarWidget {
             cursorShape: Qt.PointingHandCursor
             onClicked: if (p.quest) p.act("quests:deactivate", [p.quest.id], "Quest")
           }
+        }
+
+        // The share card, laid out off to the side: only grabbed, never seen.
+        ShareCard {
+          id: shareCard
+          x: -20000
+          w: root
         }
 
         // Flying "+N XP" labels, above the panel content.
@@ -1004,6 +1060,28 @@ BarWidget {
             Item {
               width: parent.width
               height: title.implicitHeight
+
+              // Share: a PNG of the profile, medals and seasons.
+              Text {
+                id: shareButton
+                anchors.left: title.right
+                anchors.leftMargin: Style.space(10)
+                anchors.verticalCenter: title.verticalCenter
+                textFormat: Text.PlainText
+                text: String.fromCodePoint(0xF0497) + "  share"
+                color: shareArea.containsMouse ? root.accent : Util.alpha(root.fg, 0.5)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+
+                MouseArea {
+                  id: shareArea
+                  anchors.fill: parent
+                  anchors.margins: -Style.space(4)
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: panel.share()
+                }
+              }
 
               Text {
                 id: title

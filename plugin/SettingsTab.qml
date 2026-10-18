@@ -19,8 +19,9 @@ Column {
   property var words: []       // forbidden words in window titles
   property int dayStart: 5     // hour the day starts at
   property int presenceEvery: 20   // minutes between "Still there?" checks
+  property string handle: ""      // the @handle on the share card
 
-  readonly property bool editing: hideField.activeFocus || wordField.activeFocus || aliasFrom.activeFocus || aliasTo.activeFocus
+  readonly property bool editing: handleField.activeFocus || hideField.activeFocus || wordField.activeFocus || aliasFrom.activeFocus || aliasTo.activeFocus
   spacing: Style.space(10)
 
   readonly property var goalLimits: ({ day: [0.5, 16], week: [1, 80], month: [1, 368] })
@@ -35,6 +36,7 @@ Column {
     p.call("apps:getHiddenWords", [], function(ok, d) { if (ok && d && d.success) tab.words = d.hiddenTitleWords || [] })
     p.call("settings:getDayStart", [], function(ok, d) { if (ok && d && d.success) tab.dayStart = d.dayStartHour })
     p.call("settings:getPresenceEvery", [], function(ok, d) { if (ok && d && d.success) tab.presenceEvery = d.minutes })
+    p.call("settings:getHandle", [], function(ok, d) { if (ok && d && d.success) { tab.handle = d.handle; handleField.text = d.handle } })
     p.call("apps:known", [30], function(ok, d) { if (ok && d && d.success) tab.known = d.apps || [] })
   }
 
@@ -58,6 +60,14 @@ Column {
     p.act("settings:setDayStart", [h], "Day start", function(d) {
       if (d) tab.dayStart = d.dayStartHour
       w.refreshGoal()
+    })
+  }
+
+  function saveHandle() {
+    var h = handleField.text.trim().replace(/^@+/, "")
+    if (h === handle) return
+    p.act("settings:setHandle", [h], "Handle", function(d) {
+      if (d) { tab.handle = d.handle; handleField.text = d.handle }
     })
   }
 
@@ -125,6 +135,49 @@ Column {
 
   onVisibleChanged: if (visible) refresh()
   Component.onCompleted: if (visible) refresh()
+
+  // ---- the player's @handle, for the share card
+  PanelSectionHeader {
+    text: "HANDLE"
+    foreground: w.fg
+    fontFamily: w.fontFamily
+  }
+
+  Row {
+    width: parent.width
+    spacing: Style.space(6)
+
+    Text {
+      anchors.verticalCenter: handleField.verticalCenter
+      textFormat: Text.PlainText
+      text: "@"
+      color: Util.alpha(w.fg, 0.7)
+      font.family: w.fontFamily
+      font.pixelSize: Style.font.body
+      font.bold: true
+    }
+
+    TextField {
+      id: handleField
+      width: parent.width - handleSave.width - Style.space(20)
+      placeholderText: "your handle, shown when you share"
+      foreground: w.fg
+      accent: w.accent
+      font.family: w.fontFamily
+      onAccepted: tab.saveHandle()
+      Keys.onEscapePressed: w.close()
+    }
+
+    Button {
+      id: handleSave
+      anchors.verticalCenter: handleField.verticalCenter
+      text: "Save"
+      foreground: w.fg
+      accent: w.accent
+      bordered: true
+      onClicked: tab.saveHandle()
+    }
+  }
 
   // ---- day start
   PanelSectionHeader {

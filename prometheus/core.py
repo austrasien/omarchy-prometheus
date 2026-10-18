@@ -613,6 +613,34 @@ class Core:
 
     # ------------------------------------------------------------ day start
 
+    HANDLE_CHARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-")
+
+    def handle(self) -> str:
+        return self.store.get_setting("handle", "") or ""
+
+    def set_handle(self, handle) -> dict:
+        """The player's @handle, shown on the share card. Letters, digits, _ . -"""
+        h = handle.strip().lstrip("@") if isinstance(handle, str) else None
+        if h is None or len(h) > 32 or not set(h) <= self.HANDLE_CHARS:
+            raise Refused("Invalid handle: up to 32 letters, digits, _ . -")
+        self.store.set_setting("handle", h)
+        return {"success": True, "handle": h}
+
+    def share(self, at: int) -> dict:
+        """Everything the share card shows."""
+        ledger = C.Ledger(self.store, at)
+        league = C.leagues(ledger)["current"]
+        seasons = C.seasons(ledger)
+        first = ledger.first_day
+        return {
+            "success": True, "handle": self.handle(), "profile": self.profile(at),
+            "league": {k: league[k] for k in ("name", "color", "shining")},
+            "seasons": [{k: s[k] for k in ("label", "grade", "xp", "goal", "hardGoal", "running")}
+                        for s in reversed(seasons)],
+            "firstDay": first.isoformat() if first else None,
+            "medals": M.placard(self.store, at), "seasonMedals": C.season_medals(self.store),
+        }
+
     def set_day_start(self, hour, at: int) -> dict:
         if not isinstance(hour, (int, float)) or not 0 <= int(hour) <= 12:
             raise Refused("Invalid day start hour (0 to 12)")

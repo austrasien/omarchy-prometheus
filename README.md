@@ -84,6 +84,9 @@ only what was actually used.
 - **Leaderboard**: your best days and weeks (XP), sessions (focus) and quests
   (XP while active), top 10, with the current one highlighted. A quest can be
   taken off the board (an open one is deleted); its XP stays.
+- **Share**: the "share" button by the panel's title renders a PNG card (your
+  @handle, set in Settings, league, level, XP bar, every medal, every season's
+  score and grade, the date you started) and asks where to save it.
 - **Achievements** (a family not started yet shows only dots; tiers after the next one too; each tier has a rarity by the XP it is worth: normal under 30, common green, rare blue from 60, epic purple from 140, legendary gold and shining from 360; secrets are epic): 111 families with 724 tiers (17 on quests, 13 on leagues, seasons and leaderboards), plus a calendar of 126
   dated achievements (one per date: Roman festivals, geek days, scientists
   and writers, SpaceX and Tesla milestones, each unlocked by finishing a
@@ -186,6 +189,8 @@ bar (session ended, challenge won).
 | `tasks:reopen` | `[id]` | Back to the list, during a session |
 | `tasks:delete` | `[id]` | Drop an open task without its XP |
 | `toast:preview` | `[rarity]` | Show a sample achievement unlock (to see the capsule) |
+| `share:get` | | What the share card shows |
+| `settings:getHandle` / `settings:setHandle` | `[handle]` | The player's @handle |
 | `leagues:get` | | League ladder, settled weeks, the current week's zone |
 | `seasons:get` | | Every season (goals, grade, recap) and the season medals |
 | `leaderboard:get` | `[board]` | Top 10 of `days`, `weeks`, `sessions` or `quests` |

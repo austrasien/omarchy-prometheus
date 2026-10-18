@@ -97,20 +97,37 @@ Column {
             border.width: parent.here ? 2 : 0
             border.color: "white"
 
-            // Emerald and up glint: a flash of white, one gem after the other.
+          }
+
+          // Emerald and up: a reflection runs across the gem, one gem after
+          // the other, at full brightness even on a league not reached yet.
+          Item {
+            visible: index >= 5
+            anchors.centerIn: parent
+            width: gem.width
+            height: gem.height
+            rotation: 45
+            clip: true
+
             Rectangle {
-              anchors.fill: parent
-              radius: parent.radius
-              color: "white"
-              opacity: 0
-              visible: index >= 5
-              SequentialAnimation on opacity {
+              id: glint
+              width: parent.width * 0.45
+              height: parent.height * 1.6
+              y: -parent.height * 0.3
+              x: -width
+              rotation: 45
+              gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop { position: 0.0; color: "#00ffffff" }
+                GradientStop { position: 0.5; color: "#f0ffffff" }
+                GradientStop { position: 1.0; color: "#00ffffff" }
+              }
+              SequentialAnimation on x {
                 running: index >= 5 && tab.visible
                 loops: Animation.Infinite
-                PauseAnimation { duration: (index - 5) * 220 }
-                NumberAnimation { to: 0.85; duration: 160; easing.type: Easing.OutQuad }
-                NumberAnimation { to: 0; duration: 420; easing.type: Easing.InQuad }
-                PauseAnimation { duration: 2200 - (index - 5) * 220 }
+                PauseAnimation { duration: (index - 5) * 180 }
+                NumberAnimation { from: -glint.width; to: glint.parent.width + glint.width * 0.2; duration: 650; easing.type: Easing.InOutQuad }
+                PauseAnimation { duration: 1800 - (index - 5) * 180 }
               }
             }
           }

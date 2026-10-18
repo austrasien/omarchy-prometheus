@@ -470,5 +470,18 @@ class CoreTest(unittest.TestCase):
         self.assertIsNotNone(again.presence_state(self.at(21)))
 
 
+    def test_handle_and_share(self):
+        self.assertEqual(self.core.set_handle("@thibault_42")["handle"], "thibault_42")
+        with self.assertRaises(Refused):
+            self.core.set_handle("bad handle!")
+        self.core.start(None, self.at(0))
+        self.core.end(self.at(60))
+        card = self.core.share(self.at(61))
+        self.assertEqual(card["handle"], "thibault_42")
+        self.assertEqual(card["league"]["name"], "Bronze")
+        self.assertTrue(card["firstDay"])
+        self.assertTrue(card["seasons"][0]["running"])
+
+
 if __name__ == "__main__":
     unittest.main()
