@@ -666,11 +666,13 @@ BarWidget {
           else panel.focusContent()
         }
 
-        // A red bookmark hangs from the top edge while a quest is active,
+        // A bookmark hangs from the top edge while a quest is active,
         // like a ribbon left in a book.
         Item {
           id: bookmark
           visible: !!p.quest
+          // The active quest's own color.
+          readonly property color tint: p.quest && p.quest.color ? p.quest.color : root.red
           z: 5
           width: Style.space(14)
           height: Style.space(30)
@@ -684,7 +686,7 @@ BarWidget {
             preferredRendererType: Shape.CurveRenderer
             ShapePath {
               strokeWidth: 0
-              fillColor: root.red
+              fillColor: bookmark.tint
               startX: 0; startY: 0
               PathLine { x: bookmark.width; y: 0 }
               PathLine { x: bookmark.width; y: bookmark.height }
@@ -699,7 +701,7 @@ BarWidget {
             x: bookmark.width * 0.2
             width: 1
             height: bookmark.height - bookmark.width * 0.6
-            color: Qt.darker(root.red, 1.35)
+            color: Qt.darker(bookmark.tint, 1.35)
             opacity: 0.6
           }
 
