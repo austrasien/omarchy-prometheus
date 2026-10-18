@@ -428,22 +428,22 @@ class CoreTest(unittest.TestCase):
         c = self.core
         c.on_window(Window("YouTube"), self.at(0))
         c.start("s", self.at(0))
-        self.assertEqual(c.update_presence(self.at(44)), [])
-        self.assertEqual(c.update_presence(self.at(45))[0][0], "presence")
-        self.assertFalse(c.state(self.at(46))["presence"]["flashing"])
-        self.assertTrue(c.state(self.at(48))["presence"]["flashing"])
-        c.presence_confirm(self.at(48))                        # still there
-        self.assertIsNone(c.state(self.at(48))["presence"])
-        self.assertEqual(c.update_presence(self.at(48 + 44)), [])
-        self.assertEqual(c.update_presence(self.at(48 + 45))[0][0], "presence")
-        ev = c.update_presence(self.at(48 + 49))               # no answer in 4 min
+        self.assertEqual(c.update_presence(self.at(19)), [])
+        self.assertEqual(c.update_presence(self.at(20))[0][0], "presence")
+        self.assertFalse(c.state(self.at(21))["presence"]["flashing"])
+        self.assertTrue(c.state(self.at(23))["presence"]["flashing"])
+        c.presence_confirm(self.at(23))                        # still there
+        self.assertIsNone(c.state(self.at(23))["presence"])
+        self.assertEqual(c.update_presence(self.at(23 + 19)), [])
+        self.assertEqual(c.update_presence(self.at(23 + 20))[0][0], "presence")
+        ev = c.update_presence(self.at(23 + 24))               # no answer in 4 min
         self.assertEqual(ev[0][0], "absent")
-        st = c.state(self.at(100))["session"]
-        self.assertEqual(st["pauseStartedAt"], self.at(48 + 45))   # backdated to the question
+        st = c.state(self.at(60))["session"]
+        self.assertEqual(st["pauseStartedAt"], self.at(23 + 20))   # backdated to the question
         self.assertEqual(st["autoPaused"], [])                     # resumed by hand only
-        c.resume(self.at(110))
-        recap = c.end(self.at(110))["recap"]
-        self.assertEqual(recap["durationSeconds"], (48 + 45) * 60)
+        c.resume(self.at(70))
+        recap = c.end(self.at(70))["recap"]
+        self.assertEqual(recap["durationSeconds"], (23 + 20) * 60)
 
 
 if __name__ == "__main__":

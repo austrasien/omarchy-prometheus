@@ -20,7 +20,7 @@ only what was actually used.
   are never attributed to an app. They also pause the running session by
   themselves; such a pause resumes by itself when you are back, while a
   pause you make by hand never does.
-- **Presence check**: every 45 min of running session, a pill asks "Toujours
+- **Presence check**: every 20 min of running session, a pill asks "Toujours
   là ?". A click keeps going; unanswered, it flashes from the 3rd minute and
   the session pauses at the 4th, backdated to the question (a playing video
   keeps idle away, so idle alone cannot tell).

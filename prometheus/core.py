@@ -30,7 +30,7 @@ CHALLENGE_OFFER_TTL_MS = 5 * 60 * 1000
 # Presence check: a running session asks "still there?" every so often (a
 # playing video keeps idle away, so idle alone cannot tell). Unanswered, the
 # pill flashes, then the session pauses, backdated to when it asked.
-PRESENCE_EVERY_MS = 45 * 60 * 1000
+PRESENCE_EVERY_MS = 20 * 60 * 1000
 PRESENCE_FLASH_AFTER_MS = 3 * 60 * 1000
 PRESENCE_TIMEOUT_MS = 4 * 60 * 1000
 GOAL_LIMITS = {"day": (0.5, 16), "week": (1, 80), "month": (1, 368)}
