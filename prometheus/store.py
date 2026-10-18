@@ -270,6 +270,13 @@ class Store:
     def add_event(self, kind: str, at: int, session_id: str | None) -> None:
         self.db.execute("INSERT INTO events(kind, at, session_id) VALUES(?, ?, ?)", (kind, at, session_id))
 
+    def sessions_with_event(self, kind: str) -> set[str]:
+        return {r[0] for r in self.db.execute(
+            "SELECT DISTINCT session_id FROM events WHERE kind=? AND session_id IS NOT NULL", (kind,))}
+
+    def set_achievement_xp(self, aid: str, xp: int) -> None:
+        self.db.execute("UPDATE achievements SET xp=? WHERE id=?", (xp, aid))
+
     def count_events(self, kind: str) -> int:
         return int(self.db.execute("SELECT COUNT(*) FROM events WHERE kind=?", (kind,)).fetchone()[0])
 

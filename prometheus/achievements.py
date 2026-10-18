@@ -4,8 +4,9 @@ the measures that unlock them, all computed from Prometheus' own records.
 A family has a measure (a number, or None when nothing qualifies yet) and
 thresholds. Each threshold is a tier: an achievement with a name, a
 description, a line for when it unlocks, and an XP reward. Tiered rewards
-grow 5 XP per tier, capped at 50; a single achievement is worth 10 XP, a
-secret one 25.
+grow 5 XP per tier up to the 10th (50 XP), then 2 XP per tier; a single
+achievement is worth 10 XP. Each family has a weight (x1, x2, x3) by how hard
+it is. Secret achievements are worth 25 XP, flat.
 """
 
 from __future__ import annotations
@@ -37,6 +38,7 @@ class Family:
     secret: bool = False
     unit: str = ""               # shown with the progress: "", "h", "%", "days"
     scale: float = 1.0           # measure / scale is what is shown
+    weight: int = 1              # x1 easy, x2 hard, x3 extreme
 
     @property
     def single(self) -> bool:
@@ -49,8 +51,12 @@ class Family:
         if self.secret:
             return 25
         if self.single:
-            return 10
-        return min(50, 5 * (i + 1))
+            base = 10
+        elif i < 10:
+            base = 5 * (i + 1)
+        else:
+            base = 50 + 2 * (i - 9)
+        return base * self.weight
 
     def quip(self, i: int) -> str:
         return self.quips[i % len(self.quips)].format(n=_fmt(self.thresholds[i] / self.scale))
@@ -94,6 +100,10 @@ class Context:
     inbox_zero: int = 0                                      # times the to-do list was emptied
     put_off: list = field(default_factory=list)              # (task text, when) of procrastinated sessions
     switches: dict = field(default_factory=dict)             # session id -> app changes
+    interrupted: set = field(default_factory=set)            # sessions with an automatic pause
+    day_first: dict = field(default_factory=dict)            # logical date -> first session start, ms
+    day_xp: dict = field(default_factory=dict)               # logical date -> XP earned (no achievements)
+    goal: dict | None = None                                 # {hours, period}
 
 
 def _date(s: str) -> dt.date:
@@ -123,6 +133,8 @@ def build_context(store, now: int, level: int) -> Context:
             ctx.closed.append(s)
         ctx.day_focus[s["date"]] = ctx.day_focus.get(s["date"], 0) + focus
         ctx.day_sessions[s["date"]] = ctx.day_sessions.get(s["date"], 0) + 1
+        ctx.day_first[s["date"]] = min(ctx.day_first.get(s["date"], s["start"]), s["start"])
+        ctx.day_xp[s["date"]] = ctx.day_xp.get(s["date"], 0) + focus // 600
     ctx.sessions.sort(key=lambda s: s["start"])
 
     # Procrastinations count every put-off session, however short.
@@ -131,8 +143,15 @@ def build_context(store, now: int, level: int) -> Context:
             ctx.procrastinations[r["task"]] = ctx.procrastinations.get(r["task"], 0) + 1
             ctx.put_off.append((r["task"], r["ended_at"] or now))
 
-    ctx.tasks_done = [{"text": r["text"], "created": r["created_at"], "done": r["done_at"]}
+    ctx.tasks_done = [{"text": r["text"], "created": r["created_at"], "done": r["done_at"], "xp": r["xp"] or 1}
                       for r in store.done_tasks()]
+    for t in ctx.tasks_done:
+        d = T.date_str(t["done"])
+        ctx.day_xp[d] = ctx.day_xp.get(d, 0) + t["xp"]
+    for r in store.db.execute("SELECT ended_at, xp FROM challenges WHERE state='won'"):
+        d = T.date_str(r["ended_at"])
+        ctx.day_xp[d] = ctx.day_xp.get(d, 0) + r["xp"]
+    ctx.interrupted = store.sessions_with_event("autopause") | store.sessions_with_event("absent")
     ctx.reflexes = store.count_events("reflex")
     ctx.inbox_zero = store.count_events("inbox_zero")
     ctx.switches = _app_switches(store)
@@ -142,6 +161,8 @@ def build_context(store, now: int, level: int) -> Context:
         "GROUP BY session_id HAVING COUNT(*) >= 3)").fetchone()[0])
     ctx.absences = store.count_events("absent")
     goal = store.get_setting("hoursGoal")
+    if goal:
+        ctx.goal = {"hours": float(goal["hours"]), "period": goal.get("period")}
     if goal and goal.get("period") == "day":
         ctx.goal_hours = float(goal["hours"])
     ctx.monotask = _longest_single_app(store)
@@ -247,13 +268,6 @@ def _night(c: Context) -> float | None:
     return max((_night_hour(s) for s in c.sessions), default=None)
 
 
-def _comeback(c: Context) -> float | None:
-    for a, b in zip(c.sessions, c.sessions[1:]):
-        if b["start"] - a["end"] >= 7 * DAY * 1000:
-            return 1
-    return None
-
-
 def _weekend(c: Context) -> float | None:
     dates = set(c.day_sessions)
     for d in dates:
@@ -350,6 +364,90 @@ def _on_dates(dates: set[tuple[int, int]]):
     return measure
 
 
+def _goal_hits(period: str):
+    """How many days / weeks / months reached the hours goal set for that period."""
+    def measure(c: Context) -> float | None:
+        if not c.goal or c.goal["period"] != period:
+            return None
+        buckets = defaultdict(float)
+        for d, s in c.day_focus.items():
+            day = _date(d)
+            key = d if period == "day" else day.isocalendar()[:2] if period == "week" else d[:7]
+            buckets[key] += s
+        return sum(1 for s in buckets.values() if s >= c.goal["hours"] * H) or None
+    return measure
+
+
+def _personal_bests(c: Context) -> float | None:
+    """Weeks that beat every week before them (the first week is no record)."""
+    weeks = defaultdict(float)
+    for d, s in c.day_focus.items():
+        weeks[_date(d).isocalendar()[:2]] += s
+    best, records = None, 0
+    for key in sorted(weeks):
+        if best is not None and weeks[key] > best:
+            records += 1
+        best = weeks[key] if best is None else max(best, weeks[key])
+    return records or None
+
+
+def _tod(ms: int) -> float:
+    t = _local(ms)
+    return t.hour * 60 + t.minute
+
+
+def _clockwork(c: Context) -> float | None:
+    """Longest run of days whose first session starts within 15 min of the day before."""
+    days = sorted(c.day_first)
+    best = run = 0
+    prev = None
+    for d in days:
+        cur = _date(d)
+        if prev is not None and (cur - _date(prev)).days == 1 and abs(_tod(c.day_first[d]) - _tod(c.day_first[prev])) <= 15:
+            run += 1
+        else:
+            run = 1
+        best = max(best, run)
+        prev = d
+    return best if best >= 2 else None
+
+
+def _early_streak(c: Context) -> float | None:
+    early = set()
+    for s in c.sessions:
+        t = _local(s["start"])
+        if 4 <= t.hour < 8:
+            early.add(s["date"])
+    return _longest_run(early) or None
+
+
+def _uninterrupted(c: Context) -> float | None:
+    return sum(1 for s in c.closed if s["focus"] >= 2 * H and s["id"] not in c.interrupted) or None
+
+
+def _years_on(month: int, day: int):
+    """Different years with a session on that calendar date."""
+    def measure(c: Context) -> float | None:
+        years = {_local(s["start"]).year for s in c.sessions
+                 if (_local(s["start"]).month, _local(s["start"]).day) == (month, day)}
+        return len(years) or None
+    return measure
+
+
+def _on_exact(year: int, month: int, day: int):
+    def measure(c: Context) -> float | None:
+        return 1 if any(_local(s["start"]).date() == dt.date(year, month, day) for s in c.sessions) else None
+    return measure
+
+
+def _longest_gap_comeback(c: Context) -> float | None:
+    """Longest break, in days, that ended with a new session."""
+    best = 0
+    for a, b in zip(c.sessions, c.sessions[1:]):
+        best = max(best, (b["start"] - a["end"]) / (DAY * 1000))
+    return best or None
+
+
 def _goal_streak(c: Context) -> float | None:
     if not c.goal_hours:
         return None
@@ -376,18 +474,30 @@ def _tiers(start, stop, step, extra=()):
 
 FAMILIES: list[Family] = [
     # ---- volume
-    Family("sessions", "Shipping cadence", lambda c: len(c.closed) or None, [10, 20, 40, 80],
+    Family("sessions", "Shipping cadence", lambda c: len(c.closed) or None, [10 * 2 ** k for k in range(10)],
            lambda t: f"Shipping Cadence {t:g}", lambda t: f"Complete {t:g} sessions.",
            ["Ten sessions. The flywheel spins. Keep regulators away from it.",
             "Twenty. Iteration speed is the only moat that matters.",
             "Forty sessions. You're compounding faster than the Fed can print.",
-            "Eighty. That's not a habit anymore, that's a launch cadence."]),
-    Family("tasks", "Zero to one", lambda c: len(c.tasks_done) or None, [10, 20, 40, 80],
+            "Eighty. That's not a habit anymore, that's a launch cadence.",
+            "{n} sessions. SpaceX launches less often, and they have a whole company.",
+            "{n}. Your commit graph would make a 10x engineer blush.",
+            "{n} sessions. Habits are just compounding with better branding.",
+            "{n}. At this cadence you're a utility, not a person.",
+            "{n} sessions. The universe trends toward entropy; you trend toward output.",
+            "{n}. Somewhere a union rep is drafting a complaint about you."]),
+    Family("tasks", "Zero to one", lambda c: len(c.tasks_done) or None, [10 * 2 ** k for k in range(10)],
            lambda t: f"Zero to {t:g}", lambda t: f"Finish {t:g} tasks.",
            ["Zero to ten. Thiel would call it a start. A small one.",
             "Twenty tasks shipped while the committee is still drafting the memo.",
             "Forty. Execution is the only ideology that compiles.",
-            "Eighty. You ship like paperwork is a myth from a dying civilization."]),
+            "Eighty. You ship like paperwork is a myth from a dying civilization.",
+            "{n} tasks. Done is the engine; perfect is a tax.",
+            "{n} closed. Backlogs tremble when you open your laptop.",
+            "{n}. Your throughput just got its own GDP line.",
+            "{n} tasks. Ideas are cheap; you're the expensive part.",
+            "{n}. If tasks were taxable, you'd be moving to Puerto Rico.",
+            "{n} tasks shipped. Zero to one, repeated until it's a power law."]),
     Family("cumul", "Compound interest", lambda c: sum(s["focus"] for s in c.sessions) or None,
            [h * H for h in range(100, 10001, 100)],
            lambda t: f"Compound Interest {t / H:g} h", lambda t: f"Reach {t / H:g} h of focus in total.",
@@ -467,12 +577,64 @@ FAMILIES: list[Family] = [
     Family("deep5", "Deep hours III", _streak_hours(5), [5, 10, 20, 30, 50],
            lambda t: f"Deep Hours 5 h ×{t:g}", lambda t: f"5 h of focus a day, {t:g} days in a row.",
            ["5 hours a day, {n} days. Your competitors are in a standup about synergy."], unit="days"),
-    Family("goal", "Quota crusher", _goal_streak, [3, 5, 10, 20, 30],
+    Family("goal", "Quota crusher", _goal_streak, [3, 5, 7, 10, 14, 21, 30, 45, 60, 90, 120, 180, 365],
            lambda t: f"Quota Crusher ×{t:g}", lambda t: f"Hit your daily hours goal {t:g} days in a row.",
-           ["Goal hit {n} days running. Targets are floors, not ceilings."], unit="days"),
-    Family("comeback", "Return of the king", _comeback, [1],
-           lambda t: "Return of the King", lambda t: "Start a session after 7 days without one.",
-           ["You're back. The market missed you. Briefly."]),
+           ["Goal hit {n} days running. Targets are floors, not ceilings.",
+            "{n} days on target. Quotas are a planned-economy thing; you just overdeliver.",
+            "{n} days. Your goal is starting to feel underpriced.",
+            "{n} days straight. Raise the bar; it's clearly too low."], unit="days"),
+    Family("goalday", "Daily quota", _goal_hits("day"), [1, 5, 10, 25, 50, 100, 200, 365, 500, 1000],
+           lambda t: f"Daily Quota {t:g}", lambda t: f"Reach your daily hours goal on {t:g} days.",
+           ["Goal reached. The plan was the minimum.",
+            "{n} days at quota. Five-year plans failed; your daily ones don't.",
+            "{n} days on target. Consistency is a deflationary asset."], unit="days"),
+    Family("goalweek", "Weekly quota", _goal_hits("week"), [1, 2, 4, 8, 13, 26, 52, 104, 156, 260],
+           lambda t: f"Weekly Quota {t:g}", lambda t: f"Reach your weekly hours goal in {t:g} weeks.",
+           ["Weekly goal: done. The weekend is now optional.",
+            "{n} weeks at quota. A quarter, a year, a decade: same energy.",
+            "{n} weeks. Your OKRs have OKRs."]),
+    Family("goalmonth", "Monthly quota", _goal_hits("month"), [1, 2, 3, 6, 12, 24, 36, 60, 120],
+           lambda t: f"Monthly Quota {t:g}", lambda t: f"Reach your monthly hours goal in {t:g} months.",
+           ["A month on target. Central banks miss theirs; you don't.",
+            "{n} months at quota. Long-term thinking is the real alpha.",
+            "{n} months. Your goal should start paying you rent."]),
+    Family("personalbest", "Personal best", _personal_bests, [1, 3, 5, 10, 15, 20, 25, 30, 40, 50],
+           lambda t: f"Personal Best ×{t:g}", lambda t: f"Beat your best week in hours, {t:g} times.",
+           ["New record week. Your past self is now your competitor.",
+            "{n} records broken. Up and to the right, the only acceptable chart.",
+            "{n} personal bests. Stagnation is a choice you keep declining."]),
+    Family("dayxp", "XP rush", lambda c: max(c.day_xp.values(), default=None), [50, 100, 150, 200, 250, 300, 400, 500],
+           lambda t: f"XP Rush {t:g}", lambda t: f"Earn {t:g} XP in one day (achievements aside).",
+           ["{n} XP in a day. Hyperinflation, but the good kind.",
+            "{n} XP today. Your level bar needs a bigger monitor.",
+            "{n} in one day. The leaderboard is just you, competing with you."]),
+    Family("clockwork", "Clockwork", _clockwork, [5, 7, 10, 14, 21, 30, 45, 60, 90],
+           lambda t: f"Clockwork ×{t:g}", lambda t: f"Start your day within 15 min of the day before, {t:g} days in a row.",
+           ["Same time, {n} days. Predictable like a launch window.",
+            "{n} days on schedule. Atomic clocks are taking notes.",
+            "{n} days of clockwork. Discipline is freedom with a cron job."], unit="days"),
+    Family("earlystreak", "Dawn patrol", _early_streak, [5, 7, 10, 14, 21, 30, 45, 60, 90, 120],
+           lambda t: f"Dawn Patrol ×{t:g}", lambda t: f"A session before 8:00, {t:g} days in a row.",
+           ["{n} early mornings. The rest of the world is still hitting snooze.",
+            "{n} days before 8. You front-run the day.",
+            "{n} dawns. Sunrise is your daily standup."], unit="days"),
+    Family("uninterrupted", "Zero interruptions", _uninterrupted, [1, 5, 10, 25, 50, 100, 200, 300],
+           lambda t: f"Zero Interruptions {t:g}", lambda t: f"{t:g} sessions of 2 h+ without any automatic pause.",
+           ["Two hours, no idle, no lock, no AFK. Pure throughput.",
+            "{n} unbroken sessions. Your focus has no attack surface.",
+            "{n} times uninterrupted. Notifications fear you."]),
+    Family("comeback", "Comebacks", _longest_gap_comeback, [7, 14, 30, 60, 90, 180, 365],
+           lambda t: {7: "Return of the King", 14: "Sabbatical Over", 30: "The Prodigal Founder",
+                      60: "Second Act", 90: "Back from Exile", 180: "Resurrection",
+                      365: "Cold Boot"}.get(int(t), f"Comeback {t:g}"),
+           lambda t: f"Start a session after {t:g} days without one.",
+           ["You're back. The market missed you. Briefly.",
+            "Two weeks off, back on. Vacations are just extended context switches.",
+            "A month away. The prodigal founder returns; the fatted calf is a backlog.",
+            "Two months out. Every great company has a second act.",
+            "Three months of exile, over. Napoleon came back too. Ship faster than he did.",
+            "Half a year. You died, metaphorically, and rebooted. Transhumanism works.",
+            "A full year off, then back. Cryosleep complete. Welcome to the future."], unit="days"),
 
     # ---- tasks
     Family("tasksday", "Throughput", lambda c: _tasks_per(c, lambda d: d), [5, 10, 15, 20, 25, 30],
@@ -564,6 +726,34 @@ FAMILIES: list[Family] = [
            lambda t: f"Date Line ×{t:g}", lambda t: f"Cross midnight in session {t:g} times.",
            ["You started yesterday and finished today. Time zones are a social construct.",
             "{n} midnights crossed mid-flow. Calendars can't contain you."], secret=True),
+    Family("piday", "Pi day", _years_on(3, 14), [1, 2, 3, 5, 10],
+           lambda t: f"Pi Day ×{t:g}", lambda t: f"Hold a session on March 14th, {t:g} different years.",
+           ["3.14159… and you're still not rounding down your effort.",
+            "{n} Pi Days. Irrational dedication."], secret=True),
+    Family("apollo", "Apollo", _years_on(7, 20), [1, 2, 3, 5, 10],
+           lambda t: f"Apollo ×{t:g}", lambda t: f"Hold a session on July 20th, {t:g} different years.",
+           ["July 20th. One small session for you, one giant leap for your backlog.",
+            "{n} Apollo days. We went to the Moon on slide rules; no excuses."], secret=True),
+    Family("sputnik", "Sputnik", _years_on(10, 4), [1, 2, 3, 5, 10],
+           lambda t: f"Sputnik ×{t:g}", lambda t: f"Hold a session on October 4th, {t:g} different years.",
+           ["October 4th. The space race started today; so did your session.",
+            "{n} Sputnik days. Beep. Beep. Still shipping."], secret=True),
+    Family("leapday", "Leap day", _years_on(2, 29), [1, 2, 3, 5, 10],
+           lambda t: f"Leap Day ×{t:g}", lambda t: f"Hold a session on February 29th, {t:g} different leap years.",
+           ["A day that barely exists, and you used it. Maximum calendar efficiency.",
+            "{n} leap days. You've found the bonus level of time."], secret=True),
+    Family("longestday", "Longest day", _years_on(6, 21), [1, 2, 3, 5, 10],
+           lambda t: f"Longest Day ×{t:g}", lambda t: f"Hold a session on June 21st, {t:g} different years.",
+           ["Longest day of the year. More daylight, more output.",
+            "{n} solstices of maximum sun, maximum ship."], secret=True),
+    Family("longestnight", "Longest night", _years_on(12, 21), [1, 2, 3, 5, 10],
+           lambda t: f"Longest Night ×{t:g}", lambda t: f"Hold a session on December 21st, {t:g} different years.",
+           ["Longest night of the year. Prometheus brought fire for exactly this.",
+            "{n} winter solstices. The darkness is just more screen contrast."], secret=True),
+    Family("y2k38", "Y2K38 warm-up", _on_exact(2033, 5, 18), [1],
+           lambda t: "Y2K38 Warm-Up", lambda t: "Hold a session on May 18th, 2033, when Unix time passes 2 billion seconds.",
+           ["Two billion seconds since 1970. You were there, shipping. Veteran status: unlocked."],
+           secret=True),
     Family("fullmoon", "Lunar shift", _full_moon, [1],
            lambda t: "Lunar Shift", lambda t: "Hold a session under a full moon.",
            ["Full moon session. Next one from Mars."]),
@@ -658,6 +848,18 @@ FAMILIES: list[Family] = [
 ]
 
 
+# Difficulty weights: x2 hard, x3 extreme; everything else x1.
+WEIGHTS = {
+    "cumul": 3, "deep5": 3, "streak3": 3, "week": 3, "intensity": 3, "goodmonths": 3, "activedays": 3,
+    "endurance": 2, "sprint3": 2, "streak": 2, "streak2": 2, "deep3": 2, "deep4": 2, "goal": 2,
+    "goalday": 2, "goalweek": 2, "goalmonth": 2, "tasksday": 2, "tasksweek": 2, "triple": 2,
+    "personalbest": 2, "clockwork": 2, "earlystreak": 2, "uninterrupted": 2, "calm": 2,
+    "monotask": 2, "archaeologist": 2, "fullmonth": 2, "dailymax": 2, "dayxp": 2,
+}
+for _f in FAMILIES:
+    _f.weight = WEIGHTS.get(_f.id, 1)
+
+
 # ------------------------------------------------------------- evaluation
 
 
@@ -667,6 +869,13 @@ def evaluate(store, now: int, level_for_xp: Callable[[int], int], base_xp: int) 
     Level achievements grant XP that can raise the level, so this runs until
     nothing new unlocks."""
     fresh: list[dict] = []
+    # Rewards follow the current rules, also for what was unlocked before.
+    unlocked = store.unlocked_achievements()
+    for f in FAMILIES:
+        for i in range(len(f.thresholds)):
+            row = unlocked.get(f.tier_id(i))
+            if row is not None and row["xp"] != f.xp(i):
+                store.set_achievement_xp(row["id"], f.xp(i))
     while True:
         unlocked = store.unlocked_achievements()
         level = level_for_xp(base_xp + store.achievement_xp_total())

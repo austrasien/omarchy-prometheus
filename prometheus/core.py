@@ -204,6 +204,7 @@ class Core:
         if s["pause_started_at"] is None:
             start = max(since, s["started_at"], self.last_resume_at)
             self.store.set_pause(s["id"], start, s["total_pause_ms"])
+            self.store.add_event("autopause", start, s["id"])
             state = {"session": s["id"], "reasons": [reason]}
         elif state.get("session") == s["id"] and reason not in state.get("reasons", []):
             state["reasons"] = state.get("reasons", []) + [reason]
@@ -232,6 +233,7 @@ class Core:
         if s is None or s["pause_started_at"] is not None:
             return  # already paused: the pause covers the sleep
         self.store.set_pause(s["id"], None, s["total_pause_ms"] + (at - last))
+        self.store.add_event("autopause", last, s["id"])
 
     def auto_paused(self) -> list[str]:
         s = self._session()

@@ -96,10 +96,25 @@ class AchievementsTest(unittest.TestCase):
         self.assertEqual(cat["total"], sum(len(f.thresholds) for f in A.FAMILIES))
 
     def test_xp_rules(self):
-        fam = next(f for f in A.FAMILIES if f.id == "cumul")
-        self.assertEqual([fam.xp(i) for i in (0, 1, 9, 10, 99)], [5, 10, 50, 50, 50])
-        self.assertEqual(next(f for f in A.FAMILIES if f.id == "comeback").xp(0), 10)
-        self.assertEqual(next(f for f in A.FAMILIES if f.id == "monk").xp(0), 25)
+        fam = next(f for f in A.FAMILIES if f.id == "cumul")          # weight x3
+        self.assertEqual([fam.xp(i) for i in (0, 1, 9, 10, 99)], [15, 30, 150, 156, 690])
+        tasks = next(f for f in A.FAMILIES if f.id == "tasks")        # weight x1
+        self.assertEqual([tasks.xp(i) for i in (0, 9)], [5, 50])
+        self.assertEqual(next(f for f in A.FAMILIES if f.id == "newyear").xp(0), 25)   # secret
+        self.assertEqual(next(f for f in A.FAMILIES if f.id == "y2k38").xp(0), 25)
+
+    def test_old_unlocks_follow_new_rules(self):
+        self.store.unlock("sessions:10", self.t0, 999)               # stale reward
+        self.check(self.t0)
+        self.assertEqual(self.store.unlocked_achievements()["sessions:10"]["xp"], 5)
+
+    def test_comeback_tiers_and_calendar_years(self):
+        self.session(self.t0, 15)
+        self.session(self.t0 + 31 * DAY, 15)                          # back after 31 days
+        self.check(self.t0 + 32 * DAY)
+        got = self.unlocked()
+        self.assertIn("comeback:30", got)
+        self.assertNotIn("comeback:60", got)
 
     def test_task_families(self):
         c = self.core

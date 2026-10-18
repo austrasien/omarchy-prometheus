@@ -39,17 +39,20 @@ only what was actually used.
   written back to the note.
 - **XP and levels**: 1 XP per 10 min of session (pauses excluded), plus done
   tasks, plus won challenges. Level 2 costs 100 XP, each next level 50 more.
-- **Achievements**: 53 families, 395 tiers, computed from Prometheus' own
+- **Achievements**: 68 families, 526 tiers, computed from Prometheus' own
   records: sessions, tasks (same-day, inbox zero, redemptions), cumulative
   hours (100 h to 10,000 h), levels, endurance, intensity, 3-day and weekly
   hours, streaks, active days and months, early and late sessions, midnight
   crossings, challenges, task archaeology, calm and single-app sessions,
-  "Toujours là ?" reflexes, holidays, sessions on battery or on its last 10 %,
+  "Toujours là ?" reflexes, holidays, sessions on battery or on its last 10 %, goals reached per day, week or
+  month, personal-best weeks, XP in a day, clockwork starts, dawn streaks,
+  sessions without automatic pauses, comebacks, geek dates,
   and sessions by weather (read from the file the Omarchy
   weather plugin writes, `~/.local/state/omarchy/weather-current.json`), and a
   few secrets. Each has a name, a description, a line when it unlocks, and an
-  XP reward: 5 XP per tier, capped at 50; 10 for a single achievement, 25 for
-  a secret one. Sessions under 10 min count for nothing.
+  XP reward: 5 XP per tier up to the 10th, then 2 more per tier; 10 for a
+  single achievement; times the family's weight (x1, x2 or x3, by
+  difficulty). Secret ones are worth 25 XP. Sessions under 10 min count for nothing.
 - **Extension challenge**: after 1 h of focus, a pill in the bar offers 20
   min more. Hovered, it splits into decline and accept. Accepted, the session
   cannot be ended before those 20 min of focus are done, unless the challenge
