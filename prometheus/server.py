@@ -96,7 +96,7 @@ class Daemon:
             "quests:list": lambda a: self.core.quests_list(self.clock()),
             "quests:add": lambda a: self.core.quest_add(a[0] if a else "", a[1] if len(a) > 1 else "", self.clock()),
             "quests:activate": lambda a: self.core.quest_activate(a[0] if a else None, self.clock()),
-            "quests:deactivate": lambda a: self.core.quest_deactivate(a[0] if a else None),
+            "quests:deactivate": lambda a: self.core.quest_deactivate(a[0] if a else None, self.clock()),
             "quests:complete": self._quest_complete,
             "quests:uncomplete": lambda a: self.core.quest_uncomplete(a[0] if a else None, self.clock()),
             "quests:delete": lambda a: self.core.quest_delete(a[0] if a else None, self.clock()),

@@ -23,7 +23,6 @@ class QuestTest(unittest.TestCase):
     def work(self, n):
         """A session on day n."""
         self.core.start(None, self.day(n))
-        self.core.tick(self.day(n, 30))
         self.core.end(self.day(n, 60))
 
     def add(self, kind, title="Write the report"):
@@ -43,7 +42,7 @@ class QuestTest(unittest.TestCase):
         self.core.quest_activate(a, self.day(0))
         self.core.quest_activate(b, self.day(0))
         self.assertEqual(self.core.state(self.day(0))["quest"]["title"], "B")
-        self.core.quest_deactivate(b)
+        self.core.quest_deactivate(b, self.day(0))
         self.assertIsNone(self.core.state(self.day(0))["quest"])
 
     def test_days_worked_count_only_while_active(self):
@@ -53,7 +52,7 @@ class QuestTest(unittest.TestCase):
         self.work(1)
         self.work(1)                      # same day counts once
         self.work(2)
-        self.core.quest_deactivate(q)
+        self.core.quest_deactivate(q, self.day(2, 90))
         self.work(3)
         self.assertEqual(self.core.quests.days_worked(q), 2)
         reply = self.core.quest_complete(q, self.day(4))
@@ -109,6 +108,38 @@ class QuestTest(unittest.TestCase):
         self.core.quest_complete(ids[1], self.day(0))
         q = self.core.quest_add("Another", "daily", self.day(0))["quest"]
         self.assertNotEqual(q["color"], Q.RED)
+
+    def test_list_order_does_not_follow_activation(self):
+        a, b = self.add("short", "A"), self.add("short", "B")
+        self.core.quest_activate(b, self.day(0))
+        self.assertEqual([q["title"] for q in self.core.quests_list(self.day(0))["quests"]], ["A", "B"])
+
+    def test_activity_counts_only_while_active(self):
+        q = self.add("short")
+        self.core.task_add("Before", "manual", self.day(0))
+        self.work(0)                                  # not active: not counted
+        c = self.core
+        c.start(None, self.day(1))
+        c.quest_activate(q, self.day(1, 10))          # 50 min of this session count
+        tid = c.task_add("Draft", "manual", self.day(1, 20))["task"]["id"]
+        c.task_complete(tid, self.day(1, 30))
+        c.end(self.day(1, 60))
+        c.start(None, self.day(2))
+        c.end(self.day(2, 60))                        # a full hour
+        c.quest_deactivate(q, self.day(2, 90))
+        self.work(3)                                  # put aside: not counted
+        act = c.quests_list(self.day(3))["quests"][0]["activity"]
+        self.assertEqual(act["sessions"], 2)
+        self.assertEqual(act["seconds"], 110 * 60)
+        self.assertEqual(act["tasks"], 1)
+        self.assertEqual(act["xp"], 110 // 10 + 1)
+        self.assertEqual(len(act["hours"]), 24)
+
+    def test_deactivate_other_quest_is_a_no_op(self):
+        a, b = self.add("short", "A"), self.add("short", "B")
+        self.core.quest_activate(a, self.day(0))
+        self.core.quest_deactivate(b, self.day(0))
+        self.assertEqual(self.core.state(self.day(0))["quest"]["title"], "A")
 
     def test_refusals(self):
         with self.assertRaises(Refused):

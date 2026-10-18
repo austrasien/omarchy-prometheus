@@ -703,10 +703,11 @@ BarWidget {
             opacity: 0.6
           }
 
+          // A click puts the quest aside (it stays in the list).
           MouseArea {
             anchors.fill: parent
             cursorShape: Qt.PointingHandCursor
-            onClicked: root.tab = "quests"
+            onClicked: if (p.quest) p.act("quests:deactivate", [p.quest.id], "Quest")
           }
         }
 

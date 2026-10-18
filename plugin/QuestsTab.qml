@@ -52,6 +52,20 @@ Column {
     return label + "  ·  " + (d === 0 ? "not worked on yet" : d + (d === 1 ? " day" : " days") + " worked")
   }
 
+  function duration(sec) {
+    var m = Math.floor(sec / 60), h = Math.floor(m / 60)
+    return h > 0 ? h + "h" + (m % 60 < 10 ? "0" : "") + (m % 60) : m + " min"
+  }
+
+  // What happened while the quest was active.
+  function activityLine(a) {
+    if (!a || (a.seconds < 60 && a.tasks === 0 && a.sessions === 0)) return ""
+    var parts = [duration(a.seconds), a.sessions + (a.sessions === 1 ? " session" : " sessions")]
+    if (a.tasks > 0) parts.push(a.tasks + (a.tasks === 1 ? " task" : " tasks"))
+    parts.push("+" + a.xp + " XP")
+    return parts.join("  ·  ")
+  }
+
   function refresh() {
     if (!p || !p.live) return
     p.call("quests:list", [], function(ok, d) {
@@ -211,23 +225,27 @@ Column {
           readonly property var quest: modelData.quest
           readonly property bool isDone: modelData.isDone
           readonly property bool checked: isDone || !!quest.doneToday
+          readonly property color questColor: quest.color || w.red
           readonly property bool hovered: rowArea.containsMouse || checkArea.containsMouse
             || markArea.containsMouse || deleteArea.containsMouse
           width: list.width
           height: textBlock.implicitHeight + Style.space(8)
 
+          // The active quest sits in a capsule of its own color.
           Rectangle {
             anchors.fill: parent
-            radius: Style.space(4)
-            color: row.quest.active ? Util.alpha(w.red, row.hovered ? 0.2 : 0.12)
+            radius: Math.min(height / 2, Style.space(16))
+            color: row.quest.active ? Util.alpha(row.questColor, row.hovered ? 0.14 : 0.08)
               : row.hovered ? Util.alpha(w.accent, 0.12) : "transparent"
+            border.width: row.quest.active ? 1.5 : 0
+            border.color: row.questColor
           }
 
           // Completes the quest (for today, if daily); checked, undoes it.
           Text {
             id: check
             anchors.left: parent.left
-            anchors.leftMargin: Style.space(4)
+            anchors.leftMargin: Style.space(10)
             anchors.top: textBlock.top
             textFormat: Text.PlainText
             text: row.checked ? tab.checkedGlyph : tab.uncheckedGlyph
@@ -260,8 +278,7 @@ Column {
               width: parent.width
               textFormat: Text.PlainText
               text: row.quest.title
-              // Each quest has its own color; dimmed once done.
-              color: Util.alpha(row.quest.color || w.fg, row.checked ? 0.45 : 1)
+              color: row.checked ? Util.alpha(w.fg, 0.45) : w.fg
               font.family: w.fontFamily
               font.pixelSize: Style.font.body
               font.strikeout: row.isDone
@@ -277,6 +294,43 @@ Column {
               font.pixelSize: Style.font.caption
               wrapMode: Text.Wrap
             }
+
+            Text {
+              width: parent.width
+              visible: text !== ""
+              textFormat: Text.PlainText
+              text: tab.activityLine(row.quest.activity)
+              color: Util.alpha(w.fg, 0.5)
+              font.family: w.fontFamily
+              font.pixelSize: Style.font.caption
+              wrapMode: Text.Wrap
+            }
+
+            // When the work happened: one cell per hour of the day,
+            // brighter for more focus. Midnight on the left.
+            Item {
+              id: hoursStrip
+              readonly property var hours: row.quest.activity ? row.quest.activity.hours : []
+              readonly property int peak: Math.max.apply(null, hours.concat([0]))
+              width: parent.width
+              height: Style.space(6) + Style.space(3)
+              visible: peak > 0
+
+              Row {
+                y: Style.space(3)
+                spacing: 1
+                Repeater {
+                  model: hoursStrip.hours
+                  Rectangle {
+                    required property int modelData
+                    width: (hoursStrip.width - 23) / 24
+                    height: Style.space(6)
+                    radius: 1
+                    color: modelData > 0 ? Util.alpha(w.fg, 0.2 + 0.7 * modelData / hoursStrip.peak) : Util.alpha(w.fg, 0.07)
+                  }
+                }
+              }
+            }
           }
 
           // Bookmark: activates the quest, or puts it aside. Always shown,
@@ -290,7 +344,7 @@ Column {
             textFormat: Text.PlainText
             text: row.quest.active ? tab.bookmarkGlyph : tab.bookmarkOutlineGlyph
             opacity: row.quest.active || row.hovered ? 1 : 0
-            color: row.quest.active || markArea.containsMouse ? w.red : Util.alpha(w.fg, 0.55)
+            color: row.quest.active || markArea.containsMouse ? row.questColor : Util.alpha(w.fg, 0.55)
             font.family: w.fontFamily
             font.pixelSize: Style.font.body
             z: 2
@@ -335,7 +389,7 @@ Column {
           Laurel {
             id: laurel
             anchors.right: parent.right
-            anchors.rightMargin: Style.space(4)
+            anchors.rightMargin: Style.space(10)
             anchors.verticalCenter: parent.verticalCenter
             size: Style.space(24)
             text: String(row.quest.xp || 0)

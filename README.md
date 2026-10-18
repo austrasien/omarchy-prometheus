@@ -48,6 +48,9 @@ only what was actually used.
   the first one, and any new one while no open quest is red, is red; the others
   draw a color left, so no two open quests share one (ten at most). The active
   quest's title is shown in its color.
+  The active quest sits in a capsule of its color in the list; the bookmark puts
+  it aside. Each quest tracks what happened in sessions while it was active:
+  focus time, sessions, focus per hour of the day, tasks checked and XP earned.
 - **XP and levels**: 1 XP per 10 min of session (pauses excluded), plus done
   tasks, plus won challenges. Level 2 costs 100 XP, each next level 50 more.
 - **Achievements**: 81 families with 608 tiers, plus a calendar of 126

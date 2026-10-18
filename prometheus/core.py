@@ -56,6 +56,7 @@ class Core:
     def __init__(self, store: Store):
         self.store = store
         self.quests = Q.Quests(store)
+        self.quests.repair(T.now_ms())
         T.set_day_start_hour(self.store.get_setting("dayStartHour", T.DEFAULT_DAY_START_HOUR))
         self.window: Window | None = None
         self.idle = False
@@ -738,8 +739,8 @@ class Core:
     def quest_activate(self, qid, at: int) -> dict:
         return self._quest(self.quests.activate, qid, at, self._working())
 
-    def quest_deactivate(self, qid=None) -> dict:
-        return self._quest(self.quests.deactivate, qid)
+    def quest_deactivate(self, qid, at: int) -> dict:
+        return self._quest(self.quests.deactivate, qid, at)
 
     def quest_delete(self, qid, at: int) -> dict:
         return self._quest(self.quests.delete, qid, at)

@@ -13,7 +13,7 @@ import sqlite3
 import uuid
 from pathlib import Path
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
@@ -105,6 +105,15 @@ CREATE TABLE IF NOT EXISTS quest_work (
   day      TEXT NOT NULL,
   PRIMARY KEY (quest_id, day)
 );
+
+-- When each quest was the active one. A quest's activity (time, sessions,
+-- tasks, XP) is what happened in sessions during these periods.
+CREATE TABLE IF NOT EXISTS quest_active (
+  quest_id   TEXT NOT NULL,
+  started_at INTEGER NOT NULL,
+  ended_at   INTEGER                -- NULL while it is still active
+);
+CREATE INDEX IF NOT EXISTS idx_quest_active ON quest_active(quest_id);
 
 -- Daily quests: one row per day they were completed.
 CREATE TABLE IF NOT EXISTS quest_done (

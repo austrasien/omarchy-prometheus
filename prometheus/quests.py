@@ -13,10 +13,12 @@ so the reward follows the effort actually put in, not the calendar.
 
 from __future__ import annotations
 
+import datetime as dt
 import random
 import uuid
 
 from . import timeutil as T
+from .store import clipped_seconds
 from .medals import AZURE, CYAN, GREEN, INDIGO, LIME, ORANGE, PINK, RED, SPRING, VIOLET
 
 KINDS = ("daily", "short", "long")
@@ -50,6 +52,7 @@ def worth(kind: str, days_worked: int, streak: int = 0) -> int:
 
 class Quests:
     def __init__(self, store):
+        self.store = store
         self.db = store.db
 
     # ------------------------------------------------------------ reading
@@ -78,6 +81,7 @@ class Quests:
         out = {"id": r["id"], "title": r["title"], "kind": r["kind"], "color": r["color"] or FIRST_COLOR,
                "active": bool(r["active"]),
                "createdAt": r["created_at"], "daysWorked": self.days_worked(r["id"])}
+        out["activity"] = self.activity(r["id"], at)
         if r["kind"] == "daily":
             today = self.db.execute("SELECT xp FROM quest_done WHERE quest_id=? AND day=?",
                                     (r["id"], T.date_str(at))).fetchone()
@@ -92,13 +96,58 @@ class Quests:
             out["xp"] = worth(r["kind"], out["daysWorked"])
         return out
 
+    # ----------------------------------------------------------- activity
+
+    def periods(self, qid: str, at: int) -> list[tuple[int, int]]:
+        return [(r["started_at"], r["ended_at"] if r["ended_at"] is not None else at)
+                for r in self.db.execute("SELECT * FROM quest_active WHERE quest_id=? ORDER BY started_at", (qid,))]
+
+    def activity(self, qid: str, at: int, focus_seconds_per_xp: int = 600) -> dict:
+        """What happened in sessions while the quest was active: focus time,
+        sessions, focus minutes per hour of the day, tasks checked, XP earned
+        (focus, tasks and the quest's own rewards)."""
+        seconds, sessions, tasks, task_xp = 0, set(), 0, 0
+        hours = [0] * 24
+        for start, end in self.periods(qid, at):
+            if end <= start:
+                continue
+            for s in self.store.overlapping_sessions(start, end):
+                sec = clipped_seconds(s, start, end, at)
+                if sec > 0:
+                    seconds += sec
+                    sessions.add(s["id"])
+            for sp in self.store.spans_between(start, end):
+                if sp["session_id"] is None:
+                    continue
+                t, e = sp["s"], sp["e"]
+                while t < e:  # split at the hour boundaries, local time
+                    local = dt.datetime.fromtimestamp(t / 1000)
+                    nxt = int((local.replace(minute=0, second=0, microsecond=0)
+                               + dt.timedelta(hours=1)).timestamp() * 1000)
+                    hours[local.hour] += min(e, nxt) - t
+                    t = min(e, nxt)
+            for r in self.db.execute(
+                "SELECT created_at, done_at, xp FROM tasks WHERE done_at >= ? AND done_at < ? "
+                "AND done_session_id IS NOT NULL", (start, end)
+            ):
+                tasks += 1
+                task_xp += r["xp"] if r["xp"] is not None else 1 + max(0, (r["done_at"] - r["created_at"]) // 86_400_000)
+        reward = self.db.execute("SELECT COALESCE(xp, 0) FROM quests WHERE id=?", (qid,)).fetchone()
+        reward = int(reward[0]) if reward else 0
+        reward += int(self.db.execute("SELECT COALESCE(SUM(xp), 0) FROM quest_done WHERE quest_id=?",
+                                      (qid,)).fetchone()[0])
+        return {"seconds": int(seconds), "sessions": len(sessions), "tasks": tasks,
+                "hours": [round(ms / 60000) for ms in hours],
+                "xp": int(seconds) // focus_seconds_per_xp + task_xp + reward,
+                "rewardXp": reward}
+
     def active(self, at: int) -> dict | None:
         r = self.db.execute("SELECT * FROM quests WHERE active=1 AND deleted_at IS NULL LIMIT 1").fetchone()
         return self._view(r, at) if r is not None else None
 
     def listing(self, at: int) -> dict:
         rows = self.db.execute(
-            "SELECT * FROM quests WHERE deleted_at IS NULL AND done_at IS NULL ORDER BY active DESC, created_at"
+            "SELECT * FROM quests WHERE deleted_at IS NULL AND done_at IS NULL ORDER BY created_at"
         ).fetchall()
         done = self.db.execute(
             "SELECT * FROM quests WHERE deleted_at IS NULL AND done_at IS NOT NULL ORDER BY done_at DESC LIMIT 20"
@@ -146,23 +195,42 @@ class Quests:
         r = self._row(qid)
         if r is None or r["done_at"] is not None:
             raise QuestError("Quest not found or already done")
-        self.db.execute("UPDATE quests SET active=0 WHERE active=1")
-        self.db.execute("UPDATE quests SET active=1 WHERE id=?", (qid,))
+        self._set_active(qid, at)
         if working:
             self.mark_work(at)
         return {"success": True}
 
-    def deactivate(self, qid=None) -> dict:
-        if qid is None:
-            self.db.execute("UPDATE quests SET active=0 WHERE active=1")
-        elif self.db.execute("UPDATE quests SET active=0 WHERE id=?", (qid,)).rowcount == 0:
+    def deactivate(self, qid, at: int) -> dict:
+        """Put the active quest aside (any given id must be that quest)."""
+        if qid is not None and self._row(qid) is None:
             raise QuestError("Quest not found")
+        r = self.db.execute("SELECT id FROM quests WHERE active=1").fetchone()
+        if r is not None and (qid is None or r["id"] == qid):
+            self._set_active(None, at)
         return {"success": True}
+
+    def _set_active(self, qid: str | None, at: int) -> None:
+        """Make `qid` the only active quest (None: no quest), closing and
+        opening the activity periods to match."""
+        self.db.execute("UPDATE quest_active SET ended_at=? WHERE ended_at IS NULL", (at,))
+        self.db.execute("UPDATE quests SET active=0 WHERE active=1")
+        if qid is not None:
+            self.db.execute("UPDATE quests SET active=1 WHERE id=?", (qid,))
+            self.db.execute("INSERT INTO quest_active(quest_id, started_at) VALUES(?, ?)", (qid, at))
+
+    def repair(self, at: int) -> None:
+        """An active quest without an open period (made before periods existed)."""
+        for r in self.db.execute("SELECT id FROM quests WHERE active=1").fetchall():
+            if self.db.execute("SELECT 1 FROM quest_active WHERE quest_id=? AND ended_at IS NULL",
+                               (r["id"],)).fetchone() is None:
+                self.db.execute("INSERT INTO quest_active(quest_id, started_at) VALUES(?, ?)", (r["id"], at))
 
     def delete(self, qid, at: int) -> dict:
         if self._row(qid) is None:
             raise QuestError("Quest not found")
-        self.db.execute("UPDATE quests SET deleted_at=?, active=0 WHERE id=?", (at, qid))
+        if self._row(qid)["active"]:
+            self._set_active(None, at)
+        self.db.execute("UPDATE quests SET deleted_at=? WHERE id=?", (at, qid))
         return {"success": True}
 
     def complete(self, qid, at: int) -> dict:
@@ -178,7 +246,9 @@ class Quests:
                 raise QuestError("Already done today")
         else:
             xp = worth(r["kind"], self.days_worked(qid))
-            self.db.execute("UPDATE quests SET done_at=?, xp=?, active=0 WHERE id=?", (at, xp, qid))
+            if r["active"]:
+                self._set_active(None, at)
+            self.db.execute("UPDATE quests SET done_at=?, xp=? WHERE id=?", (at, xp, qid))
         return {"success": True, "xp": xp, "title": r["title"], "kind": r["kind"]}
 
     def uncomplete(self, qid, at: int) -> dict:
