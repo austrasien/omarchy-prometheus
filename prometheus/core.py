@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from . import achievements as A
+from . import competition as C
 from . import env
 from . import medals as M
 from . import quests as Q
@@ -372,6 +373,7 @@ class Core:
             "presence": self.presence_state(at),
             "medals": M.placard(self.store, at),
             "quest": self.quests.active(at),
+            "seasonMedals": C.season_medals(self.store),
             "session": self._session_state(),
             "today": {"sessions": len(closed), "seconds": sum(session_seconds(r) for r in closed)},
             "window": {"app": self.alias(w.app), "title": w.title} if w else None,
@@ -717,7 +719,7 @@ class Core:
         task_xp = sum(self._task(r)["xp"] for r in self.store.done_tasks())
         bonus = self.challenge_xp()
         trophies = self.store.achievement_xp_total()
-        decorations = self.store.medal_xp_total()
+        decorations = self.store.medal_xp_total() + C.season_xp_total(self.store)
         quest_xp = self.quests.xp_total()
         total = focus_xp + task_xp + bonus + trophies + decorations + quest_xp
         return dict(self.level_for(total), xp=total, focusXp=focus_xp, taskXp=task_xp,
@@ -755,7 +757,23 @@ class Core:
     # ---------------------------------------------------------------- medals
 
     def check_medals(self, at: int, history: bool = False) -> list[dict]:
-        return M.evaluate(self.store, at, history=history)
+        return M.evaluate(self.store, at, history=history) + C.check_season_medals(self.store, C.Ledger(self.store, at), at)
+
+    # ---------------------------------------------- leagues, seasons, boards
+
+    def leagues(self, at: int) -> dict:
+        out = C.leagues(C.Ledger(self.store, at))
+        return dict(out, success=True, leagues=[{"name": n, "color": c, "floor": f} for n, c, f in
+                                                zip(C.LEAGUES, C.LEAGUE_COLORS, C.LEAGUE_FLOORS)])
+
+    def seasons(self, at: int) -> dict:
+        return {"success": True, "seasons": C.seasons(C.Ledger(self.store, at)),
+                "medals": C.season_medals(self.store)}
+
+    def leaderboard(self, board, at: int) -> dict:
+        board = board if board in C.BOARDS else "days"
+        quests = self.quests.summary(at) if board == "quests" else None
+        return C.leaderboard(self.store, C.Ledger(self.store, at), board, quests)
 
     def medals_list(self, at: int) -> dict:
         return M.catalogue(self.store, at)

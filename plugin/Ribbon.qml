@@ -7,6 +7,7 @@ Item {
 
   property color color: "#3b5bdb"
   property color dot: "white"
+  property color edgeColor: dot    // the edge stripes, the dot color unless set
   property int dots: 1             // 1 daily, 2 weekly, 3 monthly
   property string edges: "none"    // none, left, both
   property real size: 1            // scale: 1 is 30 x 10 px
@@ -30,7 +31,7 @@ Item {
       anchors.top: parent.top
       anchors.bottom: parent.bottom
       width: Math.max(2, Math.round(root.width * 0.08))
-      color: root.dot
+      color: root.edgeColor
     }
 
     Rectangle {
@@ -40,7 +41,7 @@ Item {
       anchors.top: parent.top
       anchors.bottom: parent.bottom
       width: Math.max(2, Math.round(root.width * 0.08))
-      color: root.dot
+      color: root.edgeColor
     }
 
     Row {

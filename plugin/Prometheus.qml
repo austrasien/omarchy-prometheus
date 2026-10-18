@@ -34,6 +34,7 @@ Item {
   property var challenge: null    // { id, state: offered | active, minutes, xp, remainingSeconds }
   property var presence: null     // { askedAt, flashing, pauseAt } while "still there?" is asked
   property var quest: null        // the active quest: { id, title, kind, daysWorked, xp, streak, doneToday }
+  property var seasonMedals: []   // permanent: [{ season, number, bars, color, dot, edge, name, desc }]
   property var medals: []         // the placard: [{ id, name, desc, period, color, dots, dot, edges, count, current }]
   property var history: []        // seven { date, minutes }, oldest first
   property var apps: []           // today's top five { app, seconds }
@@ -163,6 +164,7 @@ Item {
     assign("challenge", state.challenge || null)
     assign("presence", state.presence || null)
     assign("quest", state.quest || null)
+    assign("seasonMedals", state.seasonMedals || [])
     assign("medals", state.medals || [])
     assign("history", state.history || [])
     assign("apps", state.apps || [])
@@ -184,6 +186,7 @@ Item {
     presence = null
     quest = null
     medals = []
+    seasonMedals = []
     history = []
     apps = []
     trackedSeconds = 0

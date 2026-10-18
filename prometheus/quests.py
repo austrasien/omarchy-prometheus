@@ -150,7 +150,8 @@ class Quests:
         for r in self.db.execute("SELECT * FROM quests ORDER BY created_at").fetchall():
             periods = self.periods(r["id"], at)
             out.append({
-                "id": r["id"], "kind": r["kind"], "color": r["color"] or FIRST_COLOR,
+                "id": r["id"], "title": r["title"], "active": bool(r["active"]),
+                "kind": r["kind"], "color": r["color"] or FIRST_COLOR,
                 "created": r["created_at"], "done": r["done_at"], "deleted": r["deleted_at"],
                 "first_active": periods[0][0] if periods else None,
                 "days_worked": self.days_worked(r["id"]),

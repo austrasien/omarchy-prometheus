@@ -13,7 +13,7 @@ import sqlite3
 import uuid
 from pathlib import Path
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
@@ -122,6 +122,18 @@ CREATE TABLE IF NOT EXISTS quest_done (
   done_at  INTEGER NOT NULL,
   xp       INTEGER NOT NULL,
   PRIMARY KEY (quest_id, day)
+);
+
+-- Season medals: won once, kept for good, each with its own random colors.
+CREATE TABLE IF NOT EXISTS season_medals (
+  season     TEXT PRIMARY KEY,     -- 2026-Q4
+  number     INTEGER NOT NULL,     -- Season 1, 2, ...
+  bars       INTEGER NOT NULL,     -- 1: goal reached, 2: hard goal reached
+  bg         TEXT NOT NULL,
+  dot        TEXT NOT NULL,
+  edge       TEXT NOT NULL,
+  awarded_at INTEGER NOT NULL,
+  xp         INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS settings (

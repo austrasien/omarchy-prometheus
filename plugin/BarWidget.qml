@@ -958,12 +958,15 @@ BarWidget {
               id: placard
               width: parent.width
               spacing: Style.space(3)
-              visible: p.medals.length > 0
+              visible: all.length > 0
               property string hovered: ""
+              // Season medals first, on their own row: permanent, and shining.
+              readonly property var all: p.seasonMedals.concat(p.medals)
 
               readonly property int perRow: 6
 
               function legendFor(m) {
+                if (m.period === "season") return m.name + " · " + m.desc + " · kept for good"
                 return m.name + (m.count > 1 ? " ×" + m.count : "") + " · " + m.desc
                   + (m.current ? " · won " + (m.period === "day" ? "today" : m.period === "week" ? "this week" : "this month") : "")
               }
@@ -982,7 +985,7 @@ BarWidget {
               // Monthly, weekly then daily medals (the daemon's order), each
               // group on its own rows; a small gap opens between groups.
               readonly property var rows: {
-                var out = [], list = p.medals, groups = ["month", "week", "day"]
+                var out = [], list = placard.all, groups = ["season", "month", "week", "day"]
                 for (var g = 0; g < groups.length; g++) {
                   var items = list.filter(function(m) { return m.period === groups[g] })
                   for (var i = 0; i < items.length; i += perRow)
@@ -1009,19 +1012,44 @@ BarWidget {
                   Repeater {
                     model: placardRow.modelData.items
 
-                    Ribbon {
+                    Item {
+                      id: medal
                       required property var modelData
-                      size: 1.15
-                      color: modelData.color
-                      dot: modelData.dot
-                      dots: modelData.dots
-                      edges: modelData.edges
-                      opacity: modelData.current ? 1 : 0.75
+                      readonly property bool season: modelData.period === "season"
+                      implicitWidth: season ? seasonBars.implicitWidth : plain.implicitWidth
+                      implicitHeight: season ? seasonBars.implicitHeight : plain.implicitHeight
+
+                      Ribbon {
+                        id: plain
+                        visible: !medal.season
+                        size: 1.15
+                        color: medal.modelData.color
+                        dot: medal.modelData.dot
+                        dots: medal.modelData.dots || 1
+                        edges: medal.modelData.edges || "none"
+                        opacity: medal.modelData.current ? 1 : 0.75
+                      }
+
+                      // One bar for the season goal, two for the hard one.
+                      Row {
+                        id: seasonBars
+                        visible: medal.season
+                        spacing: 1
+                        Repeater {
+                          model: medal.season ? medal.modelData.bars : 0
+                          HoloRibbon {
+                            size: 1.15
+                            color: medal.modelData.color
+                            dot: medal.modelData.dot
+                            edge: medal.modelData.edge
+                          }
+                        }
+                      }
 
                       MouseArea {
                         anchors.fill: parent
                         hoverEnabled: true
-                        onEntered: placard.hovered = placard.legendFor(modelData)
+                        onEntered: placard.hovered = placard.legendFor(medal.modelData)
                         onExited: placard.hovered = ""
                       }
                     }
@@ -1038,7 +1066,7 @@ BarWidget {
 
                 Repeater {
                   id: legendProbe
-                  model: p.medals
+                  model: placard.all
 
                   Text {
                     required property var modelData
@@ -1114,12 +1142,9 @@ BarWidget {
             QuestsTab { id: questsTab; width: parent.width; w: root; p: root.client; visible: root.tab === "quests" }
             StatsTab { id: statsTab; width: parent.width; w: root; p: root.client; visible: root.tab === "stats" }
             AchievementsTab { id: achievementsTab; width: parent.width; w: root; p: root.client; visible: root.tab === "achievements" }
-            PlaceholderTab { id: leaguesTab; width: parent.width; w: root; visible: root.tab === "leagues"
-              title: "Leagues"; blurb: "Coming soon." }
-            PlaceholderTab { id: seasonsTab; width: parent.width; w: root; visible: root.tab === "seasons"
-              title: "Seasons"; blurb: "Coming soon." }
-            PlaceholderTab { id: leaderboardTab; width: parent.width; w: root; visible: root.tab === "leaderboard"
-              title: "Leaderboard"; blurb: "Coming soon." }
+            LeaguesTab { id: leaguesTab; width: parent.width; w: root; p: root.client; visible: root.tab === "leagues" }
+            SeasonsTab { id: seasonsTab; width: parent.width; w: root; p: root.client; visible: root.tab === "seasons" }
+            LeaderboardTab { id: leaderboardTab; width: parent.width; w: root; p: root.client; visible: root.tab === "leaderboard" }
             SettingsTab { id: settingsTab; width: parent.width; w: root; p: root.client; visible: root.tab === "settings" }
 
             PanelSeparator { width: parent.width; foreground: root.fg }

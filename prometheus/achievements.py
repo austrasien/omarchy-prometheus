@@ -112,6 +112,10 @@ class Context:
     quests: list = field(default_factory=list)               # every quest, with its activity (quests.summary)
     quests_full: int = 0                                     # times ten quests were open at once
     quest_sweeps: int = 0                                    # times the multi-day quests were all finished
+    league_weeks: list = field(default_factory=list)         # settled weeks (competition.leagues history)
+    seasons: list = field(default_factory=list)              # every season, the running one last
+    day_earned: dict = field(default_factory=dict)           # date -> earned XP (competition.Ledger)
+    session_focus: list = field(default_factory=list)        # (start ms, focus s) of every session
 
 
 def _date(s: str) -> dt.date:
@@ -190,6 +194,12 @@ def build_context(store, now: int, level: int) -> Context:
     ctx.quests = Quests(store).summary(now)
     ctx.quests_full = store.count_events("quests_full")
     ctx.quest_sweeps = store.count_events("quest_sweep")
+    from . import competition as C
+    ledger = C.Ledger(store, now)
+    ctx.league_weeks = C.leagues(ledger)["history"]
+    ctx.seasons = C.seasons(ledger)
+    ctx.day_earned = dict(ledger.xp)
+    ctx.session_focus = [(start, sec) for sec, start, _, _ in ledger.session_rows]
     return ctx
 
 
@@ -268,6 +278,67 @@ def _speedruns(c: Context) -> int | None:
 def _marathons(c: Context) -> int | None:
     return _count([q for q in _quests_done(c, "long") if q["first_active"] is not None
                    and q["done"] - q["first_active"] >= 30 * DAY * 1000])
+
+
+def _league_peak(c: Context) -> int | None:
+    return max((w["after"] for w in c.league_weeks), default=0) or None
+
+
+def _promotions(c: Context) -> int | None:
+    return _count([w for w in c.league_weeks if w["outcome"] == "up"])
+
+
+def _bounce_backs(c: Context) -> int | None:
+    weeks = c.league_weeks
+    return _count([1 for a, b in zip(weeks, weeks[1:]) if a["outcome"] == "down" and b["outcome"] == "up"])
+
+
+def _promotion_run(c: Context) -> int | None:
+    best = run = 0
+    for w in c.league_weeks:
+        run = run + 1 if w["outcome"] == "up" else 0
+        best = max(best, run)
+    return best or None
+
+
+def _diamond_weeks(c: Context) -> int | None:
+    return _count([w for w in c.league_weeks if w["before"] == 9])
+
+
+def _seasons_with(c: Context, bars: int) -> int | None:
+    return _count([s for s in c.seasons if s["bars"] >= bars])
+
+
+def _graded(c: Context) -> list[dict]:
+    return [s for s in c.seasons if s["grade"] is not None]
+
+
+def _honor_run(c: Context) -> int | None:
+    best = run = 0
+    for s in _graded(c):
+        run = run + 1 if s["grade"] in ("A", "B") else 0
+        best = max(best, run)
+    return best or None
+
+
+def _phoenix(c: Context) -> int | None:
+    g = _graded(c)
+    return _count([1 for a, b in zip(g, g[1:]) if a["grade"] == "F" and b["grade"] == "A"])
+
+
+def _day_records(c: Context) -> int | None:
+    from .competition import records
+    return records([(d, x) for d, x in c.day_earned.items()]) or None
+
+
+def _session_records(c: Context) -> int | None:
+    from .competition import records
+    return records(c.session_focus) or None
+
+
+def _day_podiums(c: Context) -> int | None:
+    from .competition import podiums
+    return podiums([(d, x) for d, x in c.day_earned.items()]) or None
 
 
 def _pivots(c: Context) -> int | None:
@@ -1099,6 +1170,66 @@ FAMILIES: list[Family] = [
            lambda t: "Pivot", lambda t: "Delete a quest you had already put more than 5 h into.",
            ["Sunk cost is a tax on the weak."], secret=True),
 
+    # ---- leagues
+    Family("promoted", "Promoted", _promotions, [1, 3, 5, 10, 25, 50],
+           lambda t: f"Promoted ×{t:g}", lambda t: f"Get promoted to a higher league {t:g} times.",
+           ["Up a league. Meritocracy works when you're the merit.",
+            "{n} promotions. The org chart can't keep up with you.",
+            "{n} times promoted. Your past self is filing a complaint with HR."]),
+    Family("leagueclimb", "League climber", _league_peak, list(range(1, 10)),
+           lambda t: f"{['Bronze', 'Silver', 'Gold', 'Sapphire', 'Ruby', 'Emerald', 'Amethyst', 'Pearl', 'Obsidian', 'Diamond'][int(t)]} League",
+           lambda t: f"Reach the {['Bronze', 'Silver', 'Gold', 'Sapphire', 'Ruby', 'Emerald', 'Amethyst', 'Pearl', 'Obsidian', 'Diamond'][int(t)]} league.",
+           ["New league, new altitude. Gravity is a suggestion.",
+            "Another league up. Escape velocity is just compounding with a rocket.",
+            "Higher still. The air is thin and the competition thinner."]),
+    Family("diamondhands", "Diamond hands", _diamond_weeks, [1, 4, 12, 26, 52],
+           lambda t: f"Diamond Hands {t:g}", lambda t: f"Play {t:g} weeks in the Diamond league.",
+           ["Diamond league. Pressure makes diamonds; you make pressure.",
+            "{n} weeks in Diamond. Holding the top like a long-term position."], unit="weeks"),
+    Family("bounceback", "Bounce back", _bounce_backs, [1, 3, 5, 10],
+           lambda t: f"Bounce Back ×{t:g}", lambda t: f"Get promoted right after a relegation, {t:g} times.",
+           ["Relegated, then promoted. Drawdowns are buying opportunities.",
+            "{n} bounces. Antifragile, by the book."]),
+    Family("promostreak", "Promotion streak", _promotion_run, [2, 3, 5, 9],
+           lambda t: f"Promotion Streak {t:g}", lambda t: f"Get promoted {t:g} weeks in a row.",
+           ["{n} promotions in a row. Exponential, not linear.",
+            "{n} straight. Hockey stick, achieved."], unit="weeks"),
+
+    # ---- seasons
+    Family("seasonpass", "Season pass", lambda c: _seasons_with(c, 1), [1, 2, 4, 8, 12],
+           lambda t: f"Season Pass ×{t:g}", lambda t: f"Reach the season goal in {t:g} seasons.",
+           ["Season goal, cleared. Quarterly guidance: exceeded.",
+            "{n} seasons on target. Wall Street would love your consistency."]),
+    Family("hardmode", "Hard mode", lambda c: _seasons_with(c, 2), [1, 2, 4, 8],
+           lambda t: f"Hard Mode ×{t:g}", lambda t: f"Reach the hard season goal in {t:g} seasons.",
+           ["Two bars. The hard goal is the only goal.",
+            "{n} hard seasons. Difficulty setting: founder."]),
+    Family("straighta", "Straight A", lambda c: _count([s for s in _graded(c) if s["grade"] == "A"]), [1, 2, 4, 8],
+           lambda t: f"Straight A ×{t:g}", lambda t: f"Finish {t:g} seasons with an A.",
+           ["An A. Grade inflation, except you earned it.",
+            "{n} A seasons. The curve is you."]),
+    Family("honorroll", "Honor roll", _honor_run, [2, 4, 8],
+           lambda t: f"Honor Roll {t:g}", lambda t: f"Finish {t:g} seasons in a row with an A or a B.",
+           ["{n} good seasons in a row. Consistency compounds.",
+            "{n} straight. Your track record is now a moat."], unit="seasons"),
+    Family("phoenix", "Phoenix", _phoenix, [1],
+           lambda t: "Phoenix", lambda t: "Follow an F season with an A season.",
+           ["From F to A. Every great company has a near-death chapter."], secret=True),
+
+    # ---- leaderboards
+    Family("dayrecord", "Record day", _day_records, [1, 5, 10, 25, 50],
+           lambda t: f"Record Day ×{t:g}", lambda t: f"Beat your best day ever in XP, {t:g} times.",
+           ["New best day. The leaderboard has one name and it's yours.",
+            "{n} record days. Your ceiling keeps becoming your floor."]),
+    Family("sessionrecord", "Record session", _session_records, [1, 5, 10, 25],
+           lambda t: f"Record Session ×{t:g}", lambda t: f"Beat your longest session ever, {t:g} times.",
+           ["Longest session ever. Endurance is a competitive advantage.",
+            "{n} session records. Your attention span is an outlier."]),
+    Family("podium", "Podium", _day_podiums, [5, 10, 25, 50, 100],
+           lambda t: f"Podium ×{t:g}", lambda t: f"Make your top 3 days ever, {t:g} times.",
+           ["{n} podium days. Bronze is still a medal; you aim higher.",
+            "{n} top-3 days. Your best is a moving target."]),
+
     Family("frost", "Cryo mode", lambda c: sum(1 for s in c.closed if s["temp"] is not None and s["temp"] < 0) or None,
            [1, 5, 10, 20, 30],
            lambda t: f"Cryo Mode {t:g}", lambda t: f"Finish {t:g} sessions below 0 °C.",
@@ -1117,6 +1248,8 @@ WEIGHTS = {
     "veteran": 2,
     "closer": 2, "longgame": 3, "unbroken": 2, "cleansweep": 2, "deepquest": 2, "payload": 2,
     "marathoner": 3,
+    "leagueclimb": 2, "diamondhands": 3, "promostreak": 2, "seasonpass": 2, "hardmode": 3,
+    "honorroll": 2, "podium": 2,
 }
 for _f in FAMILIES:
     _f.weight = WEIGHTS.get(_f.id, 1)
