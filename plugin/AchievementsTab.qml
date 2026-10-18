@@ -226,6 +226,8 @@ Column {
           readonly property var last: tab.lastUnlocked(modelData)
           readonly property int done: tab.doneCount(modelData)
           readonly property bool complete: next === null
+          // The calendar: one row for the whole collection of dates.
+          readonly property bool collection: modelData.kind === "collection"
           width: familyList.width
           spacing: Style.space(4)
 
@@ -250,7 +252,8 @@ Column {
                   anchors.right: famCount.left
                   anchors.rightMargin: Style.space(6)
                   textFormat: Text.PlainText
-                  text: fam.complete ? (fam.last ? fam.last.name : fam.modelData.title) : fam.next.name
+                  text: fam.collection ? fam.modelData.title
+                    : fam.complete ? (fam.last ? fam.last.name : fam.modelData.title) : fam.next.name
                   color: fam.complete ? w.gold : w.fg
                   font.family: w.fontFamily
                   font.pixelSize: Style.font.body
@@ -275,7 +278,9 @@ Column {
                 width: parent.width
                 wrapMode: Text.WordWrap
                 textFormat: Text.PlainText
-                text: fam.complete ? "Complete." : fam.next.desc
+                text: fam.collection
+                  ? (fam.last ? "Latest: " + fam.last.name + ". " : "") + "Finish a session on the right day: each date hides an event."
+                  : fam.complete ? "Complete." : fam.next.desc
                 color: Util.alpha(w.fg, 0.65)
                 font.family: w.fontFamily
                 font.pixelSize: Style.font.caption
@@ -296,8 +301,8 @@ Column {
 
           // Progress toward the next tier (count-like families only).
           Item {
-            visible: !fam.complete && fam.modelData.value !== null && fam.modelData.compare === "ge"
-              && fam.next && fam.next.threshold !== null
+            visible: fam.collection || (!fam.complete && fam.modelData.value !== null && fam.modelData.compare === "ge"
+              && fam.next && fam.next.threshold !== null)
             width: parent.width
             height: Style.space(5)
 
@@ -311,7 +316,8 @@ Column {
               height: parent.height
               radius: height / 2
               color: w.gold
-              width: fam.next && fam.next.threshold
+              width: fam.collection ? parent.width * fam.done / Math.max(1, fam.modelData.tiers.length)
+                : fam.next && fam.next.threshold
                 ? parent.width * Math.min(1, (fam.modelData.value || 0) / fam.next.threshold) : 0
             }
           }
@@ -319,7 +325,8 @@ Column {
           Text {
             visible: text !== ""
             textFormat: Text.PlainText
-            text: tab.progressText(fam.modelData, fam.next)
+            text: fam.collection ? fam.done + " / " + fam.modelData.tiers.length + " dates found"
+              : tab.progressText(fam.modelData, fam.next)
             color: Util.alpha(w.fg, 0.45)
             font.family: w.fontFamily
             font.pixelSize: Style.font.caption

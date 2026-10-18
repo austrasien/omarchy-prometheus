@@ -93,7 +93,10 @@ class AchievementsTest(unittest.TestCase):
         self.assertEqual(monk["title"], "???")
         self.assertEqual(monk["tiers"][0]["name"], "???")
         self.assertEqual(cat["unlocked"], 0)
-        self.assertEqual(cat["total"], sum(len(f.thresholds) for f in A.FAMILIES))
+        from prometheus import geekdates
+        self.assertEqual(cat["total"], sum(len(f.thresholds) for f in A.FAMILIES) + len(geekdates.all_entries()))
+        cal = next(f for f in cat["families"] if f["id"] == "calendar")
+        self.assertEqual(cal["tiers"][0]["name"], "???")
 
     def test_xp_rules(self):
         fam = next(f for f in A.FAMILIES if f.id == "cumul")          # weight x3
@@ -148,6 +151,21 @@ class AchievementsTest(unittest.TestCase):
         cat = {f["id"]: f for f in self.core.achievements_list(self.t0)["families"]}
         for fid in ("christmas", "orthodox", "newyear", "bookends", "midnight"):
             self.assertEqual(cat[fid]["title"], "???")
+
+    def test_calendar_dates(self):
+        import datetime as dt
+        def noon(y, m, d):
+            return int(dt.datetime(y, m, d, 12, 0).astimezone().timestamp() * 1000)
+        self.session(noon(2030, 5, 4), 15)            # May the Fourth
+        self.session(noon(2030, 1, 1), 15)            # New Year: owned by "Day One", not the calendar
+        self.session(noon(2030, 7, 26), 15)           # last Friday of July 2030: SysAdmin Day
+        self.check(noon(2030, 8, 1))
+        got = self.unlocked()
+        self.assertIn("cal:maythe4th", got)
+        self.assertIn("newyear", got)
+        self.assertIn("cal:poddoors", got)            # Jul 26 has a fixed event, which wins
+        self.assertNotIn("cal:sysadmin", got)
+        self.assertEqual(self.store.unlocked_achievements()["cal:maythe4th"]["xp"], 10)
 
     def test_moon(self):
         full = 947182440000 + int(14.77 * DAY)          # 2000-01-06 new moon + 14.77 days

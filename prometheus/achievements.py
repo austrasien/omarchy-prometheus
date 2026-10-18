@@ -17,6 +17,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Callable
 
+from . import geekdates
 from . import timeutil as T
 from .store import session_seconds
 
@@ -104,6 +105,10 @@ class Context:
     day_first: dict = field(default_factory=dict)            # logical date -> first session start, ms
     day_xp: dict = field(default_factory=dict)               # logical date -> XP earned (no achievements)
     goal: dict | None = None                                 # {hours, period}
+    day_tracked: dict = field(default_factory=dict)          # logical date -> tracked seconds (all apps)
+    session_top_share: dict = field(default_factory=dict)    # session id -> share of its top app
+    challenge_states: list = field(default_factory=list)     # challenge states, oldest first
+    end_dates: set = field(default_factory=set)              # local dates on which a session ended
 
 
 def _date(s: str) -> dt.date:
@@ -152,6 +157,18 @@ def build_context(store, now: int, level: int) -> Context:
         d = T.date_str(r["ended_at"])
         ctx.day_xp[d] = ctx.day_xp.get(d, 0) + r["xp"]
     ctx.interrupted = store.sessions_with_event("autopause") | store.sessions_with_event("absent")
+    ctx.challenge_states = [r[0] for r in store.db.execute("SELECT state FROM challenges ORDER BY offered_at")]
+    ctx.end_dates = {_local(s["end"]).date() for s in ctx.closed}
+    per_session = defaultdict(lambda: defaultdict(int))
+    for r in store.db.execute("SELECT session_id, app, started_at, ended_at FROM focus_spans"):
+        d = T.date_str(r["started_at"])
+        ctx.day_tracked[d] = ctx.day_tracked.get(d, 0) + (r["ended_at"] - r["started_at"]) / 1000
+        if r["session_id"]:
+            per_session[r["session_id"]][r["app"]] += r["ended_at"] - r["started_at"]
+    for sid, apps in per_session.items():
+        total = sum(apps.values())
+        if total > 0:
+            ctx.session_top_share[sid] = max(apps.values()) / total
     ctx.reflexes = store.count_events("reflex")
     ctx.inbox_zero = store.count_events("inbox_zero")
     ctx.switches = _app_switches(store)
@@ -446,6 +463,57 @@ def _longest_gap_comeback(c: Context) -> float | None:
     for a, b in zip(c.sessions, c.sessions[1:]):
         best = max(best, (b["start"] - a["end"]) / (DAY * 1000))
     return best or None
+
+
+def _monomaniac(c: Context) -> float | None:
+    hours = defaultdict(float)
+    for s in c.sessions:
+        if s["task"]:
+            hours[s["task"].strip().casefold()] += s["focus"]
+    return max(hours.values(), default=None)
+
+
+def _focus_purity(c: Context) -> float | None:
+    """Days where 90 %+ of tracked time was in session (at least 1 h tracked)."""
+    n = sum(1 for d, tracked in c.day_tracked.items()
+            if tracked >= H and c.day_focus.get(d, 0) >= 0.9 * tracked)
+    return n or None
+
+
+def _locked_in(c: Context) -> float | None:
+    return sum(1 for s in c.closed if s["focus"] >= H and c.session_top_share.get(s["id"], 0) >= 0.9) or None
+
+
+def _yes_man(c: Context) -> float | None:
+    best = run = 0
+    for st in c.challenge_states:
+        if st in ("active", "won", "abandoned"):
+            run += 1
+            best = max(best, run)
+        elif st in ("declined", "expired"):
+            run = 0
+    return best or None
+
+
+def _perfect_weeks(c: Context) -> float | None:
+    weeks = defaultdict(set)
+    for d in c.day_sessions:
+        weeks[_date(d).isocalendar()[:2]].add(d)
+    return sum(1 for days in weeks.values() if len(days) == 7) or None
+
+
+def _month_hours(c: Context) -> float | None:
+    months = defaultdict(float)
+    for d, s in c.day_focus.items():
+        months[d[:7]] += s
+    return max(months.values(), default=None)
+
+
+def _year_hours(c: Context) -> float | None:
+    years = defaultdict(float)
+    for d, s in c.day_focus.items():
+        years[d[:4]] += s
+    return max(years.values(), default=None)
 
 
 def _goal_streak(c: Context) -> float | None:
@@ -748,7 +816,7 @@ FAMILIES: list[Family] = [
             "{n} solstices of maximum sun, maximum ship."], secret=True),
     Family("longestnight", "Longest night", _years_on(12, 21), [1, 2, 3, 5, 10],
            lambda t: f"Longest Night ×{t:g}", lambda t: f"Hold a session on December 21st, {t:g} different years.",
-           ["Longest night of the year. Prometheus brought fire for exactly this.",
+           ["Longest night of the year, and the night SpaceX first landed an orbital booster (2015). Prometheus brought fire for exactly this.",
             "{n} winter solstices. The darkness is just more screen contrast."], secret=True),
     Family("y2k38", "Y2K38 warm-up", _on_exact(2033, 5, 18), [1],
            lambda t: "Y2K38 Warm-Up", lambda t: "Hold a session on May 18th, 2033, when Unix time passes 2 billion seconds.",
@@ -817,6 +885,72 @@ FAMILIES: list[Family] = [
             "{n} sessions on fumes. Your charger is a crutch.",
             "{n} near-dead finishes. Living dangerously, efficiently."]),
 
+    # ---- projects, intention, volume
+    Family("monomaniac", "Monomaniac", _monomaniac, [h * H for h in (10, 25, 50, 100, 250, 500, 1000)],
+           lambda t: f"Monomaniac {t / H:g} h", lambda t: f"Spend {t / H:g} h of focus on the same task.",
+           ["{n} hours on one thing. Focus is saying no to a thousand good ideas.",
+            "{n} hours, one project. Obsession is underrated by people without it.",
+            "{n} hours on a single mission. Founders call it conviction; HR calls it a concern."],
+           unit="h", scale=H),
+    Family("intentional", "Intentional", lambda c: sum(1 for s in c.closed if s["task"]) or None,
+           [10 * 2 ** k for k in range(10)],
+           lambda t: f"Intentional {t:g}", lambda t: f"Finish {t:g} sessions started with a task name.",
+           ["{n} named sessions. Intent is the cheapest productivity hack.",
+            "{n} sessions with a mission statement. Shorter than most corporate ones."]),
+    Family("backlogcleaner", "Backlog cleaner",
+           lambda c: sum(1 for t in c.tasks_done if t["done"] - t["created"] >= 7 * DAY * 1000) or None,
+           [5, 10, 25, 50, 100, 200],
+           lambda t: f"Backlog Cleaner {t:g}", lambda t: f"Finish {t:g} tasks that waited a week or more.",
+           ["{n} old tasks cleared. Technical debt, repaid without a bailout.",
+            "{n} ancient tasks done. The archive is shrinking."]),
+    Family("speedrun", "Speedrun",
+           lambda c: sum(1 for t in c.tasks_done if t["done"] - t["created"] < H) or None,
+           [5, 10, 25, 50, 100, 200, 500],
+           lambda t: f"Speedrun {t:g}", lambda t: f"Finish {t:g} tasks within an hour of adding them.",
+           ["{n} tasks done within the hour. Any% category, world record pace.",
+            "{n} speedruns. Your to-do list never gets a chance to age."]),
+    Family("bestmonth", "Best month", _month_hours, [h * H for h in (50, 100, 150, 200, 250, 300, 350, 400)],
+           lambda t: f"Best Month {t / H:g} h", lambda t: f"Focus {t / H:g} h in one calendar month.",
+           ["{n} hours in a month. That's a quarter's work at a ministry.",
+            "{n} hours this month. The calendar is a resource, and you extracted it."],
+           unit="h", scale=H),
+    Family("annual", "Annual report", _year_hours, [h * H for h in range(500, 4001, 500)],
+           lambda t: f"Annual Report {t / H:g} h", lambda t: f"Focus {t / H:g} h in one calendar year.",
+           ["{n} hours this year. Shareholders, read it and weep.",
+            "{n} hours in a year. Ten thousand hours is a milestone, not a ceiling."],
+           unit="h", scale=H),
+    Family("perfectweek", "Perfect week", _perfect_weeks, [1, 2, 4, 8, 13, 26, 52],
+           lambda t: f"Perfect Week {t:g}", lambda t: f"Hold a session every day of a week (Mon–Sun), {t:g} times.",
+           ["Seven days, seven sessions. God rested on the seventh; you shipped.",
+            "{n} perfect weeks. The weekend is an outdated protocol."]),
+    Family("veteran", "Veteran", lambda c: len({s["date"][:4] for s in c.sessions}) or None, [1, 2, 3, 5, 10],
+           lambda t: f"Veteran {t:g}", lambda t: f"Hold sessions in {t:g} different years.",
+           ["A year on the board. Lindy is on your side.",
+            "{n} years of fire. Most startups don't survive that long."]),
+    Family("purity", "Focus purity", _focus_purity, [1, 5, 10, 25, 50, 100, 200, 365],
+           lambda t: f"Focus Purity {t:g}", lambda t: f"{t:g} days with 90 %+ of tracked time in session.",
+           ["90% in session. Your idle time is a rounding error.",
+            "{n} pure days. You don't browse; you execute."], unit="days"),
+    Family("lockedin", "Locked in", _locked_in, [1, 5, 10, 25, 50, 100, 300],
+           lambda t: f"Locked In {t:g}", lambda t: f"{t:g} sessions of 1 h+ with 90 % in a single app.",
+           ["One app, one hour, one mind. Locked in.",
+            "{n} locked-in sessions. Attention is a weapon and you're armed."]),
+    Family("yesman", "Yes man", _yes_man, [3, 5, 10, 25, 50],
+           lambda t: f"Yes Man {t:g}", lambda t: f"Accept {t:g} challenges in a row without declining one.",
+           ["{n} yeses in a row. Risk-on.",
+            "{n} challenges accepted straight. You never met an extension you didn't like."]),
+    Family("aroundtheclock", "Around the clock",
+           lambda c: len({_local(s["start"]).hour for s in c.sessions}) or None, [12, 18, 24],
+           lambda t: f"Around the Clock {t:g}", lambda t: f"Start sessions at {t:g} different hours of the day.",
+           ["{n} different start hours. Circadian rhythm is a suggestion.",
+            "All 24 hours covered. You are the always-on economy."]),
+    Family("meteorologist", "Meteorologist",
+           lambda c: 1 if ({"rain", "snow", "storm", "clear"} <= {s["weather"] for s in c.closed}
+                           and any(s["temp"] is not None and s["temp"] > 30 for s in c.closed)
+                           and any(s["temp"] is not None and s["temp"] < 0 for s in c.closed)) else None,
+           [1], lambda t: "Meteorologist", lambda t: "Finish sessions in rain, snow, storm, sun, heat and frost.",
+           ["Every weather, same output. Climate is not a productivity variable."], secret=True),
+
     # ---- the world outside
     Family("battery", "Off-grid", lambda c: sum(1 for s in c.closed if s["battery"]) or None,
            [10 * 2 ** k for k in range(10)],
@@ -855,6 +989,8 @@ WEIGHTS = {
     "goalday": 2, "goalweek": 2, "goalmonth": 2, "tasksday": 2, "tasksweek": 2, "triple": 2,
     "personalbest": 2, "clockwork": 2, "earlystreak": 2, "uninterrupted": 2, "calm": 2,
     "monotask": 2, "archaeologist": 2, "fullmonth": 2, "dailymax": 2, "dayxp": 2,
+    "monomaniac": 2, "annual": 3, "bestmonth": 2, "perfectweek": 2, "purity": 2, "lockedin": 2,
+    "veteran": 2,
 }
 for _f in FAMILIES:
     _f.weight = WEIGHTS.get(_f.id, 1)
@@ -889,6 +1025,13 @@ def evaluate(store, now: int, level_for_xp: Callable[[int], int], base_xp: int) 
                     store.unlock(aid, now, f.xp(i))
                     new.append({"id": aid, "name": f.name(f.thresholds[i]), "xp": f.xp(i),
                                 "quip": f.quip(i), "secret": f.secret})
+        for day in sorted(ctx.end_dates):
+            event = geekdates.event_on(day)
+            if event and f"cal:{event[0]}" not in unlocked:
+                aid, name, _, quip = event
+                store.unlock(f"cal:{aid}", now, geekdates.XP)
+                unlocked = store.unlocked_achievements()
+                new.append({"id": f"cal:{aid}", "name": name, "xp": geekdates.XP, "quip": quip, "secret": True})
         if not new:
             return fresh
         fresh.extend(new)
@@ -922,4 +1065,22 @@ def catalogue(store, now: int, level: int) -> dict:
             "value": (None if value is None or not revealed else round(value / f.scale, 2)),
             "tiers": tiers,
         })
+    # The calendar: one collection, each date hidden until found.
+    tiers, found = [], 0
+    for aid, name, desc, quip in geekdates.all_entries():
+        row = unlocked.get(f"cal:{aid}")
+        total += 1
+        if row is not None:
+            found += 1
+            got += 1
+            xp += row["xp"]
+            tiers.append({"id": f"cal:{aid}", "threshold": None, "name": name, "desc": desc,
+                          "xp": row["xp"], "unlockedAt": row["unlocked_at"], "quip": quip})
+        else:
+            tiers.append({"id": None, "threshold": None, "name": "???",
+                          "desc": "Finish a session on the right day.", "xp": geekdates.XP,
+                          "unlockedAt": None, "quip": None})
+    tiers.sort(key=lambda t: (t["unlockedAt"] is None, t["unlockedAt"] or 0))
+    families.append({"id": "calendar", "title": "Calendar", "secret": False, "kind": "collection",
+                     "unit": "", "compare": "ge", "value": found, "tiers": tiers})
     return {"success": True, "families": families, "unlocked": got, "total": total, "xp": xp}

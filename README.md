@@ -39,14 +39,20 @@ only what was actually used.
   written back to the note.
 - **XP and levels**: 1 XP per 10 min of session (pauses excluded), plus done
   tasks, plus won challenges. Level 2 costs 100 XP, each next level 50 more.
-- **Achievements**: 68 families, 526 tiers, computed from Prometheus' own
+- **Achievements**: 81 families with 608 tiers, plus a calendar of 126
+  dated achievements (one per date: Roman festivals, geek days, scientists
+  and writers, SpaceX and Tesla milestones, each unlocked by finishing a
+  session that day, 10 XP), so 734 in all, computed from Prometheus' own
   records: sessions, tasks (same-day, inbox zero, redemptions), cumulative
   hours (100 h to 10,000 h), levels, endurance, intensity, 3-day and weekly
   hours, streaks, active days and months, early and late sessions, midnight
   crossings, challenges, task archaeology, calm and single-app sessions,
   "Toujours là ?" reflexes, holidays, sessions on battery or on its last 10 %, goals reached per day, week or
   month, personal-best weeks, XP in a day, clockwork starts, dawn streaks,
-  sessions without automatic pauses, comebacks, geek dates,
+  sessions without automatic pauses, comebacks, geek dates, hours on a single
+  task, named sessions, backlog clean-ups, speedruns, best month and year,
+  perfect weeks, years of use, focus purity, locked-in sessions, challenge
+  acceptance runs, start hours around the clock,
   and sessions by weather (read from the file the Omarchy
   weather plugin writes, `~/.local/state/omarchy/weather-current.json`), and a
   few secrets. Each has a name, a description, a line when it unlocks, and an
