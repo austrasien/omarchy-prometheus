@@ -1,0 +1,12 @@
+[Unit]
+Description=Prometheus focus tracker
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=%h/src/prometheus/bin/prometheusd
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target

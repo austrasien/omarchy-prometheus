@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "id": "austraz.prometheus",
+  "name": "Prometheus",
+  "version": "0.1.0",
+  "author": "austrasien",
+  "license": "MIT",
+  "description": "Local focus sessions in the Omarchy bar: live timer next to the icon, start with a task name, pause, end with a recap notification, today's apps and the week. Talks to prometheusd (~/src/prometheus); tasks are the Obsidian daily note's todos.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Prometheus",
+    "description": "Focus session timer, window tracking and journal tasks, all local",
+    "category": "Time",
+    "defaultSection": "center",
+    "allowMultiple": false,
+    "defaults": {
+      "socket": "",
+      "idleTimeout": 300,
+      "vaultPath": "",
+      "journalBin": ""
+    },
+    "schema": [
+      {
+        "key": "socket",
+        "type": "string",
+        "label": "Control socket",
+        "description": "Empty: $XDG_RUNTIME_DIR/prometheus/control.sock",
+        "defaultValue": ""
+      },
+      {
+        "key": "idleTimeout",
+        "type": "integer",
+        "label": "Idle timeout (seconds)",
+        "description": "Without input for this long, time stops counting. 0 disables idle detection.",
+        "min": 0,
+        "max": 3600,
+        "step": 30,
+        "defaultValue": 300
+      },
+      {
+        "key": "vaultPath",
+        "type": "path",
+        "label": "Obsidian vault",
+        "description": "Absolute path of an Obsidian vault whose daily-note todos are offered as task suggestions. Empty: no suggestions.",
+        "defaultValue": ""
+      },
+      {
+        "key": "journalBin",
+        "type": "path",
+        "label": "obsidian-daily-qs binary",
+        "description": "Empty: the one bundled with austraz.clock",
+        "defaultValue": ""
+      }
+    ]
+  }
+}
