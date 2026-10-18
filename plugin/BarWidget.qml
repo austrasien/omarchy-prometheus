@@ -617,7 +617,8 @@ BarWidget {
       open: armed && root.panelOpen
       centerOnBar: true
       focusTarget: keyCatcher
-      contentWidth: panel.fittedContentWidth(Style.space(380))
+      // At least as wide as the tab row, so no tab is clipped.
+      contentWidth: panel.fittedContentWidth(Math.max(Style.space(380), tabRow.implicitWidth))
       contentHeight: panel.fittedContentHeight(column.implicitHeight)
 
       readonly property var tabs: [
@@ -874,6 +875,7 @@ BarWidget {
             }
 
             ButtonGroup {
+              id: tabRow
               anchors.horizontalCenter: parent.horizontalCenter
               options: panel.tabs
               value: root.tab
