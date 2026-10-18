@@ -619,7 +619,7 @@ BarWidget {
       centerOnBar: true
       focusTarget: keyCatcher
       // At least as wide as the tab row, so no tab is clipped.
-      contentWidth: panel.fittedContentWidth(Math.max(Style.space(380), tabRow.implicitWidth + panel.padding * 2 + 4))
+      contentWidth: panel.fittedContentWidth(Math.max(Style.space(380), tabRow.implicitWidth + panel.padding * 2 + Style.space(16)))
       contentHeight: panel.fittedContentHeight(column.implicitHeight)
 
       readonly property var tabs: [

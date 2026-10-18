@@ -64,6 +64,7 @@ class Core:
         self.last_resume_at = 0       # a backdated auto-pause never reaches before this
         self.presence_since = None    # last proof of presence for the running session
         self.presence_asked_at = None
+        self._load_presence()
         # The world around a session; replaced in tests.
         self.on_battery = env.on_battery
         self.battery_percent = env.battery_percent
@@ -778,9 +779,26 @@ class Core:
 
     # ------------------------------------------------------------- presence
 
+    # The presence clock is kept in the settings, tied to the session, so a
+    # daemon restart does not start the 20 minutes over again.
+
+    def _load_presence(self) -> None:
+        saved = self.store.get_setting("presence") or {}
+        s = self._session()
+        if s is not None and saved.get("session") == s["id"]:
+            self.presence_since = saved.get("since")
+            self.presence_asked_at = saved.get("asked")
+
+    def _save_presence(self) -> None:
+        s = self._session()
+        self.store.set_setting("presence", {
+            "session": s["id"] if s is not None else None,
+            "since": self.presence_since, "asked": self.presence_asked_at})
+
     def _present(self, at: int) -> None:
         self.presence_since = at
         self.presence_asked_at = None
+        self._save_presence()
 
     def presence_state(self, at: int) -> dict | None:
         if self.presence_asked_at is None:
@@ -797,9 +815,11 @@ class Core:
             return []
         if self.presence_since is None:
             self.presence_since = at
+            self._save_presence()
         if self.presence_asked_at is None:
             if at - self.presence_since >= self.presence_every_minutes() * 60 * 1000:
                 self.presence_asked_at = at
+                self._save_presence()
                 return [("presence", {})]
             return []
         if at - self.presence_asked_at >= PRESENCE_TIMEOUT_MS:
@@ -807,6 +827,7 @@ class Core:
             self.store.set_pause(s["id"], start, s["total_pause_ms"])
             self.store.set_setting("autoPause", {})   # a plain pause: resumed by hand
             self.presence_asked_at = None
+            self._save_presence()
             self.store.add_event("absent", at, s["id"])
             self._split(at)
             return [("absent", {})]

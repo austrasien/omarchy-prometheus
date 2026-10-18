@@ -460,5 +460,15 @@ class CoreTest(unittest.TestCase):
             c.set_presence_every(500)
 
 
+    def test_presence_clock_survives_a_daemon_restart(self):
+        self.core.start(None, self.at(0))
+        self.assertEqual(self.core.update_presence(self.at(15)), [])
+        restarted = Core(self.store)           # the daemon comes back up
+        events = restarted.update_presence(self.at(20))
+        self.assertEqual([e[0] for e in events], ["presence"])
+        again = Core(self.store)               # and the pending question too
+        self.assertIsNotNone(again.presence_state(self.at(21)))
+
+
 if __name__ == "__main__":
     unittest.main()
