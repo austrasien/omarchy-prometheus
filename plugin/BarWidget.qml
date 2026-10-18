@@ -179,7 +179,7 @@ BarWidget {
       if (panelLoader.item) Qt.callLater(panelLoader.item.focusContent)
     }
     onFailed: function(reason) { root.showToast("error", reason, "") }
-    onToast: function(kind, title, text) { root.showToast(kind, title, text) }
+    onToast: function(kind, title, text, rarity) { root.showToast(kind, title, text, rarity) }
   }
 
   function openJournal() {
@@ -513,8 +513,8 @@ BarWidget {
   property var toastQueue: []
   property var currentToast: null   // { kind, title, text }
 
-  function showToast(kind, title, text) {
-    toastQueue = toastQueue.concat([{ kind: kind, title: title, text: text }])
+  function showToast(kind, title, text, rarity) {
+    toastQueue = toastQueue.concat([{ kind: kind, title: title, text: text, rarity: rarity || "" }])
     if (!currentToast) nextToast()
   }
 
@@ -526,8 +526,20 @@ BarWidget {
     toastTimer.restart()
   }
 
-  function toastColor(kind) {
+  function toastColor(kind, rarity) {
+    if (kind === "achievement" && rarity) return root.rarityColor(rarity)
     return kind === "error" || kind === "absent" ? root.red : kind === "ended" ? root.green : root.gold
+  }
+
+  // Achievement rarity: normal, common (green), rare (blue), epic (purple),
+  // legendary (gold, and it shines).
+  readonly property color commonColor: "#5fd068"
+  readonly property color rareColor: "#4ea5ff"
+  readonly property color epicColor: "#b77cff"
+  readonly property color legendaryColor: "#ffc93c"
+  function rarityColor(r) {
+    return r === "common" ? commonColor : r === "rare" ? rareColor : r === "epic" ? epicColor
+      : r === "legendary" ? legendaryColor : root.fg
   }
 
   Timer {
@@ -559,7 +571,7 @@ BarWidget {
     anchors.leftMargin: Style.space(4)
     anchors.verticalCenter: button.verticalCenter
     readonly property real fullWidth: toastMetrics.advanceWidth + Style.space(22)
-    readonly property color tint: root.currentToast ? root.toastColor(root.currentToast.kind) : root.gold
+    readonly property color tint: root.currentToast ? root.toastColor(root.currentToast.kind, root.currentToast.rarity) : root.gold
     width: Math.round(fullWidth * root.toastShown)
     height: Math.round(button.height * 0.62)
     visible: width > 0

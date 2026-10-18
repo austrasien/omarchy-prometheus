@@ -11,6 +11,7 @@ Column {
   property var w: null
   property var p: null
   property var info: null      // leagues:get
+  property string openBio: ""  // the rival whose short bio is shown
 
   readonly property bool editing: false
   function focusEntry() { return false }
@@ -20,7 +21,8 @@ Column {
     if (!p || !p.live) return
     p.call("leagues:get", [], function(ok, d) { if (ok && d && d.success) tab.info = d })
   }
-  onVisibleChanged: if (visible) refresh()
+  // Reopening the tab starts with every bio closed.
+  onVisibleChanged: if (visible) { openBio = ""; refresh() }
   Component.onCompleted: if (visible) refresh()
   Connections {
     target: p
@@ -168,8 +170,10 @@ Column {
         readonly property color tint: modelData.zone === "promotion" ? w.green
           : modelData.zone === "relegation" ? w.red : w.fg
         readonly property bool zoneStart: index === 0 || index === 3 || index === 7
+        readonly property bool bioOpen: !modelData.you && !!modelData.bio && tab.openBio === modelData.name
         width: tab.width
-        height: playerRow.height + (zoneStart ? zoneLabel.implicitHeight + Style.space(4) : 0)
+        height: (zoneStart ? zoneLabel.implicitHeight + Style.space(4) : 0) + playerRow.height
+          + (bioOpen ? bioText.implicitHeight + Style.space(6) : 0)
 
         Text {
           id: zoneLabel
@@ -187,7 +191,7 @@ Column {
 
         Rectangle {
           id: playerRow
-          anchors.bottom: parent.bottom
+          y: player.zoneStart ? zoneLabel.implicitHeight + Style.space(4) : 0
           width: parent.width
           height: Style.space(24)
           radius: Style.space(4)
@@ -215,10 +219,20 @@ Column {
             anchors.verticalCenter: parent.verticalCenter
             textFormat: Text.PlainText
             text: player.modelData.you ? "You" : player.modelData.name
-            color: player.modelData.you ? w.fg : Util.alpha(w.fg, 0.7)
+            color: player.modelData.you ? w.fg : nameArea.containsMouse || player.bioOpen ? w.accent : Util.alpha(w.fg, 0.7)
             font.family: w.fontFamily
             font.pixelSize: Style.font.caption
             font.bold: player.modelData.you
+          }
+
+          // A rival's name opens (or closes) a one-line bio.
+          MouseArea {
+            id: nameArea
+            anchors.fill: parent
+            enabled: !player.modelData.you && !!player.modelData.bio
+            hoverEnabled: true
+            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+            onClicked: tab.openBio = player.bioOpen ? "" : player.modelData.name
           }
 
           // Your row: the chevrons stream up or down with your zone.
@@ -245,6 +259,22 @@ Column {
             font.pixelSize: Style.font.caption
             font.bold: player.modelData.you
           }
+        }
+
+        Text {
+          id: bioText
+          visible: player.bioOpen
+          anchors.top: playerRow.bottom
+          anchors.topMargin: Style.space(3)
+          x: Style.space(30)
+          width: parent.width - x - Style.space(6)
+          wrapMode: Text.WordWrap
+          textFormat: Text.PlainText
+          text: player.modelData.bio ? player.modelData.bio.life + "  ·  " + player.modelData.bio.line : ""
+          color: Util.alpha(w.fg, 0.7)
+          font.family: w.fontFamily
+          font.pixelSize: Style.font.caption
+          font.italic: true
         }
       }
     }

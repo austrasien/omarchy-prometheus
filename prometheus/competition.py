@@ -28,6 +28,7 @@ import random
 from collections import defaultdict
 
 from . import timeutil as T
+from .bios import bio
 from .store import session_seconds
 
 FOCUS_SECONDS_PER_XP = 600
@@ -232,7 +233,8 @@ def leagues(ledger: Ledger) -> dict:
                 "history": history,
                 "current": {"week": w.isoformat(), "league": league, "name": LEAGUES[league],
                             "color": LEAGUE_COLORS[league], "xp": xp, "rank": rank, "zone": zone,
-                            "players": [{k: r[k] for k in ("name", "xp", "you", "rank", "zone")} for r in players],
+                            "players": [dict({k: r[k] for k in ("name", "xp", "you", "rank", "zone")},
+                                             bio=None if r["you"] else bio(r["name"])) for r in players],
                             # XP to pass the 3rd rival (promotion) and the 7th (out of relegation).
                             "toPromotion": max(0, others[PROMOTED - 1] + 1 - xp),
                             "toSafety": max(0, others[len(others) - RELEGATED] + 1 - xp),

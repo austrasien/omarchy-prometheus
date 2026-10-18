@@ -141,6 +141,15 @@ class QuestTest(unittest.TestCase):
         self.core.quest_deactivate(b, self.day(0))
         self.assertEqual(self.core.state(self.day(0))["quest"]["title"], "A")
 
+    def test_seven_quests_a_day_at_most(self):
+        ids = [self.add("daily", f"D{i}") for i in range(8)]
+        for qid in ids[:7]:
+            self.core.quest_complete(qid, self.day(0, 1))
+        with self.assertRaises(Refused):
+            self.core.quest_complete(ids[7], self.day(0, 2))
+        self.assertEqual(self.core.quests_list(self.day(0, 3))["doneToday"], 7)
+        self.core.quest_complete(ids[7], self.day(1))          # a new day
+
     def test_refusals(self):
         with self.assertRaises(Refused):
             self.core.quest_add("  ", "short", self.day(0))

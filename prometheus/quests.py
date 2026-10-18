@@ -37,6 +37,7 @@ LONG_BASE, LONG_PER_DAY, LONG_CAP = 30, 5, 150
 # and there can be at most ten of them.
 FIRST_COLOR = RED
 SWEEP_MIN = 3
+QUESTS_PER_DAY = 7       # completions a logical day can count, daily ones included
 
 COLORS = (RED, ORANGE, LIME, GREEN, SPRING, CYAN, AZURE, INDIGO, VIOLET, PINK)
 
@@ -175,7 +176,8 @@ class Quests:
         return {"success": True,
                 "quests": [self._view(r, at) for r in rows],
                 "done": [self._view(r, at) for r in done],
-                "xp": self.xp_total()}
+                "xp": self.xp_total(),
+                "doneToday": self.done_today(at), "perDay": QUESTS_PER_DAY}
 
     def xp_total(self) -> int:
         once = self.db.execute("SELECT COALESCE(SUM(xp), 0) FROM quests WHERE done_at IS NOT NULL").fetchone()[0]
@@ -262,6 +264,8 @@ class Quests:
         r = self._row(qid)
         if r is None or r["done_at"] is not None:
             raise QuestError("Quest not found or already done")
+        if self.done_today(at) >= QUESTS_PER_DAY:
+            raise QuestError(f"{QUESTS_PER_DAY} quests a day at most: come back tomorrow")
         if r["kind"] == "daily":
             day = T.date_str(at)
             xp = worth("daily", 0, self.streak(qid, at))
@@ -282,6 +286,15 @@ class Quests:
                 run = 0
             self.store.set_setting("questSweepRun", run)
         return {"success": True, "xp": xp, "title": r["title"], "kind": r["kind"]}
+
+    def done_today(self, at: int) -> int:
+        """Quests completed on the logical day of `at`."""
+        start = T.day_start(at)
+        end = T.add_days(start, 1)
+        daily = self.db.execute("SELECT COUNT(*) FROM quest_done WHERE day=?", (T.date_str(at),)).fetchone()[0]
+        once = self.db.execute("SELECT COUNT(*) FROM quests WHERE done_at >= ? AND done_at < ?",
+                               (start, end)).fetchone()[0]
+        return int(daily) + int(once)
 
     def _open_multiday(self) -> int:
         return int(self.db.execute(

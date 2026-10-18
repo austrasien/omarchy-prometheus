@@ -2,7 +2,8 @@ import QtQuick
 import qs.Commons
 import qs.Ui
 
-// Achievements tab: recent unlocks with their lines, then every family with
+// Achievements tab: names in their rarity's color (normal, common green,
+// rare blue, epic purple, legendary gold and shining). Recent unlocks with their lines, then every family with
 // its next tier and the progress toward it. Secret families stay "???"
 // until one of their tiers unlocks. A family not started yet shows only the
 // shape of its text (dots), and so do the tiers after the next one: the daemon
@@ -147,18 +148,16 @@ Column {
           width: parent.width
           height: recentName.implicitHeight
 
-          Text {
+          RarityText {
             id: recentName
             anchors.left: parent.left
             anchors.right: recentXp.left
             anchors.rightMargin: Style.space(6)
-            textFormat: Text.PlainText
             text: modelData.name
-            color: w.fg
-            font.family: w.fontFamily
-            font.pixelSize: Style.font.body
-            font.bold: true
-            elide: Text.ElideRight
+            color: w.rarityColor(modelData.rarity)
+            legendary: modelData.rarity === "legendary"
+            fontFamily: w.fontFamily
+            pixelSize: Style.font.body
           }
 
           Text {
@@ -250,19 +249,21 @@ Column {
                 width: parent.width
                 height: famName.implicitHeight
 
-                Text {
+                // The tier shown (the next one, or the last if complete),
+                // in its rarity's color.
+                RarityText {
                   id: famName
+                  readonly property var shownTier: fam.collection ? null : fam.complete ? fam.last : fam.next
+                  readonly property string rarity: shownTier && shownTier.rarity ? shownTier.rarity : "normal"
                   anchors.left: parent.left
                   anchors.right: famCount.left
                   anchors.rightMargin: Style.space(6)
-                  textFormat: Text.PlainText
                   text: fam.collection ? fam.modelData.title
                     : fam.complete ? (fam.last ? fam.last.name : fam.modelData.title) : fam.next.name
-                  color: fam.complete ? w.gold : fam.masked ? Util.alpha(w.fg, 0.3) : w.fg
-                  font.family: w.fontFamily
-                  font.pixelSize: Style.font.body
-                  font.bold: true
-                  elide: Text.ElideRight
+                  color: fam.masked ? Util.alpha(w.fg, 0.3) : w.rarityColor(rarity)
+                  legendary: !fam.masked && rarity === "legendary"
+                  fontFamily: w.fontFamily
+                  pixelSize: Style.font.body
                 }
 
                 Text {

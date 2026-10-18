@@ -22,6 +22,21 @@ from . import timeutil as T
 from .store import session_seconds
 
 QUALIFYING_SECONDS = 10 * 60      # shorter sessions count for nothing
+
+# Rarity, from the XP a tier is worth (its difficulty): under 30 normal, then
+# common, rare, epic, and legendary from 360 XP. Secrets are epic; the
+# calendar's dates are common.
+RARITIES = ["normal", "common", "rare", "epic", "legendary"]
+RARITY_XP = [30, 60, 140, 360]
+
+
+def rarity_for(xp: int, secret: bool = False) -> str:
+    if secret:
+        return "epic"
+    for name, bound in zip(RARITIES, RARITY_XP):
+        if xp < bound:
+            return name
+    return "legendary"
 DAY = 24 * 3600
 H = 3600
 
@@ -58,6 +73,9 @@ class Family:
         else:
             base = 50 + 2 * (i - 9)
         return base * self.weight
+
+    def rarity(self, i: int) -> str:
+        return rarity_for(self.xp(i), self.secret)
 
     def quip(self, i: int) -> str:
         return self.quips[i % len(self.quips)].format(n=_fmt(self.thresholds[i] / self.scale))
@@ -1283,14 +1301,15 @@ def evaluate(store, now: int, level_for_xp: Callable[[int], int], base_xp: int) 
                 if aid not in unlocked and f.passes(value, i):
                     store.unlock(aid, now, f.xp(i))
                     new.append({"id": aid, "name": f.name(f.thresholds[i]), "xp": f.xp(i),
-                                "quip": f.quip(i), "secret": f.secret})
+                                "quip": f.quip(i), "secret": f.secret, "rarity": f.rarity(i)})
         for day in sorted(ctx.end_dates):
             event = geekdates.event_on(day)
             if event and f"cal:{event[0]}" not in unlocked:
                 aid, name, _, quip = event
                 store.unlock(f"cal:{aid}", now, geekdates.XP)
                 unlocked = store.unlocked_achievements()
-                new.append({"id": f"cal:{aid}", "name": name, "xp": geekdates.XP, "quip": quip, "secret": True})
+                new.append({"id": f"cal:{aid}", "name": name, "xp": geekdates.XP, "quip": quip, "secret": True,
+                            "rarity": "common"})
         if not new:
             return fresh
         fresh.extend(new)
@@ -1322,11 +1341,11 @@ def catalogue(store, now: int, level: int) -> dict:
                 xp += row["xp"]
             tiers.append({"id": aid, "threshold": t / f.scale, "name": f.name(t), "desc": f.desc(t),
                           "xp": f.xp(i), "unlockedAt": row["unlocked_at"] if row else None,
-                          "quip": f.quip(i) if row else None})
+                          "quip": f.quip(i) if row else None, "rarity": f.rarity(i)})
         revealed = not f.secret or any(t["unlockedAt"] for t in tiers)
         if not revealed:
             tiers = [{"id": None, "threshold": None, "name": "???", "desc": "Secret achievement.",
-                      "xp": f.xp(0), "unlockedAt": None, "quip": None}]
+                      "xp": f.xp(0), "unlockedAt": None, "quip": None, "rarity": "epic"}]
         # Suspense: a family nobody has started shows only the shape of its
         # text; a started one shows its unlocked tiers and the next one, the
         # tiers after that stay dots until the one before is reached.
@@ -1336,7 +1355,8 @@ def catalogue(store, now: int, level: int) -> dict:
             nxt = next((i for i, t in enumerate(tiers) if not t["unlockedAt"]), len(tiers))
             for i, t in enumerate(tiers):
                 if masked or i > nxt:
-                    t.update(name=_dots(t["name"]), desc=_dots(t["desc"]), threshold=None, hidden=True)
+                    t.update(name=_dots(t["name"]), desc=_dots(t["desc"]), threshold=None, hidden=True,
+                             rarity=None)
         families.append({
             "id": f.id, "title": (_dots(f.title) if masked else f.title) if revealed else "???",
             "secret": f.secret, "masked": masked,
@@ -1354,11 +1374,11 @@ def catalogue(store, now: int, level: int) -> dict:
             got += 1
             xp += row["xp"]
             tiers.append({"id": f"cal:{aid}", "threshold": None, "name": name, "desc": desc,
-                          "xp": row["xp"], "unlockedAt": row["unlocked_at"], "quip": quip})
+                          "xp": row["xp"], "unlockedAt": row["unlocked_at"], "quip": quip, "rarity": "common"})
         else:
             tiers.append({"id": None, "threshold": None, "name": "???",
                           "desc": "Finish a session on the right day.", "xp": geekdates.XP,
-                          "unlockedAt": None, "quip": None})
+                          "unlockedAt": None, "quip": None, "rarity": "common"})
     tiers.sort(key=lambda t: (t["unlockedAt"] is None, t["unlockedAt"] or 0))
     families.append({"id": "calendar", "title": "Calendar", "secret": False, "kind": "collection",
                      "unit": "", "compare": "ge", "value": found, "tiers": tiers})

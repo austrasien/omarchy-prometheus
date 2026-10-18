@@ -68,7 +68,7 @@ Item {
   signal failed(string reason)
   signal ended(var recap)
   // A short message from the daemon, for the bar (no desktop notifications).
-  signal toast(string kind, string title, string text)
+  signal toast(string kind, string title, string text, string rarity)
 
   // ------------------------------------------------------------- formatting
 
@@ -132,7 +132,7 @@ Item {
     if (!wasLive) sendIdle()
 
     if (payload.event === "state") { apply(payload.state); return }
-    if (payload.event === "toast") { toast(payload.kind || "", payload.title || "", payload.text || ""); return }
+    if (payload.event === "toast") { toast(payload.kind || "", payload.title || "", payload.text || "", payload.rarity || ""); return }
 
     var callback = pending[payload.id]
     if (callback) {

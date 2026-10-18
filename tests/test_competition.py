@@ -104,6 +104,14 @@ class CompetitionTest(unittest.TestCase):
         self.assertGreater(len({tuple(r) for r in rosters}), 10)
         self.assertEqual(C.season_roster("2026-Q4"), C.season_roster("2026-Q4"))
 
+    def test_every_rival_has_a_bio(self):
+        from prometheus.bios import BIOS
+        self.assertEqual(set(C.RIVAL_NAMES), set(BIOS))
+        cur = C.leagues(C.Ledger(self.store, self.at(0)))["current"]
+        for pl in cur["players"]:
+            if not pl["you"]:
+                self.assertTrue(pl["bio"]["line"])
+
     def test_weeks_start_on_sunday(self):
         import datetime as dt
         self.assertEqual(T.week_first(dt.date(2026, 10, 18)), dt.date(2026, 10, 18))   # a Sunday

@@ -244,7 +244,7 @@ class Daemon:
             self.check_medals()
             return
         for a in new:
-            self.toast("achievement", a["name"], f"+{a['xp']} XP · {a['quip']}")
+            self.toast("achievement", a["name"], f"+{a['xp']} XP · {a['quip']}", a.get("rarity"))
         self.check_medals()
 
     def check_medals(self) -> None:
@@ -294,8 +294,11 @@ class Daemon:
     # desktop notifications. Lost if no bar is connected, which is fine:
     # they only echo what the state already holds.
 
-    def toast(self, kind: str, title: str, text: str = "") -> None:
-        line = self._line({"event": "toast", "kind": kind, "title": title, "text": text})
+    def toast(self, kind: str, title: str, text: str = "", rarity: str | None = None) -> None:
+        payload = {"event": "toast", "kind": kind, "title": title, "text": text}
+        if rarity:
+            payload["rarity"] = rarity
+        line = self._line(payload)
         for w in list(self.clients):
             try:
                 w.write(line)

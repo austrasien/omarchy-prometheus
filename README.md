@@ -43,7 +43,7 @@ only what was actually used.
   the quest shows under the title. Each day a session runs while it is active
   counts as a day worked. Rewards: daily 5 XP, +1 per day in a row before it (up
   to 10); short 10 XP + 5 per day worked (up to 40); long 30 XP + 5 per day
-  worked (up to 150). Deleting a quest keeps the XP it already earned.
+  worked (up to 150). Deleting a quest keeps the XP it already earned. Seven quest completions a day at most, daily ones included.
   Each open quest has its own color among the ten vivid hues of the medals:
   the first one, and any new one while no open quest is red, is red; the others
   draw a color left, so no two open quests share one (ten at most). The active
@@ -56,7 +56,7 @@ only what was actually used.
 - **Leagues**: ten, Bronze, Silver, Gold, Sapphire, Ruby, Emerald, Amethyst,
   Pearl, Obsidian, Diamond. Each week (Sunday to Saturday, like every week in
   Prometheus) you play nine rivals, scientists and pioneers drawn by lot each
-  season from a pool of 104 (never two with the same first name), drawn from a Gaussian fitted to your last four weeks (5 % stronger
+  season from a pool of 104 (never two with the same first name; a click on a name shows a one-line bio), drawn from a Gaussian fitted to your last four weeks (5 % stronger
   each league up, never under the league's floor) and seeded by week and
   league, so a week always replays the same. They earn their XP as the week
   goes. Top 3 go up a league, bottom 3 go down one, an empty week always goes
@@ -78,7 +78,7 @@ only what was actually used.
 - **Leaderboard**: your best days and weeks (XP), sessions (focus) and quests
   (XP while active), top 10, with the current one highlighted. A quest can be
   taken off the board (an open one is deleted); its XP stays.
-- **Achievements** (a family not started yet shows only dots; tiers after the next one too): 111 families with 724 tiers (17 on quests, 13 on leagues, seasons and leaderboards), plus a calendar of 126
+- **Achievements** (a family not started yet shows only dots; tiers after the next one too; each tier has a rarity by the XP it is worth: normal under 30, common green, rare blue from 60, epic purple from 140, legendary gold and shining from 360; secrets are epic): 111 families with 724 tiers (17 on quests, 13 on leagues, seasons and leaderboards), plus a calendar of 126
   dated achievements (one per date: Roman festivals, geek days, scientists
   and writers, SpaceX and Tesla milestones, each unlocked by finishing a
   session that day, 10 XP), so 850 in all, computed from Prometheus' own

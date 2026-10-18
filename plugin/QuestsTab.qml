@@ -16,6 +16,8 @@ Column {
   property var quests: []     // open quests, active first; each has its own color
   property var done: []       // completed short and long quests, latest first
   property bool showDone: false
+  property int doneToday: 0
+  property int perDay: 7
   property string kind: "short"
 
   readonly property bool editing: addField.activeFocus
@@ -72,6 +74,8 @@ Column {
       if (!ok || !d || !d.success) return
       tab.quests = d.quests || []
       tab.done = d.done || []
+      tab.doneToday = d.doneToday || 0
+      tab.perDay = d.perDay || 7
       if (tab.done.length === 0) tab.showDone = false
     })
   }
@@ -154,7 +158,7 @@ Column {
     width: parent.width
     wrapMode: Text.WordWrap
     textFormat: Text.PlainText
-    text: tab.rule(tab.kind)
+    text: tab.rule(tab.kind) + "  " + tab.doneToday + " / " + tab.perDay + " quests completed today."
     color: Util.alpha(w.fg, 0.55)
     font.family: w.fontFamily
     font.pixelSize: Style.font.caption
