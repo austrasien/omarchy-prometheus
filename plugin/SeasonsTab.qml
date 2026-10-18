@@ -38,7 +38,7 @@ Column {
   }
 
   function gradeColor(g) {
-    return g === "A" ? w.gold : g === "B" ? w.green : g === "C" ? w.fg : g === "D" ? "#ea9a23" : w.red
+    return g === "S" ? w.legendaryColor : g === "A" ? w.gold : g === "B" ? w.green : g === "C" ? w.fg : g === "D" ? "#ea9a23" : w.red
   }
 
   function dateLabel(iso) { return Qt.formatDate(new Date(iso + "T12:00:00"), "MMM d") }
@@ -181,7 +181,7 @@ Column {
       textFormat: Text.PlainText
       text: !tab.cur ? "" : "XP from focus, tasks, challenges and quests. The goals are a weekly pace over the season: your good weeks (the better half of the last 26), "
         + tab.cur.weeklyGoal + " XP a week for the goal (250 at least), " + tab.cur.weeklyHard
-        + " for the hard one (30 % more, 350 at least). Grades: A hard goal, B goal, C 80 %, D 60 %, F below."
+        + " for the hard one (30 % more, 350 at least). Grades: S 20 % beyond the hard goal, A hard goal, B goal, C 80 %, D 60 %, F below."
       color: Util.alpha(w.fg, 0.45)
       font.family: w.fontFamily
       font.pixelSize: Style.font.caption
@@ -210,16 +210,16 @@ Column {
         width: tab.width
         height: Math.max(grade.implicitHeight, pastText.implicitHeight)
 
-        Text {
+        // The grade, big; an S shines.
+        RarityText {
           id: grade
           anchors.left: parent.left
           width: Style.space(26)
-          textFormat: Text.PlainText
           text: pastRow.modelData.grade
           color: tab.gradeColor(pastRow.modelData.grade)
-          font.family: w.fontFamily
-          font.pixelSize: Style.font.body + 10
-          font.bold: true
+          legendary: pastRow.modelData.grade === "S"
+          fontFamily: w.fontFamily
+          pixelSize: Style.font.body + 10
         }
 
         Column {

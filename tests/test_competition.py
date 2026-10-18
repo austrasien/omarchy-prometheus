@@ -34,7 +34,7 @@ class CompetitionTest(unittest.TestCase):
         self.assertEqual(a, C._rivals(w, 3, [100, 120, 80, 100], 1.0))
         self.assertEqual(len(a), 9)
         mean = sum(r["final"] for r in a) / 9
-        self.assertTrue(220 < mean < 480)                # the Sapphire floor, 87 % of 400
+        self.assertTrue(550 < mean < 1000)               # the Sapphire floor, 87 % of 870 a round
         half = C._rivals(w, 3, [100, 120, 80, 100], 0.5)
         self.assertTrue(all(h["xp"] <= r["xp"] for h, r in zip(half, a)))
 
@@ -47,22 +47,34 @@ class CompetitionTest(unittest.TestCase):
 
     def test_top_three_below_the_minimum_is_no_promotion(self):
         rivals = [{"name": str(i), "xp": i, "final": i} for i in range(1, 10)]
-        self.assertEqual(C._standings(299, rivals, 0)[1:], (1, "stagnation"))     # Bronze needs 300
-        self.assertEqual(C._standings(300, rivals, 0)[1:], (1, "promotion"))
-        self.assertEqual(C._standings(329, rivals, 1)[2], "stagnation")            # Silver needs 330
+        self.assertEqual(C._standings(599, rivals, 0)[1:], (1, "stagnation"))     # Bronze: 600 a round
+        self.assertEqual(C._standings(600, rivals, 0)[1:], (1, "promotion"))
+        self.assertEqual(C._standings(679, rivals, 1)[2], "stagnation")            # Silver: 680
+        self.assertEqual(C._standings(300, rivals, 0, progress=0.5)[2], "promotion")   # prorated mid-round
+        self.assertEqual(C.PROMOTION_MIN_WEEKLY[8], 2 * C.PROMOTION_MIN_WEEKLY[4])  # Obsidian = 2 x Ruby
+
+    def round_day(self, k, day=0):
+        """Day `day` of the k-th league round from the first one in setUp."""
+        first = C.round_start(C._date(T.date_str(self.at(0)))) + __import__("datetime").timedelta(days=14)
+        return T._start_of(first) + (14 * k + day) * 86_400_000 + 10 * 60 * MIN
+
+    def work_at(self, ms, minutes):
+        self.core.start(None, ms)
+        self.core.end(ms + minutes * MIN)
 
     def test_one_league_at_a_time_up_and_down(self):
-        self.work(0, 6000)          # 600 XP: top of any table, but one league up only
-        hist = C.leagues(C.Ledger(self.store, self.at(14)))["history"]
-        self.assertEqual([(w["before"], w["after"]) for w in hist[:2]], [(0, 1), (1, 0)])   # then an empty week
+        self.work_at(self.round_day(0), 30000)       # 3000 XP: top of any table, but one league up only
+        hist = C.leagues(C.Ledger(self.store, self.round_day(2, 1)))["history"]
+        self.assertEqual([(w["before"], w["after"]) for w in hist[:2]], [(0, 1), (1, 0)])   # then an empty round
+        self.assertEqual(C._date(hist[1]["week"]) - C._date(hist[0]["week"]), __import__("datetime").timedelta(days=14))
 
     def test_current_week_players(self):
-        self.work(0, 600)
-        cur = C.leagues(C.Ledger(self.store, self.at(7, 1)))["current"]
+        self.work_at(self.round_day(0), 6000)
+        cur = C.leagues(C.Ledger(self.store, self.round_day(1, 0) + MIN))["current"]
         self.assertEqual(len(cur["players"]), 10)
-        self.assertEqual(cur["zone"], "relegation")       # Monday morning, 0 XP so far
+        self.assertEqual(cur["zone"], "relegation")       # the round just began, 0 XP so far
         self.assertEqual(sum(p["you"] for p in cur["players"]), 1)
-        self.assertGreater(cur["toSafety"], 0)
+        self.assertEqual(cur["daysLeft"], 14)
 
     def test_seasons_goal_bars_grade(self):
         import datetime as dt
@@ -79,6 +91,8 @@ class CompetitionTest(unittest.TestCase):
         self.assertEqual(s["bars"], 0)
         self.assertGreaterEqual(s["weeklyGoal"], 250)
         self.assertGreaterEqual(s["weeklyHard"], 350)
+        self.assertEqual(C._grade(720, 300, 600), "S")      # 20 % beyond the hard goal
+        self.assertEqual(C._grade(719, 300, 600), "A")
         self.assertEqual(C._grade(600, 300, 600), "A")
         self.assertEqual(C._grade(300, 300, 600), "B")
         self.assertEqual(C._grade(240, 300, 600), "C")
@@ -177,10 +191,11 @@ class CompetitionTest(unittest.TestCase):
         self.assertEqual(self.core.quests_list(self.at(1))["quests"], [])     # an open quest is deleted too
 
     def test_achievements(self):
-        self.work(0, 6000)
-        self.work(7, 9000)
-        self.core.check_medals(self.at(14))
-        got = set(self.store.unlocked_achievements()) | {a["id"] for a in self.core.check_achievements(self.at(14))}
+        self.work_at(self.round_day(0), 30000)
+        self.work_at(self.round_day(1), 40000)
+        at = self.round_day(2, 1)
+        self.core.check_medals(at)
+        got = set(self.store.unlocked_achievements()) | {a["id"] for a in self.core.check_achievements(at)}
         for aid in ("promoted:1", "leagueclimb:2", "promostreak:2"):
             self.assertIn(aid, got)
 

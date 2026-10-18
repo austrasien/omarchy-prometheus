@@ -93,6 +93,7 @@ class Daemon:
             "tasks:complete": lambda a: self.core.task_complete(a[0] if a else None, self.clock()),
             "tasks:reopen": lambda a: self.core.task_reopen(a[0] if a else None),
             "tasks:delete": lambda a: self.core.task_delete(a[0] if a else None),
+            "toast:preview": self._toast_preview,
             "leagues:get": lambda a: self.core.leagues(self.clock()),
             "seasons:get": lambda a: self.core.seasons(self.clock()),
             "leaderboard:get": lambda a: self.core.leaderboard(a[0] if a else "days", self.clock()),
@@ -118,6 +119,12 @@ class Daemon:
         r = reply["recap"]
         self.toast("ended", self.END_REASONS[reason], f"{r.get('task') or 'Session'} · {format_short(r['durationSeconds'])}")
         return reply
+
+    def _toast_preview(self, args) -> dict:
+        """Show a sample achievement toast of a rarity (to see what one looks like)."""
+        rarity = args[0] if args and args[0] in ("normal", "common", "rare", "epic", "legendary") else "legendary"
+        self.toast("achievement", "Preview Achievement", "+42 XP · This is what winning feels like.", rarity)
+        return {"success": True}
 
     QUEST_DONE = {"daily": "Daily quest done", "short": "Quest complete", "long": "Long quest complete"}
 

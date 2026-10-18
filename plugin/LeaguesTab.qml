@@ -2,9 +2,9 @@ import QtQuick
 import qs.Commons
 import qs.Ui
 
-// Leagues tab: ten leagues, Bronze to Diamond, one week at a time against
-// your own recent weeks. Shows the ladder, where this week stands (relegation,
-// stagnation or promotion zone) and the weeks already settled.
+// Leagues tab: ten leagues, Bronze to Diamond, one two-week round at a time
+// against nine rivals. Shows the ladder (Emerald and up shine), where this
+// round stands (relegation, stagnation or promotion zone) and past rounds.
 Column {
   id: tab
 
@@ -45,15 +45,19 @@ Column {
     if (!cur) return ""
     var next = leagueName(cur.league + 1), here = cur.name, below = leagueName(cur.league - 1)
     if (cur.zone === "promotion")
-      return cur.top ? "Top of the table in Diamond. Nowhere higher to go: hold it." : "Bravo! If the week ended now, you would go up to " + next + "."
+      return cur.top ? "Top of the table in Diamond. Nowhere higher to go: hold it." : "Bravo! If the round ended now, you would go up to " + next + "."
     if (cur.zone === "relegation") {
       if (cur.bottom) return cur.toSafety + " XP more to climb out of the bottom 3. Bronze has no floor below, but still."
-      return "If the week ended now, you would drop to " + below + ". " + cur.toSafety + " XP more to get out of the bottom 3."
+      return "If the round ended now, you would drop to " + below + ". " + cur.toSafety + " XP more to get out of the bottom 3."
     }
     if (cur.top) return "You stay in Diamond, the top league."
     if (cur.rank <= 3 && cur.promotionMin !== null)
-      return "Top 3, but promotion out of " + here + " takes " + cur.promotionMin + " XP this week: " + cur.toPromotion + " XP more."
-    return "You stay in " + here + ". " + cur.toPromotion + " XP more to be promoted (top 3 and " + cur.promotionMin + " XP)."
+      return "Top 3, but promotion out of " + here + " takes " + cur.promotionMin + " XP over the round (" + cur.promotionMinSoFar + " by now): " + cur.toPromotion + " XP more."
+    return "You stay in " + here + ". " + cur.toPromotion + " XP more to be promoted (top 3, and " + cur.promotionMin + " XP over the round)."
+  }
+
+  function roundLabel(start, end) {
+    return weekLabel(start) + " – " + weekLabel(end)
   }
 
   function weekLabel(iso) {
@@ -82,6 +86,7 @@ Column {
           anchors.verticalCenter: parent.verticalCenter
 
           Rectangle {
+            id: gem
             anchors.centerIn: parent
             width: parent.width * 0.72
             height: width
@@ -91,21 +96,38 @@ Column {
             opacity: tab.cur && index <= tab.cur.league ? 1 : 0.28
             border.width: parent.here ? 2 : 0
             border.color: "white"
+
+            // Emerald and up glint: a flash of white, one gem after the other.
+            Rectangle {
+              anchors.fill: parent
+              radius: parent.radius
+              color: "white"
+              opacity: 0
+              visible: index >= 5
+              SequentialAnimation on opacity {
+                running: index >= 5 && tab.visible
+                loops: Animation.Infinite
+                PauseAnimation { duration: (index - 5) * 220 }
+                NumberAnimation { to: 0.85; duration: 160; easing.type: Easing.OutQuad }
+                NumberAnimation { to: 0; duration: 420; easing.type: Easing.InQuad }
+                PauseAnimation { duration: 2200 - (index - 5) * 220 }
+              }
+            }
           }
         }
       }
     }
   }
 
-  Text {
-    width: parent.width
-    horizontalAlignment: Text.AlignHCenter
-    textFormat: Text.PlainText
+  // The league's name; from Emerald up, a light sweeps across it.
+  RarityText {
+    anchors.horizontalCenter: parent.horizontalCenter
+    width: implicitWidth
     text: tab.cur ? tab.cur.name + " League" : "…"
     color: tab.cur ? tab.cur.color : w.fg
-    font.family: w.fontFamily
-    font.pixelSize: Style.font.body + 4
-    font.bold: true
+    legendary: !!tab.cur && tab.cur.shining
+    fontFamily: w.fontFamily
+    pixelSize: Style.font.body + 4
   }
 
   // ---- this week: you and nine rivals, ranked
@@ -146,7 +168,7 @@ Column {
         anchors.right: parent.right
         anchors.verticalCenter: zoneText.verticalCenter
         textFormat: Text.PlainText
-        text: tab.cur ? tab.cur.daysLeft + (tab.cur.daysLeft === 1 ? " day left" : " days left") : ""
+        text: tab.cur ? tab.cur.daysLeft + (tab.cur.daysLeft === 1 ? " day left" : " days left") + " in the round" : ""
         color: Util.alpha(w.fg, 0.6)
         font.family: w.fontFamily
         font.pixelSize: Style.font.caption
@@ -286,9 +308,9 @@ Column {
       width: parent.width
       wrapMode: Text.WordWrap
       textFormat: Text.PlainText
-      text: "Your rivals are drawn each week from your last 4 weeks"
+      text: "Rounds last two weeks, Sunday to the second Saturday. Your rivals are drawn each round from your last two rounds"
         + (tab.cur && tab.cur.reference !== null ? " (average " + Math.round(tab.cur.reference) + " XP)" : "")
-        + ", never weaker than the league's level, and earn their XP as the week goes. Top 3 go up if they reach the league's minimum (300 XP in Bronze, more above); bottom 3 go down; one league at most. An empty week always goes down."
+        + ", never weaker than the league's level, and earn their XP as the round goes. Top 3 go up if they reach the league's minimum (600 XP a round in Bronze, more above, prorated as the round goes); bottom 3 go down; one league at most. An empty round always goes down."
       color: Util.alpha(w.fg, 0.45)
       font.family: w.fontFamily
       font.pixelSize: Style.font.caption
@@ -302,7 +324,7 @@ Column {
     visible: tab.info && tab.info.history.length > 0
 
     PanelSectionHeader {
-      text: "PAST WEEKS"
+      text: "PAST ROUNDS"
       foreground: w.fg
       fontFamily: w.fontFamily
     }
@@ -319,7 +341,7 @@ Column {
           id: weekText
           anchors.left: parent.left
           textFormat: Text.PlainText
-          text: "Week of " + tab.weekLabel(modelData.week) + "  ·  " + modelData.xp + " XP"
+          text: tab.roundLabel(modelData.week, modelData.end || modelData.week) + "  ·  " + modelData.xp + " XP"
           color: Util.alpha(w.fg, 0.75)
           font.family: w.fontFamily
           font.pixelSize: Style.font.caption

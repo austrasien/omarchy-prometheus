@@ -320,7 +320,8 @@ def _promotion_run(c: Context) -> int | None:
 
 
 def _diamond_weeks(c: Context) -> int | None:
-    return _count([w for w in c.league_weeks if w["before"] == 9])
+    """Weeks played in Diamond (a league round is two weeks)."""
+    return 2 * len([w for w in c.league_weeks if w["before"] == 9]) or None
 
 
 def _seasons_with(c: Context, bars: int) -> int | None:
@@ -334,14 +335,14 @@ def _graded(c: Context) -> list[dict]:
 def _honor_run(c: Context) -> int | None:
     best = run = 0
     for s in _graded(c):
-        run = run + 1 if s["grade"] in ("A", "B") else 0
+        run = run + 1 if s["grade"] in ("S", "A", "B") else 0
         best = max(best, run)
     return best or None
 
 
 def _phoenix(c: Context) -> int | None:
     g = _graded(c)
-    return _count([1 for a, b in zip(g, g[1:]) if a["grade"] == "F" and b["grade"] == "A"])
+    return _count([1 for a, b in zip(g, g[1:]) if a["grade"] == "F" and b["grade"] in ("A", "S")])
 
 
 def _day_records(c: Context) -> int | None:
@@ -1209,9 +1210,9 @@ FAMILIES: list[Family] = [
            ["Relegated, then promoted. Drawdowns are buying opportunities.",
             "{n} bounces. Antifragile, by the book."]),
     Family("promostreak", "Promotion streak", _promotion_run, [2, 3, 5, 9],
-           lambda t: f"Promotion Streak {t:g}", lambda t: f"Get promoted {t:g} weeks in a row.",
+           lambda t: f"Promotion Streak {t:g}", lambda t: f"Get promoted {t:g} league rounds in a row (two weeks each).",
            ["{n} promotions in a row. Exponential, not linear.",
-            "{n} straight. Hockey stick, achieved."], unit="weeks"),
+            "{n} straight. Hockey stick, achieved."], unit="rounds"),
 
     # ---- seasons
     Family("seasonpass", "Season pass", lambda c: _seasons_with(c, 1), [1, 2, 4, 8, 12],
@@ -1222,12 +1223,16 @@ FAMILIES: list[Family] = [
            lambda t: f"Hard Mode ×{t:g}", lambda t: f"Reach the hard season goal in {t:g} seasons.",
            ["Two bars. The hard goal is the only goal.",
             "{n} hard seasons. Difficulty setting: founder."]),
-    Family("straighta", "Straight A", lambda c: _count([s for s in _graded(c) if s["grade"] == "A"]), [1, 2, 4, 8],
-           lambda t: f"Straight A ×{t:g}", lambda t: f"Finish {t:g} seasons with an A.",
+    Family("straighta", "Straight A", lambda c: _count([s for s in _graded(c) if s["grade"] in ("A", "S")]), [1, 2, 4, 8],
+           lambda t: f"Straight A ×{t:g}", lambda t: f"Finish {t:g} seasons with an A or better.",
            ["An A. Grade inflation, except you earned it.",
             "{n} A seasons. The curve is you."]),
+    Family("stier", "S-tier", lambda c: _count([s for s in _graded(c) if s["grade"] == "S"]), [1, 2, 4, 8],
+           lambda t: f"S-Tier ×{t:g}", lambda t: f"Finish {t:g} seasons with an S: 20 % beyond the hard goal.",
+           ["An S. The grading scale needed a new letter for you.",
+            "{n} S seasons. Off the charts is now your baseline."]),
     Family("honorroll", "Honor roll", _honor_run, [2, 4, 8],
-           lambda t: f"Honor Roll {t:g}", lambda t: f"Finish {t:g} seasons in a row with an A or a B.",
+           lambda t: f"Honor Roll {t:g}", lambda t: f"Finish {t:g} seasons in a row with a B or better.",
            ["{n} good seasons in a row. Consistency compounds.",
             "{n} straight. Your track record is now a moat."], unit="seasons"),
     Family("phoenix", "Phoenix", _phoenix, [1],
@@ -1267,7 +1272,7 @@ WEIGHTS = {
     "closer": 2, "longgame": 3, "unbroken": 2, "cleansweep": 2, "deepquest": 2, "payload": 2,
     "marathoner": 3,
     "leagueclimb": 2, "diamondhands": 3, "promostreak": 2, "seasonpass": 2, "hardmode": 3,
-    "honorroll": 2, "podium": 2,
+    "honorroll": 2, "podium": 2, "stier": 3,
 }
 for _f in FAMILIES:
     _f.weight = WEIGHTS.get(_f.id, 1)

@@ -38,17 +38,24 @@ FOCUS_SECONDS_PER_XP = 600
 LEAGUES = ["Bronze", "Silver", "Gold", "Sapphire", "Ruby", "Emerald", "Amethyst", "Pearl", "Obsidian", "Diamond"]
 LEAGUE_COLORS = ["#cd7f32", "#c0c0c0", "#ffd700", "#2f6fdb", "#e0115f", "#50c878", "#9966cc", "#eae0c8",
                  "#6b6b85", "#b9f2ff"]
-# Promotion takes a top-3 finish and at least this much weekly XP (Bronze to
-# Obsidian; Diamond has nowhere higher). About 6 XP per hour of focus: 300 XP
-# is a strong week.
-PROMOTION_MIN = [300, 330, 365, 400, 440, 485, 535, 590, 650]
-# The rivals' average never goes under 87 % of the league's promotion minimum
-# (so the third of nine sits about there), whatever your history; above it,
-# your last four weeks set it, 5 % stronger each league up.
+# A league round lasts two weeks, Sunday to the second Saturday, counted from
+# a fixed Sunday so every round lines up.
+ROUND_DAYS = 14
+ROUND_ANCHOR = dt.date(2023, 1, 1)     # a Sunday
+# Promotion takes a top-3 finish and at least this much XP a week, over the
+# round (twice it), Bronze to Obsidian; Diamond has nowhere higher. About 6 XP
+# per hour of focus: 300 a week is a strong week. Obsidian is twice Ruby.
+PROMOTION_MIN_WEEKLY = [300, 340, 385, 435, 490, 580, 690, 820, 980]
+DIAMOND_WEEKLY = 1150                  # what Diamond rivals play at, at least
+# Your history sets the rivals' level (your last two rounds, 5 % stronger each
+# league up), unless it is under 87 % of the league's minimum: then that
+# floor is used instead, so the third of nine sits about at the minimum.
 RIVAL_FLOOR_SHARE = 0.87
 LEAGUE_STEP = 0.05
-LEAGUE_FLOORS = [round(RIVAL_FLOOR_SHARE * m) for m in PROMOTION_MIN] + [round(RIVAL_FLOOR_SHARE * 715)]
-REFERENCE_WEEKS = 4
+REFERENCE_ROUNDS = 2
+PROMOTION_MIN = [2 * m for m in PROMOTION_MIN_WEEKLY]                  # per round
+LEAGUE_FLOORS = [round(RIVAL_FLOOR_SHARE * m) for m in PROMOTION_MIN] + [round(RIVAL_FLOOR_SHARE * 2 * DIAMOND_WEEKLY)]
+SHINING_FROM = 5                       # Emerald and up shine
 RIVALS = 9                   # plus you: ten players a week
 PROMOTED = 3                 # the top 3 go up
 RELEGATED = 3                # the bottom 3 go down
@@ -90,7 +97,10 @@ SEASON_HARD_FACTOR = 1.30
 SEASON_LOOKBACK_WEEKS = 26
 SEASON_MIN_WEEKS = 4         # fewer weeks of history: the minimums decide
 SEASON_MEDAL_XP = {1: 75, 2: 200}   # one bar, two bars (in all)
-GRADES = [("A", "hard"), ("B", "goal"), ("C", 0.8), ("D", 0.6)]   # else F
+# S beyond the hard goal by 20 %, A the hard goal, B the goal, C 80 % of it,
+# D 60 %, F below.
+GRADES = [("S", "beyond"), ("A", "hard"), ("B", "goal"), ("C", 0.8), ("D", 0.6)]
+S_FACTOR = 1.2
 
 
 def _date(s: str) -> dt.date:
@@ -201,11 +211,17 @@ def season_roster(key: str) -> list[str]:
     return roster
 
 
+def round_start(d: dt.date) -> dt.date:
+    """The Sunday opening the two-week league round of `d`."""
+    return ROUND_ANCHOR + dt.timedelta(days=ROUND_DAYS * ((d - ROUND_ANCHOR).days // ROUND_DAYS))
+
+
 def _rivals(week: dt.date, league: int, prev: list[int], progress: float) -> list[dict]:
-    """Nine made-up players for a league week, drawn from a Gaussian fitted to
-    your last four weeks (stronger each league up). Seeded by week and league,
-    so a week always replays the same. `progress` (0 to 1): how much of the
-    week has gone by; each rival earns its total at its own pace."""
+    """Nine made-up players for a league round, drawn from a Gaussian fitted to
+    your last two rounds (stronger each league up, never under the league's
+    floor). Seeded by round and league, so a round always replays the same.
+    `progress` (0 to 1): how much of the round has gone by; each rival earns
+    its total at its own pace."""
     rng = random.Random(f"{week.isoformat()}:{league}")
     ref = sum(prev) / len(prev) if prev else 0
     mean = max(ref * (1 + LEAGUE_STEP * league), LEAGUE_FLOORS[league])
@@ -213,7 +229,7 @@ def _rivals(week: dt.date, league: int, prev: list[int], progress: float) -> lis
     if len(prev) >= 2:
         spread = (sum((x - ref) ** 2 for x in prev) / (len(prev) - 1)) ** 0.5
     sd = max(spread, 0.25 * mean)
-    names = season_roster(_season_key(*_season(week + dt.timedelta(days=3))))   # the week's middle
+    names = season_roster(_season_key(*_season(week + dt.timedelta(days=ROUND_DAYS // 2))))   # the round's middle
     out = []
     for name in names:
         final = max(0, round(rng.gauss(mean, sd)))
@@ -222,9 +238,10 @@ def _rivals(week: dt.date, league: int, prev: list[int], progress: float) -> lis
     return out
 
 
-def _standings(xp: int, rivals: list[dict], league: int) -> tuple[list[dict], int, str]:
+def _standings(xp: int, rivals: list[dict], league: int, progress: float = 1.0) -> tuple[list[dict], int, str]:
     """The ten players ranked (ties go to you), your rank and your zone. The
-    top 3 without the league's promotion minimum is no promotion."""
+    top 3 without the league's promotion minimum is no promotion; during the
+    round, the minimum is prorated like the rivals' XP."""
     players = [dict(r, you=False) for r in rivals] + [{"name": "You", "xp": xp, "you": True}]
     players.sort(key=lambda r: (-r["xp"], not r["you"]))
     for i, r in enumerate(players):
@@ -233,7 +250,7 @@ def _standings(xp: int, rivals: list[dict], league: int) -> tuple[list[dict], in
                      "relegation" if i >= len(players) - RELEGATED else "stagnation")
     rank = next(r["rank"] for r in players if r["you"])
     zone = players[rank - 1]["zone"]
-    if zone == "promotion" and league < len(PROMOTION_MIN) and xp < PROMOTION_MIN[league]:
+    if zone == "promotion" and league < len(PROMOTION_MIN) and xp < PROMOTION_MIN[league] * progress:
         zone = "stagnation"
     if xp == 0:
         zone = "relegation"                        # an empty week never stays put
@@ -241,48 +258,54 @@ def _standings(xp: int, rivals: list[dict], league: int) -> tuple[list[dict], in
 
 
 def leagues(ledger: Ledger) -> dict:
-    """Every settled week, and where the current one stands."""
-    weeks = ledger.week_xp()
-    this_monday = _monday(ledger.today)
+    """Every settled round, and where the current one stands."""
+    days = defaultdict(int)
+    for d, x in ledger.xp.items():
+        days[round_start(_date(d))] += x
+    this_round = round_start(ledger.today)
     first = ledger.first_day
-    start = _monday(first) if first else this_monday
+    start = round_start(first) if first else this_round
     league, history, xps = 0, [], []
-    w = start
+    r = start
+    round_ms = ROUND_DAYS * 86_400_000
     while True:
-        xp = weeks.get(w, 0)
-        prev = xps[-REFERENCE_WEEKS:]
-        current = w == this_monday
+        xp = days.get(r, 0)
+        prev = xps[-REFERENCE_ROUNDS:]
+        current = r == this_round
         progress = 1.0
         if current:
-            week_ms = 7 * 86_400_000
-            progress = (ledger.now - T.week_start(ledger.now)) / week_ms
-        players, rank, zone = _standings(xp, _rivals(w, league, prev, progress), league)
+            progress = (ledger.now - T._start_of(r)) / round_ms
+        players, rank, zone = _standings(xp, _rivals(r, league, prev, progress), league, progress)
         top, bottom = league == len(LEAGUES) - 1, league == 0
         moves = {"promotion": 0 if top else 1, "relegation": 0 if bottom else -1, "stagnation": 0}[zone]
+        end = r + dt.timedelta(days=ROUND_DAYS)
         if current:
-            others = sorted((r["xp"] for r in players if not r["you"]), reverse=True)
-            end = w + dt.timedelta(days=7)
+            others = sorted((p["xp"] for p in players if not p["you"]), reverse=True)
+            minimum = PROMOTION_MIN[league] if league < len(PROMOTION_MIN) else None
             return {
                 "history": history,
-                "current": {"week": w.isoformat(), "league": league, "name": LEAGUES[league],
+                "current": {"week": r.isoformat(), "end": (end - dt.timedelta(days=1)).isoformat(),
+                            "league": league, "name": LEAGUES[league], "shining": league >= SHINING_FROM,
                             "color": LEAGUE_COLORS[league], "xp": xp, "rank": rank, "zone": zone,
-                            "players": [dict({k: r[k] for k in ("name", "xp", "you", "rank", "zone")},
-                                             bio=None if r["you"] else bio(r["name"])) for r in players],
-                            # XP to pass the 3rd rival and reach the minimum (promotion),
+                            "players": [dict({k: p[k] for k in ("name", "xp", "you", "rank", "zone")},
+                                             bio=None if p["you"] else bio(p["name"])) for p in players],
+                            # XP to pass the 3rd rival and the minimum so far (promotion),
                             # and to pass the 7th (out of relegation).
                             "toPromotion": max(0, others[PROMOTED - 1] + 1 - xp,
-                                               (PROMOTION_MIN[league] - xp) if league < len(PROMOTION_MIN) else 0),
-                            "promotionMin": PROMOTION_MIN[league] if league < len(PROMOTION_MIN) else None,
+                                               math.ceil(minimum * progress) - xp if minimum else 0),
+                            "promotionMin": minimum,
+                            "promotionMinSoFar": math.ceil(minimum * progress) if minimum else None,
                             "toSafety": max(0, others[len(others) - RELEGATED] + 1 - xp),
                             "top": top, "bottom": bottom, "reference": sum(prev) / len(prev) if prev else None,
-                            "daysLeft": (end - ledger.today).days},
+                            "progress": round(progress, 3), "daysLeft": (end - ledger.today).days},
             }
         after = league + moves
-        history.append({"week": w.isoformat(), "before": league, "after": after, "xp": xp, "rank": rank,
+        history.append({"week": r.isoformat(), "end": (end - dt.timedelta(days=1)).isoformat(),
+                        "before": league, "after": after, "xp": xp, "rank": rank,
                         "outcome": "up" if after > league else "down" if after < league else "stay"})
         league = after
         xps.append(xp)
-        w += dt.timedelta(days=7)
+        r = end
 
 
 # --------------------------------------------------------------- seasons
@@ -290,7 +313,8 @@ def leagues(ledger: Ledger) -> dict:
 
 def _grade(xp: int, goal: int, hard: int) -> str:
     for letter, need in GRADES:
-        bar = hard if need == "hard" else goal if need == "goal" else goal * need
+        bar = (hard * S_FACTOR if need == "beyond" else hard if need == "hard"
+               else goal if need == "goal" else goal * need)
         if xp >= bar:
             return letter
     return "F"

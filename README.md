@@ -54,13 +54,14 @@ only what was actually used.
 - **XP and levels**: 1 XP per 10 min of session (pauses excluded), plus done
   tasks, plus won challenges. Level 2 costs 100 XP, each next level 50 more.
 - **Leagues**: ten, Bronze, Silver, Gold, Sapphire, Ruby, Emerald, Amethyst,
-  Pearl, Obsidian, Diamond. Each week (Sunday to Saturday, like every week in
-  Prometheus) you play nine rivals, scientists and pioneers drawn by lot each
-  season from a pool of 104 (never two with the same first name; a click on a name shows a one-line bio), drawn from a Gaussian fitted to your last four weeks (5 % stronger
-  each league up, never under the league's floor) and seeded by week and
+  Pearl, Obsidian, Diamond. Each two-week round (Sunday to the second Saturday) you play nine rivals, scientists and pioneers drawn by lot each
+  season from a pool of 104 (never two with the same first name; a click on a name shows a one-line bio), drawn from a Gaussian fitted to your last two rounds (5 % stronger
+  each league up; if that is under 87 % of the league's minimum, the floor is
+  used instead) and seeded by week and
   league, so a week always replays the same. They earn their XP as the week
-  goes. Top 3 go up a league if they reach the league's minimum (300 XP in Bronze,
-  then 330, 365, 400, 440, 485, 535, 590, 650), bottom 3 go down one; the rivals
+  goes. Top 3 go up a league if they reach the league's minimum (300 XP a week in
+  Bronze, then 340, 385, 435, 490, 580, 690, 820, 980: Obsidian is twice Ruby;
+  prorated as the round goes for the live zone), bottom 3 go down one; the rivals
   are never weaker than 87 % of that minimum, an empty week always goes
   down. The tab shows the ten players with the promotion, stagnation and
   relegation zones, green chevrons streaming up or red ones streaming down.
@@ -78,7 +79,7 @@ only what was actually used.
   sides for the hard goal. Colors are contrasted (a deep ribbon, a near-white
   star, vivid edge bars) and kept away from the ten medal hues; they are drawn as the season starts, so the medal to
   win shows grey above each goal and comes alive under the mouse. A finished
-  season gets a grade (A hard goal, B goal, C
+  season gets a grade (S 20 % beyond the hard goal, A hard goal, B goal, C
   80 %, D 60 %, F below) and a recap.
 - **Leaderboard**: your best days and weeks (XP), sessions (focus) and quests
   (XP while active), top 10, with the current one highlighted. A quest can be
@@ -184,6 +185,7 @@ bar (session ended, challenge won).
 | `tasks:complete` | `[id]` | Only during a session |
 | `tasks:reopen` | `[id]` | Back to the list, during a session |
 | `tasks:delete` | `[id]` | Drop an open task without its XP |
+| `toast:preview` | `[rarity]` | Show a sample achievement unlock (to see the capsule) |
 | `leagues:get` | | League ladder, settled weeks, the current week's zone |
 | `seasons:get` | | Every season (goals, grade, recap) and the season medals |
 | `leaderboard:get` | `[board]` | Top 10 of `days`, `weeks`, `sessions` or `quests` |

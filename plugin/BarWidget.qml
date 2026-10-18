@@ -256,6 +256,7 @@ BarWidget {
     + (presencePill.width > 0 ? presencePill.width + Style.space(2) : 0)
     + (pill.width > 0 ? pill.width + Style.space(2) : 0)
     + (toastPill.width > 0 ? toastPill.width + Style.space(4) : 0)
+    + (achPill.visible ? achPill.width + Style.space(4) : 0)
   implicitHeight: button.implicitHeight
 
   readonly property string checkGlyph: String.fromCodePoint(0xF012C)
@@ -548,7 +549,11 @@ BarWidget {
     if (toastQueue.length === 0) { currentToast = null; return }
     currentToast = toastQueue[0]
     toastQueue = toastQueue.slice(1)
-    toastTimer.interval = currentToast.kind === "achievement" ? 12000 : 6000
+    if (currentToast.kind === "achievement" && !root.vertical) {
+      achPill.play()            // its own show, ten seconds, then it closes itself
+      return
+    }
+    toastTimer.interval = 6000
     toastTimer.restart()
   }
 
@@ -580,7 +585,7 @@ BarWidget {
   Timer { id: toastGap; interval: 500; onTriggered: root.nextToast() }
 
   property real toastShown: 0
-  onCurrentToastChanged: toastShown = currentToast && !root.vertical ? 1 : 0
+  onCurrentToastChanged: toastShown = currentToast && !root.vertical && currentToast.kind !== "achievement" ? 1 : 0
   Behavior on toastShown { NumberAnimation { duration: 450; easing.type: Easing.OutCubic } }
 
   TextMetrics {
@@ -627,6 +632,164 @@ BarWidget {
       anchors.fill: parent
       cursorShape: Qt.PointingHandCursor
       onClicked: { toastTimer.stop(); toastTimer.triggered() }
+    }
+  }
+
+  // ---- achievement unlocked: a capsule of the rarity's color. It snaps open,
+  // flashes white to catch the eye, then glows with a light sweeping across it
+  // (and a rainbow sheen if legendary) for ten seconds, then closes up like a
+  // pill: down to a round dot, which shrinks away.
+
+  TextMetrics {
+    id: achMetrics
+    font.family: root.fontFamily
+    font.pixelSize: Style.font.caption
+    font.bold: true
+    text: achLabel.text
+  }
+
+  Item {
+    id: achPill
+    readonly property bool active: !!root.currentToast && root.currentToast.kind === "achievement"
+    readonly property string rarity: active ? (root.currentToast.rarity || "normal") : "normal"
+    readonly property color tint: rarity === "normal" ? root.gold : root.rarityColor(rarity)
+    readonly property real fullWidth: achMetrics.advanceWidth + Style.space(30)
+    property real openWidth: 0
+    property bool flashOn: false
+    anchors.left: pill.width > 0 ? pill.right : button.right
+    anchors.leftMargin: Style.space(4)
+    anchors.verticalCenter: button.verticalCenter
+    width: Math.round(openWidth)
+    height: Math.round(button.height * 0.78)
+    visible: openWidth > 0.5
+    transformOrigin: Item.Center
+
+    function play() {
+      closeAnim.stop()
+      scale = 1
+      opacity = 1
+      openWidth = 0
+      openAnim.restart()
+    }
+    function close() {
+      if (!closeAnim.running && openWidth > 0) { openAnim.stop(); closeAnim.restart() }
+    }
+
+    SequentialAnimation {
+      id: openAnim
+      NumberAnimation { target: achPill; property: "openWidth"; from: 0; to: achPill.fullWidth; duration: 560; easing.type: Easing.OutBack; easing.overshoot: 1.6 }
+      // Six quick flashes: look here.
+      SequentialAnimation {
+        loops: 6
+        PropertyAction { target: achPill; property: "flashOn"; value: true }
+        PauseAnimation { duration: 90 }
+        PropertyAction { target: achPill; property: "flashOn"; value: false }
+        PauseAnimation { duration: 90 }
+      }
+      PauseAnimation { duration: 10000 - 560 - 1080 }
+      ScriptAction { script: achPill.close() }
+    }
+
+    SequentialAnimation {
+      id: closeAnim
+      // Closing up like a pill: the ends come together into a round dot...
+      NumberAnimation { target: achPill; property: "openWidth"; to: achPill.height; duration: 320; easing.type: Easing.InCubic }
+      // ...which pops away.
+      ParallelAnimation {
+        NumberAnimation { target: achPill; property: "scale"; to: 0; duration: 260; easing.type: Easing.InBack }
+        NumberAnimation { target: achPill; property: "opacity"; to: 0; duration: 260 }
+      }
+      ScriptAction { script: { achPill.openWidth = 0; achPill.scale = 1; achPill.opacity = 1; toastGap.restart() } }
+    }
+
+    // The glow around it, breathing.
+    Rectangle {
+      anchors.centerIn: parent
+      width: parent.width + Style.space(6)
+      height: parent.height + Style.space(6)
+      radius: height / 2
+      color: "transparent"
+      border.width: 2
+      border.color: achPill.tint
+      SequentialAnimation on opacity {
+        running: achPill.visible
+        loops: Animation.Infinite
+        NumberAnimation { from: 0.15; to: 0.7; duration: 700; easing.type: Easing.InOutSine }
+        NumberAnimation { from: 0.7; to: 0.15; duration: 700; easing.type: Easing.InOutSine }
+      }
+    }
+
+    Rectangle {
+      id: achBody
+      anchors.fill: parent
+      radius: height / 2
+      clip: true
+      color: achPill.flashOn ? "white" : achPill.tint
+      border.width: 1
+      border.color: Qt.lighter(achPill.tint, 1.4)
+
+      // Legendary: a rainbow sheen drifting across the gold.
+      Rectangle {
+        visible: achPill.rarity === "legendary"
+        width: achBody.width * 3
+        height: achBody.height
+        opacity: 0.28
+        gradient: Gradient {
+          orientation: Gradient.Horizontal
+          GradientStop { position: 0.00; color: "#ff4d4d" }
+          GradientStop { position: 0.17; color: "#ffd24d" }
+          GradientStop { position: 0.33; color: "#6dff6d" }
+          GradientStop { position: 0.50; color: "#4de1ff" }
+          GradientStop { position: 0.67; color: "#6d6dff" }
+          GradientStop { position: 0.83; color: "#ff6dff" }
+          GradientStop { position: 1.00; color: "#ff4d4d" }
+        }
+        NumberAnimation on x {
+          running: achPill.visible && achPill.rarity === "legendary"
+          loops: Animation.Infinite
+          from: -achBody.width * 2; to: 0; duration: 2600
+        }
+      }
+
+      // The shine: a bright diagonal band sweeping across, again and again.
+      Rectangle {
+        width: Math.max(14, achBody.height * 1.3)
+        height: achBody.height * 3
+        anchors.verticalCenter: parent.verticalCenter
+        rotation: 25
+        gradient: Gradient {
+          orientation: Gradient.Horizontal
+          GradientStop { position: 0.0; color: "#00ffffff" }
+          GradientStop { position: 0.5; color: "#d0ffffff" }
+          GradientStop { position: 1.0; color: "#00ffffff" }
+        }
+        SequentialAnimation on x {
+          running: achPill.visible
+          loops: Animation.Infinite
+          NumberAnimation { from: -achBody.height * 2; to: achBody.width + achBody.height; duration: 900; easing.type: Easing.InOutQuad }
+          PauseAnimation { duration: 900 }
+        }
+      }
+    }
+
+    Text {
+      id: achLabel
+      anchors.centerIn: parent
+      textFormat: Text.PlainText
+      text: !achPill.active ? ""
+        : root.trophyGlyph + "  " + (achPill.rarity !== "normal" ? achPill.rarity.toUpperCase() + "  ·  " : "")
+          + root.currentToast.title + (root.currentToast.text ? "  ·  " + root.currentToast.text : "")
+      color: achPill.flashOn ? achPill.tint : "#14151f"
+      font: achMetrics.font
+      opacity: achPill.openWidth >= achPill.fullWidth * 0.6 ? 1 : 0
+      Behavior on opacity { NumberAnimation { duration: 120 } }
+    }
+
+    // A click closes it early.
+    MouseArea {
+      anchors.fill: parent
+      cursorShape: Qt.PointingHandCursor
+      onClicked: achPill.close()
     }
   }
 
