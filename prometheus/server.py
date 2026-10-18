@@ -86,6 +86,7 @@ class Daemon:
             "presence:confirm": lambda a: self.core.presence_confirm(self.clock()),
             "settings:getPresenceEvery": lambda a: {"success": True, "minutes": self.core.presence_every_minutes()},
             "settings:setPresenceEvery": lambda a: self.core.set_presence_every(a[0] if a else None),
+            "achievements:list": lambda a: self.core.achievements_list(self.clock()),
             "tasks:list": lambda a: self.core.tasks_list(self.clock()),
             "tasks:add": lambda a: self.core.task_add(a[0] if a else "", a[1] if len(a) > 1 else "manual", self.clock()),
             "tasks:complete": lambda a: self.core.task_complete(a[0] if a else None, self.clock()),
@@ -197,6 +198,7 @@ class Daemon:
                     await self._send(writer, {"ok": False, "error": f"bad request: {e}"})
                     continue
                 await self._send(writer, self.dispatch(request))
+                self.check_achievements()
                 await self.push()
         except (ConnectionError, OSError):
             pass
@@ -206,9 +208,31 @@ class Daemon:
 
     # --------------------------------------------------------------- loops
 
+    def check_achievements(self) -> None:
+        """Unlock and announce. The first run only catches up on the history:
+        one toast for the lot instead of a burst."""
+        try:
+            seeded = self.core.store.get_setting("achievementsSeeded", False)
+            new = self.core.check_achievements(self.clock())
+        except Exception:
+            log.exception("achievement check failed")
+            return
+        if not seeded:
+            self.core.store.set_setting("achievementsSeeded", True)
+            if new:
+                xp = sum(a["xp"] for a in new)
+                self.toast("achievement", f"{len(new)} achievements from your history", f"+{xp} XP")
+            return
+        for a in new:
+            self.toast("achievement", a["name"], f"+{a['xp']} XP · {a['quip']}")
+
     async def _pusher(self) -> None:
+        ticks = 0
         while True:
             await asyncio.sleep(PUSH_INTERVAL)
+            ticks += 1
+            if ticks % 30 == 1:          # about once a minute, and at start
+                self.check_achievements()
             try:
                 now = self.clock()
                 for kind, info in self.core.update_challenge(now) + self.core.update_presence(now):

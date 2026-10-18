@@ -39,6 +39,15 @@ only what was actually used.
   written back to the note.
 - **XP and levels**: 1 XP per 10 min of session (pauses excluded), plus done
   tasks, plus won challenges. Level 2 costs 100 XP, each next level 50 more.
+- **Achievements**: 39 families, 318 tiers, computed from Prometheus' own
+  records: sessions, tasks, cumulative hours (100 h to 10,000 h), levels,
+  endurance, intensity, 3-day and weekly hours, streaks, early and late
+  sessions, challenges, task archaeology, single-app stretches, calendar,
+  sessions on battery and sessions by weather (read from the file the Omarchy
+  weather plugin writes, `~/.local/state/omarchy/weather-current.json`), and a
+  few secrets. Each has a name, a description, a line when it unlocks, and an
+  XP reward: 5 XP per tier, capped at 50; 10 for a single achievement, 25 for
+  a secret one. Sessions under 10 min count for nothing.
 - **Extension challenge**: after 1 h of focus, a pill in the bar offers 20
   min more. Hovered, it splits into decline and accept. Accepted, the session
   cannot be ended before those 20 min of focus are done, unless the challenge
@@ -103,6 +112,7 @@ bar (session ended, challenge won).
 | `challenge:abandon` | | Give up a running challenge (no bonus) |
 | `presence:confirm` | | Answer "Toujours là ?" |
 | `settings:getPresenceEvery`, `settings:setPresenceEvery` | `[minutes]` | How often to ask, 5 to 120, default 20 |
+| `achievements:list` | | Every family, its tiers, what is unlocked and the progress |
 | `tasks:list` | | Open tasks with their XP, and the ones done today |
 | `tasks:add` | `[text, source]` | `source`: manual, obsidian, procrastinated; an open duplicate is not added |
 | `tasks:complete` | `[id]` | Only during a session |

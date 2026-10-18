@@ -14,6 +14,8 @@ class CoreTest(unittest.TestCase):
     def setUp(self):
         self.store = Store(":memory:")
         self.core = Core(self.store)
+        self.core.on_battery = lambda: False
+        self.core.weather_now = lambda at: (None, None)
         # 10:00 today, local: far from midnight so day maths stay simple.
         self.t0 = T.day_start(T.now_ms()) + 10 * 60 * MIN
 

@@ -394,6 +394,7 @@ BarWidget {
   // accept. Horizontal bars only.
 
   readonly property string crossGlyph: String.fromCodePoint(0xF0156)
+  readonly property string trophyGlyph: String.fromCodePoint(0xF0538)
   readonly property bool pillWanted: p.challengeOffered && !root.vertical
 
   // 0 -> 1 as the pill draws itself in, and back when it goes.
@@ -516,6 +517,7 @@ BarWidget {
     if (toastQueue.length === 0) { currentToast = null; return }
     currentToast = toastQueue[0]
     toastQueue = toastQueue.slice(1)
+    toastTimer.interval = currentToast.kind === "achievement" ? 12000 : 6000
     toastTimer.restart()
   }
 
@@ -571,7 +573,8 @@ BarWidget {
       anchors.centerIn: parent
       textFormat: Text.PlainText
       text: !root.currentToast ? ""
-        : root.currentToast.title + (root.currentToast.text ? "  ·  " + root.currentToast.text : "")
+        : (root.currentToast.kind === "achievement" ? root.trophyGlyph + "  " : "")
+          + root.currentToast.title + (root.currentToast.text ? "  ·  " + root.currentToast.text : "")
       color: toastPill.tint
       font: toastMetrics.font
     }
@@ -621,10 +624,12 @@ BarWidget {
         { value: "session", label: "Session" },
         { value: "tasks", label: "Tâches", tooltip: p.session ? "" : "Disponible pendant une session" },
         { value: "stats", label: "Stats" },
+        { value: "achievements", label: "Succès" },
         { value: "settings", label: "Réglages" }
       ]
       readonly property var current: root.tab === "tasks" ? tasksTab
         : root.tab === "stats" ? statsTab
+        : root.tab === "achievements" ? achievementsTab
         : root.tab === "settings" ? settingsTab
         : sessionTab
       readonly property bool editing: sessionTab.editing || tasksTab.editing
@@ -769,6 +774,7 @@ BarWidget {
             SessionTab { id: sessionTab; width: parent.width; w: root; p: root.client; visible: root.tab === "session" }
             TasksTab { id: tasksTab; width: parent.width; w: root; p: root.client; o: root.journal; visible: root.tab === "tasks" }
             StatsTab { id: statsTab; width: parent.width; w: root; p: root.client; visible: root.tab === "stats" }
+            AchievementsTab { id: achievementsTab; width: parent.width; w: root; p: root.client; visible: root.tab === "achievements" }
             SettingsTab { id: settingsTab; width: parent.width; w: root; p: root.client; visible: root.tab === "settings" }
 
             PanelSeparator { width: parent.width; foreground: root.fg }

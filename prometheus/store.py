@@ -13,7 +13,7 @@ import sqlite3
 import uuid
 from pathlib import Path
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
@@ -64,6 +64,18 @@ CREATE TABLE IF NOT EXISTS challenges (
   xp           INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_challenges_session ON challenges(session_id);
+
+CREATE TABLE IF NOT EXISTS achievements (
+  id          TEXT PRIMARY KEY,
+  unlocked_at INTEGER NOT NULL,
+  xp          INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS events (
+  kind       TEXT NOT NULL,      -- e.g. absent: paused for not answering "Toujours là ?"
+  at         INTEGER NOT NULL,
+  session_id TEXT
+);
 
 CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
@@ -116,6 +128,10 @@ class Store:
         cols = {r["name"] for r in self.db.execute("PRAGMA table_info(tasks)")}
         if "xp" not in cols:  # v1 -> v2: XP a task was worth when it was done
             self.db.execute("ALTER TABLE tasks ADD COLUMN xp INTEGER")
+        cols = {r["name"] for r in self.db.execute("PRAGMA table_info(sessions)")}
+        for name, kind in (("on_battery", "INTEGER"), ("weather", "TEXT"), ("temp_c", "REAL")):
+            if name not in cols:  # v2 -> v3: the world around a session
+                self.db.execute(f"ALTER TABLE sessions ADD COLUMN {name} {kind}")
 
     def close(self) -> None:
         self.db.close()
@@ -245,6 +261,25 @@ class Store:
 
     def challenge_xp_total(self) -> int:
         return int(self.db.execute("SELECT COALESCE(SUM(xp), 0) FROM challenges WHERE state='won'").fetchone()[0])
+
+    def set_session_env(self, sid: str, **fields) -> None:
+        keys = ", ".join(f"{k}=?" for k in fields)
+        self.db.execute(f"UPDATE sessions SET {keys} WHERE id=?", (*fields.values(), sid))
+
+    def add_event(self, kind: str, at: int, session_id: str | None) -> None:
+        self.db.execute("INSERT INTO events(kind, at, session_id) VALUES(?, ?, ?)", (kind, at, session_id))
+
+    def count_events(self, kind: str) -> int:
+        return int(self.db.execute("SELECT COUNT(*) FROM events WHERE kind=?", (kind,)).fetchone()[0])
+
+    def unlocked_achievements(self) -> dict[str, sqlite3.Row]:
+        return {r["id"]: r for r in self.db.execute("SELECT * FROM achievements")}
+
+    def unlock(self, aid: str, at: int, xp: int) -> None:
+        self.db.execute("INSERT OR IGNORE INTO achievements(id, unlocked_at, xp) VALUES(?, ?, ?)", (aid, at, xp))
+
+    def achievement_xp_total(self) -> int:
+        return int(self.db.execute("SELECT COALESCE(SUM(xp), 0) FROM achievements").fetchone()[0])
 
     def all_sessions(self) -> list[sqlite3.Row]:
         return self.db.execute("SELECT * FROM sessions").fetchall()

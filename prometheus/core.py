@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from . import achievements as A
+from . import env
 from . import timeutil as T
 from .store import Store, clipped_seconds, session_seconds
 
@@ -58,6 +60,9 @@ class Core:
         self.last_resume_at = 0       # a backdated auto-pause never reaches before this
         self.presence_since = None    # last proof of presence for the running session
         self.presence_asked_at = None
+        # The world around a session; replaced in tests.
+        self.on_battery = env.on_battery
+        self.weather_now = env.weather_now
         self.span_id: int | None = None
         self.span_app: str | None = None
         self.last_tick: int | None = None
@@ -238,7 +243,8 @@ class Core:
         if self._session() is not None:
             raise Refused("Une session est déjà en cours")
         task = (task or "").strip() or None
-        self.store.create_session(task, at)
+        sid = self.store.create_session(task, at)
+        self.store.set_session_env(sid, on_battery=1 if self.on_battery() else 0)
         self.store.set_setting("autoPause", {})
         self.last_resume_at = at
         self._present(at)
@@ -287,6 +293,9 @@ class Core:
         self._close_span(at)
         self.store.finish_session(s["id"], at, total, reason)
         self.store.set_setting("autoPause", {})
+        weather, temp = self.weather_now(at)
+        battery = 1 if (s["on_battery"] or self.on_battery()) else 0  # on battery at either end
+        self.store.set_session_env(s["id"], on_battery=battery, weather=weather, temp_c=temp)
         self._open_span(at)
         done = self.store.get_session(s["id"])
         seconds = session_seconds(done)
@@ -684,8 +693,21 @@ class Core:
         focus_xp = sum(session_seconds(r, until=at) // FOCUS_SECONDS_PER_XP for r in self.store.all_sessions())
         task_xp = sum(self._task(r)["xp"] for r in self.store.done_tasks())
         bonus = self.challenge_xp()
-        total = focus_xp + task_xp + bonus
-        return dict(self.level_for(total), xp=total, focusXp=focus_xp, taskXp=task_xp, challengeXp=bonus)
+        trophies = self.store.achievement_xp_total()
+        total = focus_xp + task_xp + bonus + trophies
+        return dict(self.level_for(total), xp=total, focusXp=focus_xp, taskXp=task_xp,
+                    challengeXp=bonus, achievementXp=trophies)
+
+    # ---------------------------------------------------------- achievements
+
+    def check_achievements(self, at: int) -> list[dict]:
+        """Unlock what the records now justify; returns the new ones."""
+        p = self.profile(at)
+        base = p["xp"] - p["achievementXp"]
+        return A.evaluate(self.store, at, lambda xp: self.level_for(xp)["level"], base)
+
+    def achievements_list(self, at: int) -> dict:
+        return A.catalogue(self.store, at, self.profile(at)["level"])
 
     def task_delete(self, tid) -> dict:
         """Remove an open task, without checking it (so without its XP)."""
@@ -724,6 +746,7 @@ class Core:
             self.store.set_pause(s["id"], start, s["total_pause_ms"])
             self.store.set_setting("autoPause", {})   # a plain pause: resumed by hand
             self.presence_asked_at = None
+            self.store.add_event("absent", at, s["id"])
             self._split(at)
             return [("absent", {})]
         return []
