@@ -53,7 +53,7 @@ only what was actually used.
   focus time, sessions, focus per hour of the day, tasks checked and XP earned.
 - **XP and levels**: 1 XP per 10 min of session (pauses excluded), plus done
   tasks, plus won challenges. Level 2 costs 100 XP, each next level 50 more.
-- **Achievements**: 98 families with 665 tiers (17 of them on quests), plus a calendar of 126
+- **Achievements** (a family not started yet shows only dots; tiers after the next one too): 98 families with 665 tiers (17 of them on quests), plus a calendar of 126
   dated achievements (one per date: Roman festivals, geek days, scientists
   and writers, SpaceX and Tesla milestones, each unlocked by finishing a
   session that day, 10 XP), so 791 in all, computed from Prometheus' own

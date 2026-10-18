@@ -1163,6 +1163,15 @@ def evaluate(store, now: int, level_for_xp: Callable[[int], int], base_xp: int) 
         fresh.extend(new)
 
 
+def _dots(text: str) -> str:
+    """The shape of a text without its words: every letter becomes a dot."""
+    return "".join(ch if ch.isspace() else "•" for ch in text)
+
+
+def _started(value) -> bool:
+    return value is not None and value != 0
+
+
 def catalogue(store, now: int, level: int) -> dict:
     """Every family with its tiers, what is unlocked, and the progress to the next."""
     unlocked = store.unlocked_achievements()
@@ -1185,10 +1194,21 @@ def catalogue(store, now: int, level: int) -> dict:
         if not revealed:
             tiers = [{"id": None, "threshold": None, "name": "???", "desc": "Secret achievement.",
                       "xp": f.xp(0), "unlockedAt": None, "quip": None}]
+        # Suspense: a family nobody has started shows only the shape of its
+        # text; a started one shows its unlocked tiers and the next one, the
+        # tiers after that stay dots until the one before is reached.
+        started = any(t["unlockedAt"] for t in tiers) or _started(value)
+        masked = revealed and not started
+        if revealed:
+            nxt = next((i for i, t in enumerate(tiers) if not t["unlockedAt"]), len(tiers))
+            for i, t in enumerate(tiers):
+                if masked or i > nxt:
+                    t.update(name=_dots(t["name"]), desc=_dots(t["desc"]), threshold=None, hidden=True)
         families.append({
-            "id": f.id, "title": f.title if revealed else "???", "secret": f.secret,
+            "id": f.id, "title": (_dots(f.title) if masked else f.title) if revealed else "???",
+            "secret": f.secret, "masked": masked,
             "unit": f.unit, "compare": f.compare,
-            "value": (None if value is None or not revealed else round(value / f.scale, 2)),
+            "value": (None if value is None or not revealed or masked else round(value / f.scale, 2)),
             "tiers": tiers,
         })
     # The calendar: one collection, each date hidden until found.

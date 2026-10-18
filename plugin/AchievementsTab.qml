@@ -4,7 +4,9 @@ import qs.Ui
 
 // Achievements tab: recent unlocks with their lines, then every family with
 // its next tier and the progress toward it. Secret families stay "???"
-// until one of their tiers unlocks. Fetched when the tab is shown.
+// until one of their tiers unlocks. A family not started yet shows only the
+// shape of its text (dots), and so do the tiers after the next one: the daemon
+// sends them that way. Fetched when the tab is shown.
 Column {
   id: tab
 
@@ -72,6 +74,7 @@ Column {
   }).sort(function(a, b) {
     // Closest to the next tier first; secrets and empty measures last.
     function score(f) {
+      if (f.masked) return 3          // the unknown, at the bottom
       var n = tab.nextTier(f)
       if (!n || f.value === null || n.threshold === null || f.compare !== "ge") return 2
       return 1 - Math.min(1, f.value / Math.max(0.0001, n.threshold))
@@ -228,6 +231,7 @@ Column {
           readonly property bool complete: next === null
           // The calendar: one row for the whole collection of dates.
           readonly property bool collection: modelData.kind === "collection"
+          readonly property bool masked: !!modelData.masked
           width: familyList.width
           spacing: Style.space(4)
 
@@ -254,7 +258,7 @@ Column {
                   textFormat: Text.PlainText
                   text: fam.collection ? fam.modelData.title
                     : fam.complete ? (fam.last ? fam.last.name : fam.modelData.title) : fam.next.name
-                  color: fam.complete ? w.gold : w.fg
+                  color: fam.complete ? w.gold : fam.masked ? Util.alpha(w.fg, 0.3) : w.fg
                   font.family: w.fontFamily
                   font.pixelSize: Style.font.body
                   font.bold: true
@@ -281,7 +285,7 @@ Column {
                 text: fam.collection
                   ? (fam.last ? "Latest: " + fam.last.name + ". " : "") + "Finish a session on the right day: each date hides an event."
                   : fam.complete ? "Complete." : fam.next.desc
-                color: Util.alpha(w.fg, 0.65)
+                color: Util.alpha(w.fg, fam.masked ? 0.25 : 0.65)
                 font.family: w.fontFamily
                 font.pixelSize: Style.font.caption
               }
@@ -292,10 +296,10 @@ Column {
               anchors.right: parent.right
               anchors.verticalCenter: parent.verticalCenter
               size: Style.space(26)
-              text: String(fam.complete ? (fam.last ? fam.last.xp : 0) : fam.next.xp)
+              text: fam.masked ? "?" : String(fam.complete ? (fam.last ? fam.last.xp : 0) : fam.next.xp)
               color: w.gold
               fontFamily: w.fontFamily
-              opacity: fam.complete ? 0.5 : 1
+              opacity: fam.complete ? 0.5 : fam.masked ? 0.3 : 1
             }
           }
 

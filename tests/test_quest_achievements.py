@@ -81,6 +81,22 @@ class QuestAchievementTest(unittest.TestCase):
         self.assertIn("marathoner", got)
         self.assertIn("longgame:1", got)
 
+    def test_unstarted_families_and_far_tiers_are_dots(self):
+        fam = lambda: {f["id"]: f for f in self.core.achievements_list(self.day(0, 5))["families"]}
+        closer = fam()["closer"]
+        self.assertTrue(closer["masked"])
+        self.assertNotIn("Closer", closer["title"] + closer["tiers"][0]["name"] + closer["tiers"][0]["desc"])
+        self.assertIsNone(closer["value"])
+        q = self.add("short")
+        self.core.quest_complete(q, self.day(0, 1))
+        self.unlocked(self.day(0, 2))
+        tiers = fam()["closer"]["tiers"]
+        self.assertFalse(fam()["closer"]["masked"])
+        self.assertEqual(tiers[0]["name"], "Closer ×1")       # unlocked
+        self.assertEqual(tiers[1]["name"], "Closer ×3")       # next: readable
+        self.assertTrue(set(tiers[2]["name"]) <= {"•", " "})   # after: dots
+        self.assertIsNone(tiers[2]["threshold"])
+
     def test_weights(self):
         fam = {f.id: f for f in A.FAMILIES}
         self.assertEqual(fam["longgame"].xp(0), 15)
