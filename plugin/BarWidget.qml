@@ -623,19 +623,29 @@ BarWidget {
       centerOnBar: true
       focusTarget: keyCatcher
       // At least as wide as the tab row, so no tab is clipped.
-      contentWidth: panel.fittedContentWidth(Math.max(Style.space(380), tabRow.implicitWidth + panel.padding * 2 + Style.space(16)))
+      contentWidth: panel.fittedContentWidth(Math.max(Style.space(380), Math.max(tabRow.implicitWidth, tabRow2.implicitWidth) + panel.padding * 2 + Style.space(16)))
       contentHeight: panel.fittedContentHeight(column.implicitHeight)
 
-      readonly property var tabs: [
+      // Two rows: the work itself on top, progress and competition below.
+      readonly property var workTabs: [
         { value: "session", label: "Session" },
         { value: "tasks", label: "Tasks", tooltip: p.session ? "" : "Available during a session" },
         { value: "quests", label: "Quests" },
         { value: "stats", label: "Stats" },
-        { value: "achievements", label: "Achievements" },
         { value: "settings", label: "Settings" }
       ]
+      readonly property var progressTabs: [
+        { value: "achievements", label: "Achievements" },
+        { value: "leagues", label: "Leagues" },
+        { value: "seasons", label: "Seasons" },
+        { value: "leaderboard", label: "Leaderboard" }
+      ]
+      readonly property var tabs: workTabs.concat(progressTabs)
       readonly property var current: root.tab === "tasks" ? tasksTab
         : root.tab === "quests" ? questsTab
+        : root.tab === "leagues" ? leaguesTab
+        : root.tab === "seasons" ? seasonsTab
+        : root.tab === "leaderboard" ? leaderboardTab
         : root.tab === "stats" ? statsTab
         : root.tab === "achievements" ? achievementsTab
         : root.tab === "settings" ? settingsTab
@@ -1060,19 +1070,40 @@ BarWidget {
               }
             }
 
-            ButtonGroup {
-              id: tabRow
+            Column {
               anchors.horizontalCenter: parent.horizontalCenter
-              options: panel.tabs
-              value: root.tab
-              foreground: root.fg
-              accent: root.accent
-              fontFamily: root.fontFamily
-              fontSize: Style.font.caption
-              focusable: false
-              onChanged: function(v) {
-                root.tab = v
-                Qt.callLater(panel.focusContent)
+              spacing: Style.space(6)
+
+              ButtonGroup {
+                id: tabRow
+                anchors.horizontalCenter: parent.horizontalCenter
+                options: panel.workTabs
+                value: root.tab
+                foreground: root.fg
+                accent: root.accent
+                fontFamily: root.fontFamily
+                fontSize: Style.font.caption
+                focusable: false
+                onChanged: function(v) {
+                  root.tab = v
+                  Qt.callLater(panel.focusContent)
+                }
+              }
+
+              ButtonGroup {
+                id: tabRow2
+                anchors.horizontalCenter: parent.horizontalCenter
+                options: panel.progressTabs
+                value: root.tab
+                foreground: root.fg
+                accent: root.accent
+                fontFamily: root.fontFamily
+                fontSize: Style.font.caption
+                focusable: false
+                onChanged: function(v) {
+                  root.tab = v
+                  Qt.callLater(panel.focusContent)
+                }
               }
             }
 
@@ -1083,6 +1114,12 @@ BarWidget {
             QuestsTab { id: questsTab; width: parent.width; w: root; p: root.client; visible: root.tab === "quests" }
             StatsTab { id: statsTab; width: parent.width; w: root; p: root.client; visible: root.tab === "stats" }
             AchievementsTab { id: achievementsTab; width: parent.width; w: root; p: root.client; visible: root.tab === "achievements" }
+            PlaceholderTab { id: leaguesTab; width: parent.width; w: root; visible: root.tab === "leagues"
+              title: "Leagues"; blurb: "Coming soon." }
+            PlaceholderTab { id: seasonsTab; width: parent.width; w: root; visible: root.tab === "seasons"
+              title: "Seasons"; blurb: "Coming soon." }
+            PlaceholderTab { id: leaderboardTab; width: parent.width; w: root; visible: root.tab === "leaderboard"
+              title: "Leaderboard"; blurb: "Coming soon." }
             SettingsTab { id: settingsTab; width: parent.width; w: root; p: root.client; visible: root.tab === "settings" }
 
             PanelSeparator { width: parent.width; foreground: root.fg }
