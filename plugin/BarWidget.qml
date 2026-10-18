@@ -638,7 +638,9 @@ BarWidget {
   // ---- share: the card is grabbed (in the panel) frame by frame, ffmpeg
   // makes an animated PNG of the frames, then a save dialog asks where it
   // goes, and it is copied there.
-  readonly property string shareTemp: Quickshell.env("XDG_RUNTIME_DIR") + "/prometheus-share.png"
+  property string shareFormat: "gif"             // gif | apng (a setting)
+  readonly property string shareExt: shareFormat === "apng" ? "png" : "gif"
+  readonly property string shareTemp: Quickshell.env("XDG_RUNTIME_DIR") + "/prometheus-share." + shareExt
   readonly property int shareFrames: 18          // one loop of every shine
   readonly property real shareScale: 1.2         // about 900 px wide on a 1.25 screen: sharp, still light
   function shareFrame(k) {
@@ -647,10 +649,12 @@ BarWidget {
 
   function encodeShare() {
     // 256 colors, one palette for the whole loop: under 1 MB, no visible loss.
-    encodeProc.command = ["ffmpeg", "-loglevel", "error", "-y", "-framerate", "9",
+    var args = ["ffmpeg", "-loglevel", "error", "-y", "-framerate", "9",
       "-i", Quickshell.env("XDG_RUNTIME_DIR") + "/prometheus-share-%02d.png",
-      "-vf", "split[a][b];[a]palettegen=max_colors=256:stats_mode=full[p];[b][p]paletteuse=dither=sierra2_4a",
-      "-plays", "0", "-f", "apng", root.shareTemp]
+      "-vf", "split[a][b];[a]palettegen=max_colors=256:stats_mode=full[p];[b][p]paletteuse=dither=sierra2_4a"]
+    encodeProc.command = root.shareFormat === "apng"
+      ? args.concat(["-plays", "0", "-f", "apng", root.shareTemp])
+      : args.concat(["-loop", "0", "-f", "gif", root.shareTemp])
     encodeProc.running = true
   }
 
@@ -666,8 +670,9 @@ BarWidget {
   function askWhereToSave() {
     var day = Qt.formatDate(new Date(), "yyyy-MM-dd")
     saveDialog.command = ["zenity", "--file-selection", "--save", "--confirm-overwrite",
-      "--title=Save your Prometheus card", "--file-filter=PNG image | *.png",
-      "--filename=" + Quickshell.env("HOME") + "/Pictures/prometheus-" + day + ".png"]
+      "--title=Save your Prometheus card",
+      root.shareFormat === "apng" ? "--file-filter=Animated PNG | *.png" : "--file-filter=GIF image | *.gif",
+      "--filename=" + Quickshell.env("HOME") + "/Pictures/prometheus-" + day + "." + root.shareExt]
     saveDialog.running = true
   }
 
@@ -677,7 +682,7 @@ BarWidget {
       onStreamFinished: {
         var path = text.trim()
         if (path === "") return               // cancelled
-        if (!/\.png$/i.test(path)) path += ".png"
+        if (path.toLowerCase().slice(-4) !== "." + root.shareExt) path += "." + root.shareExt
         root.shareTarget = path
         copyShare.command = ["cp", "-f", root.shareTemp, path]
         copyShare.running = true
@@ -927,6 +932,7 @@ BarWidget {
         p.call("share:get", [], function(ok, d) {
           if (!ok || !d || !d.success) { root.showToast("error", "Could not build the card", "", ""); return }
           shareCard.info = d
+          root.shareFormat = d.format === "apng" ? "apng" : "gif"
           root.showToast("ended", "Building your card", "a few seconds", "")
           Qt.callLater(function() { panel.grabFrame(0) })
         })
@@ -1097,10 +1103,25 @@ BarWidget {
               width: parent.width
               height: title.implicitHeight
 
-              // Share: a PNG of the profile, medals and seasons.
+              // The player's @handle, by the title.
+              Text {
+                id: handleText
+                anchors.left: title.right
+                anchors.leftMargin: p.handle ? Style.space(8) : 0
+                anchors.verticalCenter: title.verticalCenter
+                width: p.handle ? implicitWidth : 0
+                textFormat: Text.PlainText
+                text: p.handle ? "@" + p.handle : ""
+                color: Util.alpha(root.fg, 0.85)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+              }
+
+              // Share: an animated card of the profile, medals and seasons.
               Text {
                 id: shareButton
-                anchors.left: title.right
+                anchors.left: handleText.right
                 anchors.leftMargin: Style.space(10)
                 anchors.verticalCenter: title.verticalCenter
                 textFormat: Text.PlainText

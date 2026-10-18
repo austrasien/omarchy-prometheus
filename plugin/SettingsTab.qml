@@ -20,6 +20,7 @@ Column {
   property int dayStart: 5     // hour the day starts at
   property int presenceEvery: 20   // minutes between "Still there?" checks
   property string handle: ""      // the @handle on the share card
+  property string shareFormat: "gif"   // gif | apng
 
   readonly property bool editing: handleField.activeFocus || hideField.activeFocus || wordField.activeFocus || aliasFrom.activeFocus || aliasTo.activeFocus
   spacing: Style.space(10)
@@ -37,6 +38,7 @@ Column {
     p.call("settings:getDayStart", [], function(ok, d) { if (ok && d && d.success) tab.dayStart = d.dayStartHour })
     p.call("settings:getPresenceEvery", [], function(ok, d) { if (ok && d && d.success) tab.presenceEvery = d.minutes })
     p.call("settings:getHandle", [], function(ok, d) { if (ok && d && d.success) { tab.handle = d.handle; handleField.text = d.handle } })
+    p.call("settings:getShareFormat", [], function(ok, d) { if (ok && d && d.success) tab.shareFormat = d.format })
     p.call("apps:known", [30], function(ok, d) { if (ok && d && d.success) tab.known = d.apps || [] })
   }
 
@@ -63,12 +65,18 @@ Column {
     })
   }
 
+  // Saved as it is typed (a moment after the last key), no button.
   function saveHandle() {
     var h = handleField.text.trim().replace(/^@+/, "")
     if (h === handle) return
-    p.act("settings:setHandle", [h], "Handle", function(d) {
-      if (d) { tab.handle = d.handle; handleField.text = d.handle }
-    })
+    p.act("settings:setHandle", [h], "Handle", function(d) { if (d) tab.handle = d.handle })
+  }
+
+  Timer { id: handleSaveTimer; interval: 600; onTriggered: tab.saveHandle() }
+
+  function setShareFormat(f) {
+    if (f === shareFormat) return
+    p.act("settings:setShareFormat", [f], "Export", function(d) { if (d) tab.shareFormat = d.format })
   }
 
   function setPresenceEvery(minutes) {
@@ -159,24 +167,49 @@ Column {
 
     TextField {
       id: handleField
-      width: parent.width - handleSave.width - Style.space(20)
-      placeholderText: "your handle, shown when you share"
+      width: parent.width - Style.space(20)
+      placeholderText: "your handle, shown on the panel and when you share"
       foreground: w.fg
       accent: w.accent
       font.family: w.fontFamily
+      onTextEdited: handleSaveTimer.restart()
       onAccepted: tab.saveHandle()
+      onActiveFocusChanged: if (!activeFocus) tab.saveHandle()
       Keys.onEscapePressed: w.close()
     }
+  }
 
-    Button {
-      id: handleSave
-      anchors.verticalCenter: handleField.verticalCenter
-      text: "Save"
-      foreground: w.fg
-      accent: w.accent
-      bordered: true
-      onClicked: tab.saveHandle()
-    }
+  // ---- share export format
+  PanelSectionHeader {
+    text: "SHARE EXPORT"
+    foreground: w.fg
+    fontFamily: w.fontFamily
+  }
+
+  ButtonGroup {
+    options: [
+      { value: "gif", label: "GIF" },
+      { value: "apng", label: "Animated PNG" }
+    ]
+    value: tab.shareFormat
+    foreground: w.fg
+    accent: w.accent
+    fontFamily: w.fontFamily
+    fontSize: Style.font.caption
+    focusable: false
+    onChanged: function(v) { tab.setShareFormat(v) }
+  }
+
+  Text {
+    width: parent.width
+    wrapMode: Text.WordWrap
+    textFormat: Text.PlainText
+    text: tab.shareFormat === "apng"
+      ? "Animated PNG: finer colors. Open in Browser to see it move (image viewers like imv show only its first frame)."
+      : "GIF: plays everywhere, image viewers and social networks included."
+    color: Util.alpha(w.fg, 0.55)
+    font.family: w.fontFamily
+    font.pixelSize: Style.font.caption
   }
 
   // ---- day start

@@ -87,6 +87,8 @@ class Daemon:
             "settings:getHandle": lambda a: {"success": True, "handle": self.core.handle()},
             "settings:setHandle": lambda a: self.core.set_handle(a[0] if a else None),
             "share:get": lambda a: self.core.share(self.clock()),
+            "settings:getShareFormat": lambda a: {"success": True, "format": self.core.share_format()},
+            "settings:setShareFormat": lambda a: self.core.set_share_format(a[0] if a else None),
             "settings:getPresenceEvery": lambda a: {"success": True, "minutes": self.core.presence_every_minutes()},
             "settings:setPresenceEvery": lambda a: self.core.set_presence_every(a[0] if a else None),
             "achievements:list": lambda a: self.core.achievements_list(self.clock()),

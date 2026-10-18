@@ -54,7 +54,8 @@ only what was actually used.
 - **XP and levels**: 1 XP per 10 min of session (pauses excluded), plus done
   tasks, plus won challenges. Level 2 costs 100 XP, each next level 50 more.
 - **Leagues**: ten, Bronze, Silver, Gold, Sapphire, Ruby, Emerald, Amethyst,
-  Pearl, Obsidian, Diamond. Each two-week round (Sunday to the second Saturday) you play nine rivals, scientists and pioneers drawn by lot each
+  Pearl, Obsidian, Diamond, drawn as a circle, a triangle, a square, then one
+  side more each league up. Each two-week round (Sunday to the second Saturday) you play nine rivals, scientists and pioneers drawn by lot each
   season from a pool of 104 (never two with the same first name; a click on a name shows a one-line bio), drawn from a Gaussian fitted to your last two rounds (5 % stronger
   each league up; if that is under 87 % of the league's minimum, the floor is
   used instead) and seeded by week and
@@ -86,7 +87,8 @@ only what was actually used.
   (XP while active), top 10, with the current one highlighted. A quest can be
   taken off the board (an open one is deleted); its XP stays.
 - **Share**: the "share" button by the panel's title renders a service ID card
-  as an animated PNG (18 frames, a hologram and a glint on the ribbons
+  as an animated GIF by default, or an animated PNG (a setting; open it in a
+  browser) (18 frames, a hologram and a glint on the ribbons
   looping, 256 colors; under 1 MB at 900 px; the first frame is mid-shine, for
   viewers that show only it):
   @handle (set in Settings), service number, rank, XP, league, enlistment
@@ -196,7 +198,8 @@ bar (session ended, challenge won).
 | `tasks:delete` | `[id]` | Drop an open task without its XP |
 | `toast:preview` | `[rarity]` | Show a sample achievement unlock (to see the capsule) |
 | `share:get` | | What the share card shows |
-| `settings:getHandle` / `settings:setHandle` | `[handle]` | The player's @handle |
+| `settings:getHandle` / `settings:setHandle` | `[handle]` | The player's @handle, shown by the panel title |
+| `settings:getShareFormat` / `settings:setShareFormat` | `[gif\|apng]` | Share export format |
 | `leagues:get` | | League ladder, settled weeks, the current week's zone |
 | `seasons:get` | | Every season (goals, grade, recap) and the season medals |
 | `leaderboard:get` | `[board]` | Top 10 of `days`, `weeks`, `sessions` or `quests` |

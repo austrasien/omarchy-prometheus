@@ -135,43 +135,15 @@ Rectangle {
     border.width: 1
     border.color: Qt.rgba(0.9, 0.88, 0.8, 0.25)
 
-    // The league gem, with a glint passing over it.
-    Item {
-      id: gemBox
+    // The league's insignia shape, with a glint passing over it.
+    LeagueGem {
       anchors.horizontalCenter: parent.horizontalCenter
       y: 14
       width: 54
       height: 54
-      Rectangle {
-        anchors.centerIn: parent
-        width: 38
-        height: 38
-        rotation: 45
-        radius: 4
-        color: card.leagueColor
-        border.width: 2
-        border.color: Qt.lighter(card.leagueColor, 1.5)
-      }
-      Item {
-        anchors.centerIn: parent
-        width: 38
-        height: 38
-        rotation: 45
-        clip: true
-        Rectangle {
-          width: 16
-          height: 70
-          y: -16
-          rotation: 45
-          x: -20 + 80 * card.frame
-          gradient: Gradient {
-            orientation: Gradient.Horizontal
-            GradientStop { position: 0.0; color: "#00ffffff" }
-            GradientStop { position: 0.5; color: "#c8ffffff" }
-            GradientStop { position: 1.0; color: "#00ffffff" }
-          }
-        }
-      }
+      league: card.league && card.league.index !== undefined ? card.league.index : 0
+      color: card.leagueColor
+      glint: card.frame
     }
 
     // Rank chevrons: one per five levels, three at most.

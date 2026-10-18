@@ -81,54 +81,30 @@ Column {
           required property var modelData
           required property int index
           readonly property bool here: tab.cur && index === tab.cur.league
-          width: Style.space(here ? 18 : 11)
+          width: Style.space(here ? 22 : 14)
           height: width
           anchors.verticalCenter: parent.verticalCenter
 
-          Rectangle {
+          // Bronze a circle, Silver a triangle, Gold a square, one side more
+          // each league up.
+          LeagueGem {
             id: gem
-            anchors.centerIn: parent
-            width: parent.width * 0.72
-            height: width
-            rotation: 45
-            radius: 2
+            anchors.fill: parent
+            league: index
             color: modelData.color
-            opacity: tab.cur && index <= tab.cur.league ? 1 : 0.28
-            border.width: parent.here ? 2 : 0
-            border.color: "white"
+            ringed: parent.here
+            fill: tab.cur && index <= tab.cur.league ? 1 : 0.3
+            glint: -1
 
-          }
-
-          // Emerald and up: a reflection runs across the gem, one gem after
-          // the other, at full brightness even on a league not reached yet.
-          Item {
-            visible: index >= 5
-            anchors.centerIn: parent
-            width: gem.width
-            height: gem.height
-            rotation: 45
-            clip: true
-
-            Rectangle {
-              id: glint
-              width: parent.width * 0.45
-              height: parent.height * 1.6
-              y: -parent.height * 0.3
-              x: -width
-              rotation: 45
-              gradient: Gradient {
-                orientation: Gradient.Horizontal
-                GradientStop { position: 0.0; color: "#00ffffff" }
-                GradientStop { position: 0.5; color: "#f0ffffff" }
-                GradientStop { position: 1.0; color: "#00ffffff" }
-              }
-              SequentialAnimation on x {
-                running: index >= 5 && tab.visible
-                loops: Animation.Infinite
-                PauseAnimation { duration: Math.max(0, (index - 5) * 180) }
-                NumberAnimation { from: -glint.width; to: glint.parent.width + glint.width * 0.2; duration: 650; easing.type: Easing.InOutQuad }
-                PauseAnimation { duration: Math.max(0, 1800 - (index - 5) * 180) }
-              }
+            // Emerald and up glint, each to its own rhythm (not a wave): a
+            // period and a start of their own.
+            SequentialAnimation {
+              running: index >= 5 && tab.visible
+              loops: Animation.Infinite
+              PauseAnimation { duration: [0, 0, 0, 0, 0, 300, 1250, 650, 1900, 950][index] }
+              NumberAnimation { target: gem; property: "glint"; from: 0; to: 1; duration: 600; easing.type: Easing.InOutQuad }
+              PropertyAction { target: gem; property: "glint"; value: -1 }
+              PauseAnimation { duration: [0, 0, 0, 0, 0, 1700, 2900, 2300, 3700, 1300][index] }
             }
           }
         }

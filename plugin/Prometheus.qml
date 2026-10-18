@@ -34,6 +34,7 @@ Item {
   property var challenge: null    // { id, state: offered | active, minutes, xp, remainingSeconds }
   property var presence: null     // { askedAt, flashing, pauseAt } while "still there?" is asked
   property var quest: null        // the active quest: { id, title, kind, daysWorked, xp, streak, doneToday }
+  property string handle: ""      // the player's @handle (Settings)
   property var seasonMedals: []   // permanent: [{ season, number, bars, color, dot, edge, name, desc }]
   property var medals: []         // the placard: [{ id, name, desc, period, color, dots, dot, edges, count, current }]
   property var history: []        // seven { date, minutes }, oldest first
@@ -164,6 +165,7 @@ Item {
     assign("challenge", state.challenge || null)
     assign("presence", state.presence || null)
     assign("quest", state.quest || null)
+    assign("handle", state.handle || "")
     assign("seasonMedals", state.seasonMedals || [])
     assign("medals", state.medals || [])
     assign("history", state.history || [])

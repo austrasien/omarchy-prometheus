@@ -481,6 +481,12 @@ class CoreTest(unittest.TestCase):
         self.assertEqual(card["league"]["name"], "Bronze")
         self.assertTrue(card["firstDay"])
         self.assertTrue(card["seasons"][0]["running"])
+        self.assertEqual(card["format"], "gif")
+        self.core.set_share_format("apng")
+        self.assertEqual(self.core.share(self.at(61))["format"], "apng")
+        with self.assertRaises(Refused):
+            self.core.set_share_format("bmp")
+        self.assertEqual(self.core.state(self.at(61))["handle"], "thibault_42")
 
 
     def test_abandoning_a_challenge_costs_three_xp(self):

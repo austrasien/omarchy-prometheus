@@ -374,6 +374,7 @@ class Core:
             "medals": M.placard(self.store, at),
             "quest": self.quests.active(at),
             "seasonMedals": C.season_medals(self.store),
+            "handle": self.handle(),
             "session": self._session_state(),
             "today": {"sessions": len(closed), "seconds": sum(session_seconds(r) for r in closed)},
             "window": {"app": self.alias(w.app), "title": w.title} if w else None,
@@ -626,6 +627,18 @@ class Core:
         self.store.set_setting("handle", h)
         return {"success": True, "handle": h}
 
+    SHARE_FORMATS = ("gif", "apng")
+
+    def share_format(self) -> str:
+        f = self.store.get_setting("shareFormat", "gif")
+        return f if f in self.SHARE_FORMATS else "gif"
+
+    def set_share_format(self, fmt) -> dict:
+        if fmt not in self.SHARE_FORMATS:
+            raise Refused("Invalid export format (gif or apng)")
+        self.store.set_setting("shareFormat", fmt)
+        return {"success": True, "format": fmt}
+
     def share(self, at: int) -> dict:
         """Everything the share card shows."""
         ledger = C.Ledger(self.store, at)
@@ -634,12 +647,13 @@ class Core:
         first = ledger.first_day
         return {
             "success": True, "handle": self.handle(), "profile": self.profile(at),
-            "league": {k: league[k] for k in ("name", "color", "shining")},
+            "league": dict({k: league[k] for k in ("name", "color", "shining")}, index=league["league"]),
             "seasons": [{k: s[k] for k in ("label", "grade", "xp", "goal", "hardGoal", "running")}
                         for s in reversed(seasons)],
             "firstDay": first.isoformat() if first else None,
             "medals": M.placard(self.store, at), "seasonMedals": C.season_medals(self.store),
             "legendary": self._legendary_unlocked(),
+            "format": self.share_format(),
             "serviceNumber": self._service_number(first),
         }
 
