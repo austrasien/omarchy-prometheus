@@ -356,6 +356,35 @@ Rectangle {
       }
     }
 
+    // League stamps: one per shining league, inked for each round finished
+    // in it.
+    Text {
+      visible: !!card.info && !!card.info.stamps
+      topPadding: 4
+      textFormat: Text.PlainText
+      text: "LEAGUE STAMPS"
+      color: card.dim
+      font.family: card.mono
+      font.pixelSize: 8
+      font.bold: true
+      font.letterSpacing: 1.5
+    }
+    Row {
+      visible: !!card.info && !!card.info.stamps
+      spacing: 6
+      Repeater {
+        model: card.info && card.info.stamps ? card.info.stamps : []
+        Stamp {
+          required property var modelData
+          league: modelData.index
+          name: modelData.name
+          ink: modelData.color
+          count: modelData.count
+          fontFamily: card.mono
+        }
+      }
+    }
+
     // Legendary achievements, gold and shining.
     Flow {
       width: parent.width

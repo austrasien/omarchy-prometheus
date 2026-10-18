@@ -54,8 +54,8 @@ only what was actually used.
 - **XP and levels**: 1 XP per 10 min of session (pauses excluded), plus done
   tasks, plus won challenges. Level 2 costs 100 XP, each next level 50 more.
 - **Leagues**: ten, Bronze, Silver, Gold, Sapphire, Ruby, Emerald, Amethyst,
-  Pearl, Obsidian, Diamond, drawn as a circle, a triangle, a square, then one
-  side more each league up. Each two-week round (Sunday to the second Saturday) you play nine rivals, scientists and pioneers drawn by lot each
+  Pearl, Obsidian, Diamond, drawn as a circle, a triangle, a square, a
+  pentagon, a hexagon, then stars of four to eight points. Each two-week round (Sunday to the second Saturday) you play nine rivals, scientists and pioneers drawn by lot each
   season from a pool of 104 (never two with the same first name; a click on a name shows a one-line bio), drawn from a Gaussian fitted to your last two rounds (5 % stronger
   each league up; if that is under 87 % of the league's minimum, the floor is
   used instead) and seeded by week and
@@ -93,7 +93,8 @@ only what was actually used.
   viewers that show only it):
   @handle (set in Settings), service number, rank, XP, league, enlistment
   date, service record (every season's grade), decorations (every medal) and
-  legendary achievements, with a holographic seal. It asks where to save it
+  legendary achievements, a stamp per shining league (inked once per round
+  finished in it), with a holographic seal. It asks where to save it
   (zenity) and needs ffmpeg.
 - **Achievements** (a family not started yet shows only dots; tiers after the next one too; each tier has a rarity by the XP it is worth: normal under 30, common green, rare blue from 60, epic purple from 140, legendary gold and shining from 360; secrets are epic): 111 families with 724 tiers (17 on quests, 13 on leagues, seasons and leaderboards), plus a calendar of 126
   dated achievements (one per date: Roman festivals, geek days, scientists

@@ -642,7 +642,12 @@ class Core:
     def share(self, at: int) -> dict:
         """Everything the share card shows."""
         ledger = C.Ledger(self.store, at)
-        league = C.leagues(ledger)["current"]
+        leagues = C.leagues(ledger)
+        league = leagues["current"]
+        # A stamp for each shining league, inked once per round finished in it.
+        stamps = [{"index": i, "name": C.LEAGUES[i], "color": C.LEAGUE_COLORS[i],
+                   "count": sum(1 for w in leagues["history"] if w["before"] == i)}
+                  for i in range(C.SHINING_FROM, len(C.LEAGUES))]
         seasons = C.seasons(ledger)
         first = ledger.first_day
         return {
@@ -654,6 +659,7 @@ class Core:
             "medals": M.placard(self.store, at), "seasonMedals": C.season_medals(self.store),
             "legendary": self._legendary_unlocked(),
             "format": self.share_format(),
+            "stamps": stamps,
             "serviceNumber": self._service_number(first),
         }
 

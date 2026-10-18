@@ -1,8 +1,9 @@
 import QtQuick
 
 // A league's insignia: Bronze a circle, Silver a triangle, Gold a square,
-// then one side more each league up (Sapphire a pentagon, Ruby a hexagon,
-// ... Diamond eleven sides). `glint` (0 to 1) places a band of light across
+// Sapphire a pentagon, Ruby a hexagon; then stars, which stay readable when
+// small: Emerald four points, Amethyst five, Pearl six, Obsidian seven,
+// Diamond eight. `glint` (0 to 1) places a band of light across
 // it, cut to its shape; -1 for none. Drawn on a canvas so the light follows
 // the outline exactly.
 Canvas {
@@ -14,7 +15,8 @@ Canvas {
   property real fill: 1              // opacity of the body (dim for leagues not reached)
   property real glint: -1
 
-  readonly property int sides: league === 0 ? 0 : league + 2
+  readonly property int sides: league === 0 ? 0 : league <= 4 ? league + 2 : 0
+  readonly property int points: league >= 5 ? league - 1 : 0
 
   onLeagueChanged: requestPaint()
   onColorChanged: requestPaint()
@@ -25,7 +27,16 @@ Canvas {
 
   function outline(ctx, r, cx, cy) {
     ctx.beginPath()
-    if (sides === 0) {
+    if (points > 0) {
+      var inner = r * (points === 4 ? 0.38 : 0.46)
+      for (var k = 0; k < points * 2; k++) {
+        var b = -Math.PI / 2 + k * Math.PI / points
+        var rr = k % 2 === 0 ? r : inner
+        var px = cx + rr * Math.cos(b), py = cy + rr * Math.sin(b)
+        if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py)
+      }
+      ctx.closePath()
+    } else if (sides === 0) {
       ctx.arc(cx, cy, r, 0, 2 * Math.PI)
     } else {
       for (var i = 0; i < sides; i++) {

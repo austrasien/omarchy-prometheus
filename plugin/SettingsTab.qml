@@ -21,6 +21,7 @@ Column {
   property int presenceEvery: 20   // minutes between "Still there?" checks
   property string handle: ""      // the @handle on the share card
   property string shareFormat: "gif"   // gif | apng
+  property string section: "handle"   // the setting shown (one button each)
 
   readonly property bool editing: handleField.activeFocus || hideField.activeFocus || wordField.activeFocus || aliasFrom.activeFocus || aliasTo.activeFocus
   spacing: Style.space(10)
@@ -141,568 +142,640 @@ Column {
 
   function focusEntry() { return false }
 
-  onVisibleChanged: if (visible) refresh()
+  onVisibleChanged: if (visible) { section = "handle"; refresh() }
   Component.onCompleted: if (visible) refresh()
 
-  // ---- the player's @handle, for the share card
-  PanelSectionHeader {
-    text: "HANDLE"
-    foreground: w.fg
-    fontFamily: w.fontFamily
-  }
-
-  Row {
-    width: parent.width
+  // ---- one button per setting; only the chosen one is shown
+  Column {
+    anchors.horizontalCenter: parent.horizontalCenter
     spacing: Style.space(6)
 
-    Text {
-      anchors.verticalCenter: handleField.verticalCenter
-      textFormat: Text.PlainText
-      text: "@"
-      color: Util.alpha(w.fg, 0.7)
-      font.family: w.fontFamily
-      font.pixelSize: Style.font.body
-      font.bold: true
-    }
-
-    TextField {
-      id: handleField
-      width: parent.width - Style.space(20)
-      placeholderText: "your handle, shown on the panel and when you share"
+    ButtonGroup {
+      anchors.horizontalCenter: parent.horizontalCenter
+      options: [
+        { value: "handle", label: "Handle" },
+        { value: "export", label: "Export" },
+        { value: "daystart", label: "Day start" },
+        { value: "presence", label: "Presence" }
+      ]
+      value: tab.section
       foreground: w.fg
       accent: w.accent
-      font.family: w.fontFamily
-      onTextEdited: handleSaveTimer.restart()
-      onAccepted: tab.saveHandle()
-      onActiveFocusChanged: if (!activeFocus) tab.saveHandle()
-      Keys.onEscapePressed: w.close()
+      fontFamily: w.fontFamily
+      fontSize: Style.font.caption
+      focusable: false
+      onChanged: function(v) { tab.section = v }
+    }
+
+    ButtonGroup {
+      anchors.horizontalCenter: parent.horizontalCenter
+      options: [
+        { value: "goal", label: "Goal" },
+        { value: "apps", label: "Hidden apps" },
+        { value: "words", label: "Words" },
+        { value: "aliases", label: "Aliases" }
+      ]
+      value: tab.section
+      foreground: w.fg
+      accent: w.accent
+      fontFamily: w.fontFamily
+      fontSize: Style.font.caption
+      focusable: false
+      onChanged: function(v) { tab.section = v }
+    }
+  }
+
+  PanelSeparator { width: parent.width; foreground: w.fg }
+
+  // ---- the player's @handle, for the share card
+  Column {
+    width: parent.width
+    spacing: Style.space(10)
+    visible: tab.section === "handle"
+    PanelSectionHeader {
+      text: "HANDLE"
+      foreground: w.fg
+      fontFamily: w.fontFamily
+    }
+
+    Row {
+      width: parent.width
+      spacing: Style.space(6)
+
+      Text {
+        anchors.verticalCenter: handleField.verticalCenter
+        textFormat: Text.PlainText
+        text: "@"
+        color: Util.alpha(w.fg, 0.7)
+        font.family: w.fontFamily
+        font.pixelSize: Style.font.body
+        font.bold: true
+      }
+
+      TextField {
+        id: handleField
+        width: parent.width - Style.space(20)
+        placeholderText: "your handle, shown on the panel and when you share"
+        foreground: w.fg
+        accent: w.accent
+        font.family: w.fontFamily
+        onTextEdited: handleSaveTimer.restart()
+        onAccepted: tab.saveHandle()
+        onActiveFocusChanged: if (!activeFocus) tab.saveHandle()
+        Keys.onEscapePressed: w.close()
+      }
     }
   }
 
   // ---- share export format
-  PanelSectionHeader {
-    text: "SHARE EXPORT"
-    foreground: w.fg
-    fontFamily: w.fontFamily
-  }
-
-  ButtonGroup {
-    options: [
-      { value: "gif", label: "GIF" },
-      { value: "apng", label: "Animated PNG" }
-    ]
-    value: tab.shareFormat
-    foreground: w.fg
-    accent: w.accent
-    fontFamily: w.fontFamily
-    fontSize: Style.font.caption
-    focusable: false
-    onChanged: function(v) { tab.setShareFormat(v) }
-  }
-
-  Text {
+  Column {
     width: parent.width
-    wrapMode: Text.WordWrap
-    textFormat: Text.PlainText
-    text: tab.shareFormat === "apng"
-      ? "Animated PNG: finer colors. Open in Browser to see it move (image viewers like imv show only its first frame)."
-      : "GIF: plays everywhere, image viewers and social networks included."
-    color: Util.alpha(w.fg, 0.55)
-    font.family: w.fontFamily
-    font.pixelSize: Style.font.caption
+    spacing: Style.space(10)
+    visible: tab.section === "export"
+    PanelSectionHeader {
+      text: "SHARE EXPORT"
+      foreground: w.fg
+      fontFamily: w.fontFamily
+    }
+
+    ButtonGroup {
+      options: [
+        { value: "gif", label: "GIF" },
+        { value: "apng", label: "Animated PNG" }
+      ]
+      value: tab.shareFormat
+      foreground: w.fg
+      accent: w.accent
+      fontFamily: w.fontFamily
+      fontSize: Style.font.caption
+      focusable: false
+      onChanged: function(v) { tab.setShareFormat(v) }
+    }
+
+    Text {
+      width: parent.width
+      wrapMode: Text.WordWrap
+      textFormat: Text.PlainText
+      text: tab.shareFormat === "apng"
+        ? "Animated PNG: finer colors. Open in Browser to see it move (image viewers like imv show only its first frame)."
+        : "GIF: plays everywhere, image viewers and social networks included."
+      color: Util.alpha(w.fg, 0.55)
+      font.family: w.fontFamily
+      font.pixelSize: Style.font.caption
+    }
   }
 
   // ---- day start
-  PanelSectionHeader {
-    text: "DAY START"
-    foreground: w.fg
-    fontFamily: w.fontFamily
-  }
-
-  Text {
+  Column {
     width: parent.width
-    wrapMode: Text.WordWrap
-    textFormat: Text.PlainText
-    text: "Before this hour, time counts for the day before: a night working until 1:00 stays with its evening."
-    color: Util.alpha(w.fg, 0.55)
-    font.family: w.fontFamily
-    font.pixelSize: Style.font.caption
-  }
-
-  Row {
-    spacing: Style.space(6)
-
-    Button {
-      text: "−"
+    spacing: Style.space(10)
+    visible: tab.section === "daystart"
+    PanelSectionHeader {
+      text: "DAY START"
       foreground: w.fg
-      accent: w.accent
-      bordered: true
-      onClicked: tab.setDayStart(tab.dayStart - 1)
+      fontFamily: w.fontFamily
     }
 
     Text {
-      anchors.verticalCenter: parent.verticalCenter
-      width: Style.space(70)
-      horizontalAlignment: Text.AlignHCenter
+      width: parent.width
+      wrapMode: Text.WordWrap
       textFormat: Text.PlainText
-      text: tab.dayStart + " h"
-      color: w.fg
+      text: "Before this hour, time counts for the day before: a night working until 1:00 stays with its evening."
+      color: Util.alpha(w.fg, 0.55)
       font.family: w.fontFamily
-      font.pixelSize: Style.font.body
-      font.bold: true
+      font.pixelSize: Style.font.caption
     }
 
-    Button {
-      text: "+"
-      foreground: w.fg
-      accent: w.accent
-      bordered: true
-      onClicked: tab.setDayStart(tab.dayStart + 1)
+    Row {
+      spacing: Style.space(6)
+
+      Button {
+        text: "−"
+        foreground: w.fg
+        accent: w.accent
+        bordered: true
+        onClicked: tab.setDayStart(tab.dayStart - 1)
+      }
+
+      Text {
+        anchors.verticalCenter: parent.verticalCenter
+        width: Style.space(70)
+        horizontalAlignment: Text.AlignHCenter
+        textFormat: Text.PlainText
+        text: tab.dayStart + " h"
+        color: w.fg
+        font.family: w.fontFamily
+        font.pixelSize: Style.font.body
+        font.bold: true
+      }
+
+      Button {
+        text: "+"
+        foreground: w.fg
+        accent: w.accent
+        bordered: true
+        onClicked: tab.setDayStart(tab.dayStart + 1)
+      }
     }
   }
-
-  PanelSeparator { width: parent.width; foreground: w.fg }
 
   // ---- presence check
-  PanelSectionHeader {
-    text: "PRESENCE CHECK"
-    foreground: w.fg
-    fontFamily: w.fontFamily
-  }
-
-  Text {
+  Column {
     width: parent.width
-    wrapMode: Text.WordWrap
-    textFormat: Text.PlainText
-    text: "During a session, \"Still there?\" shows up at this interval. Unanswered for 4 min, the session pauses."
-    color: Util.alpha(w.fg, 0.55)
-    font.family: w.fontFamily
-    font.pixelSize: Style.font.caption
-  }
-
-  Row {
-    spacing: Style.space(6)
-
-    Button {
-      text: "−"
+    spacing: Style.space(10)
+    visible: tab.section === "presence"
+    PanelSectionHeader {
+      text: "PRESENCE CHECK"
       foreground: w.fg
-      accent: w.accent
-      bordered: true
-      onClicked: tab.setPresenceEvery(tab.presenceEvery - 5)
+      fontFamily: w.fontFamily
     }
 
     Text {
-      anchors.verticalCenter: parent.verticalCenter
-      width: Style.space(70)
-      horizontalAlignment: Text.AlignHCenter
+      width: parent.width
+      wrapMode: Text.WordWrap
       textFormat: Text.PlainText
-      text: tab.presenceEvery + " min"
-      color: w.fg
+      text: "During a session, \"Still there?\" shows up at this interval. Unanswered for 4 min, the session pauses."
+      color: Util.alpha(w.fg, 0.55)
       font.family: w.fontFamily
-      font.pixelSize: Style.font.body
-      font.bold: true
+      font.pixelSize: Style.font.caption
     }
 
-    Button {
-      text: "+"
-      foreground: w.fg
-      accent: w.accent
-      bordered: true
-      onClicked: tab.setPresenceEvery(tab.presenceEvery + 5)
+    Row {
+      spacing: Style.space(6)
+
+      Button {
+        text: "−"
+        foreground: w.fg
+        accent: w.accent
+        bordered: true
+        onClicked: tab.setPresenceEvery(tab.presenceEvery - 5)
+      }
+
+      Text {
+        anchors.verticalCenter: parent.verticalCenter
+        width: Style.space(70)
+        horizontalAlignment: Text.AlignHCenter
+        textFormat: Text.PlainText
+        text: tab.presenceEvery + " min"
+        color: w.fg
+        font.family: w.fontFamily
+        font.pixelSize: Style.font.body
+        font.bold: true
+      }
+
+      Button {
+        text: "+"
+        foreground: w.fg
+        accent: w.accent
+        bordered: true
+        onClicked: tab.setPresenceEvery(tab.presenceEvery + 5)
+      }
     }
   }
-
-  PanelSeparator { width: parent.width; foreground: w.fg }
 
   // ---- hours goal
-  PanelSectionHeader {
-    text: "HOURS GOAL"
-    foreground: w.fg
-    fontFamily: w.fontFamily
-  }
+  Column {
+    width: parent.width
+    spacing: Style.space(10)
+    visible: tab.section === "goal"
+    PanelSectionHeader {
+      text: "HOURS GOAL"
+      foreground: w.fg
+      fontFamily: w.fontFamily
+    }
 
-  ButtonGroup {
-    options: [
-      { value: "off", label: "None" },
-      { value: "day", label: "Day" },
-      { value: "week", label: "Week" },
-      { value: "month", label: "Month" }
-    ]
-    value: tab.goalPeriod
-    foreground: w.fg
-    accent: w.accent
-    fontFamily: w.fontFamily
-    fontSize: Style.font.caption
-    focusable: false
-    onChanged: function(v) { tab.setGoal(v, tab.goalDefaults[v] || 0) }
-  }
-
-  Row {
-    visible: tab.goalPeriod !== "off"
-    spacing: Style.space(6)
-
-    Button {
-      text: "−"
+    ButtonGroup {
+      options: [
+        { value: "off", label: "None" },
+        { value: "day", label: "Day" },
+        { value: "week", label: "Week" },
+        { value: "month", label: "Month" }
+      ]
+      value: tab.goalPeriod
       foreground: w.fg
       accent: w.accent
-      bordered: true
-      onClicked: tab.setGoal(tab.goalPeriod, tab.goalHours - (tab.goalPeriod === "day" ? 0.5 : 1))
+      fontFamily: w.fontFamily
+      fontSize: Style.font.caption
+      focusable: false
+      onChanged: function(v) { tab.setGoal(v, tab.goalDefaults[v] || 0) }
     }
 
-    Text {
-      anchors.verticalCenter: parent.verticalCenter
-      width: Style.space(70)
-      horizontalAlignment: Text.AlignHCenter
-      textFormat: Text.PlainText
-      text: tab.goalHours + " h"
-      color: w.fg
-      font.family: w.fontFamily
-      font.pixelSize: Style.font.body
-      font.bold: true
-    }
+    Row {
+      visible: tab.goalPeriod !== "off"
+      spacing: Style.space(6)
 
-    Button {
-      text: "+"
-      foreground: w.fg
-      accent: w.accent
-      bordered: true
-      onClicked: tab.setGoal(tab.goalPeriod, tab.goalHours + (tab.goalPeriod === "day" ? 0.5 : 1))
+      Button {
+        text: "−"
+        foreground: w.fg
+        accent: w.accent
+        bordered: true
+        onClicked: tab.setGoal(tab.goalPeriod, tab.goalHours - (tab.goalPeriod === "day" ? 0.5 : 1))
+      }
+
+      Text {
+        anchors.verticalCenter: parent.verticalCenter
+        width: Style.space(70)
+        horizontalAlignment: Text.AlignHCenter
+        textFormat: Text.PlainText
+        text: tab.goalHours + " h"
+        color: w.fg
+        font.family: w.fontFamily
+        font.pixelSize: Style.font.body
+        font.bold: true
+      }
+
+      Button {
+        text: "+"
+        foreground: w.fg
+        accent: w.accent
+        bordered: true
+        onClicked: tab.setGoal(tab.goalPeriod, tab.goalHours + (tab.goalPeriod === "day" ? 0.5 : 1))
+      }
     }
   }
-
-  PanelSeparator { width: parent.width; foreground: w.fg }
 
   // ---- hidden apps
-  PanelSectionHeader {
-    text: "APPS NEVER RECORDED"
-    foreground: w.fg
-    fontFamily: w.fontFamily
-  }
-
-  Text {
+  Column {
     width: parent.width
-    wrapMode: Text.WordWrap
-    textFormat: Text.PlainText
-    text: "Time spent in these apps is neither counted nor written to disk."
-    color: Util.alpha(w.fg, 0.55)
-    font.family: w.fontFamily
-    font.pixelSize: Style.font.caption
-  }
-
-  Row {
-    width: parent.width
-    spacing: Style.space(6)
-
-    TextField {
-      id: hideField
-      width: parent.width - hideButton.width - currentButton.width - 2 * parent.spacing
-      placeholderText: "App name"
+    spacing: Style.space(10)
+    visible: tab.section === "apps"
+    PanelSectionHeader {
+      text: "APPS NEVER RECORDED"
       foreground: w.fg
-      accent: w.accent
-      font.family: w.fontFamily
-      onAccepted: tab.hideTyped()
-      Keys.onEscapePressed: w.close()
-    }
-
-    Button {
-      id: hideButton
-      anchors.verticalCenter: hideField.verticalCenter
-      text: "Hide"
-      foreground: w.fg
-      accent: w.accent
-      bordered: true
-      onClicked: tab.hideTyped()
-    }
-
-    Button {
-      id: currentButton
-      anchors.verticalCenter: hideField.verticalCenter
-      text: "Current"
-      tooltipText: p.window ? "Hide " + p.window.app : ""
-      foreground: w.fg
-      accent: w.accent
-      bordered: true
-      onClicked: if (p.window) tab.setHidden(tab.hidden.concat([p.window.app]))
-    }
-  }
-
-  Repeater {
-    model: tab.hidden
-
-    Item {
-      required property var modelData
-      width: tab.width
-      height: hiddenName.implicitHeight + Style.space(6)
-
-      Text {
-        id: hiddenName
-        anchors.left: parent.left
-        anchors.leftMargin: Style.space(4)
-        anchors.verticalCenter: parent.verticalCenter
-        textFormat: Text.PlainText
-        text: modelData
-        color: w.fg
-        font.family: w.fontFamily
-        font.pixelSize: Style.font.body
-      }
-
-      Text {
-        anchors.right: parent.right
-        anchors.rightMargin: Style.space(4)
-        anchors.verticalCenter: parent.verticalCenter
-        textFormat: Text.PlainText
-        text: tab.closeGlyph
-        color: removeArea.containsMouse ? w.accent : Util.alpha(w.fg, 0.55)
-        font.family: w.fontFamily
-        font.pixelSize: Style.font.body
-
-        MouseArea {
-          id: removeArea
-          anchors.fill: parent
-          anchors.margins: -Style.space(4)
-          hoverEnabled: true
-          cursorShape: Qt.PointingHandCursor
-          onClicked: tab.setHidden(tab.hidden.filter(function(a) { return a !== modelData }))
-        }
-      }
-    }
-  }
-
-  PanelSeparator { width: parent.width; foreground: w.fg }
-
-  // ---- forbidden title words
-  PanelSectionHeader {
-    text: "FORBIDDEN WORDS IN TITLES"
-    foreground: w.fg
-    fontFamily: w.fontFamily
-  }
-
-  Text {
-    width: parent.width
-    wrapMode: Text.WordWrap
-    textFormat: Text.PlainText
-    text: "A window whose title contains one of these words is neither counted nor written to disk. Case is ignored."
-    color: Util.alpha(w.fg, 0.55)
-    font.family: w.fontFamily
-    font.pixelSize: Style.font.caption
-  }
-
-  Row {
-    width: parent.width
-    spacing: Style.space(6)
-
-    TextField {
-      id: wordField
-      width: parent.width - wordButton.width - parent.spacing
-      placeholderText: "Word or phrase"
-      foreground: w.fg
-      accent: w.accent
-      font.family: w.fontFamily
-      onAccepted: tab.addWord()
-      Keys.onEscapePressed: w.close()
-    }
-
-    Button {
-      id: wordButton
-      anchors.verticalCenter: wordField.verticalCenter
-      text: "Add"
-      foreground: w.fg
-      accent: w.accent
-      bordered: true
-      onClicked: tab.addWord()
-    }
-  }
-
-  Repeater {
-    model: tab.words
-
-    Item {
-      required property var modelData
-      width: tab.width
-      height: wordText.implicitHeight + Style.space(6)
-
-      Text {
-        id: wordText
-        anchors.left: parent.left
-        anchors.leftMargin: Style.space(4)
-        anchors.verticalCenter: parent.verticalCenter
-        textFormat: Text.PlainText
-        text: modelData
-        color: w.fg
-        font.family: w.fontFamily
-        font.pixelSize: Style.font.body
-      }
-
-      Text {
-        anchors.right: parent.right
-        anchors.rightMargin: Style.space(4)
-        anchors.verticalCenter: parent.verticalCenter
-        textFormat: Text.PlainText
-        text: tab.closeGlyph
-        color: wordRemoveArea.containsMouse ? w.accent : Util.alpha(w.fg, 0.55)
-        font.family: w.fontFamily
-        font.pixelSize: Style.font.body
-
-        MouseArea {
-          id: wordRemoveArea
-          anchors.fill: parent
-          anchors.margins: -Style.space(4)
-          hoverEnabled: true
-          cursorShape: Qt.PointingHandCursor
-          onClicked: tab.setWords(tab.words.filter(function(x) { return x !== modelData }))
-        }
-      }
-    }
-  }
-
-  PanelSeparator { width: parent.width; foreground: w.fg }
-
-  // ---- aliases
-  PanelSectionHeader {
-    text: "RENAME OR MERGE"
-    foreground: w.fg
-    fontFamily: w.fontFamily
-  }
-
-  Text {
-    width: parent.width
-    wrapMode: Text.WordWrap
-    textFormat: Text.PlainText
-    text: "Give several apps the same name to add them up. Applies to the past too."
-    color: Util.alpha(w.fg, 0.55)
-    font.family: w.fontFamily
-    font.pixelSize: Style.font.caption
-  }
-
-  Row {
-    width: parent.width
-    spacing: Style.space(6)
-
-    TextField {
-      id: aliasFrom
-      width: (parent.width - aliasButton.width - arrow.width - 3 * parent.spacing) / 2
-      placeholderText: "App"
-      foreground: w.fg
-      accent: w.accent
-      font.family: w.fontFamily
-      onAccepted: aliasTo.forceActiveFocus()
-      Keys.onEscapePressed: w.close()
+      fontFamily: w.fontFamily
     }
 
     Text {
-      id: arrow
-      anchors.verticalCenter: aliasFrom.verticalCenter
+      width: parent.width
+      wrapMode: Text.WordWrap
       textFormat: Text.PlainText
-      text: "→"
-      color: Util.alpha(w.fg, 0.5)
+      text: "Time spent in these apps is neither counted nor written to disk."
+      color: Util.alpha(w.fg, 0.55)
       font.family: w.fontFamily
-      font.pixelSize: Style.font.body
+      font.pixelSize: Style.font.caption
     }
 
-    TextField {
-      id: aliasTo
-      width: aliasFrom.width
-      placeholderText: "New name"
-      foreground: w.fg
-      accent: w.accent
-      font.family: w.fontFamily
-      onAccepted: tab.addAlias()
-      Keys.onEscapePressed: w.close()
-    }
+    Row {
+      width: parent.width
+      spacing: Style.space(6)
 
-    Button {
-      id: aliasButton
-      anchors.verticalCenter: aliasFrom.verticalCenter
-      text: "OK"
-      foreground: w.fg
-      accent: w.accent
-      bordered: true
-      onClicked: tab.addAlias()
-    }
-  }
+      TextField {
+        id: hideField
+        width: parent.width - hideButton.width - currentButton.width - 2 * parent.spacing
+        placeholderText: "App name"
+        foreground: w.fg
+        accent: w.accent
+        font.family: w.fontFamily
+        onAccepted: tab.hideTyped()
+        Keys.onEscapePressed: w.close()
+      }
 
-  // Recently seen apps without an alias: a click fills the first field.
-  Flow {
-    width: parent.width
-    spacing: Style.space(6)
-    visible: knownRepeater.count > 0
+      Button {
+        id: hideButton
+        anchors.verticalCenter: hideField.verticalCenter
+        text: "Hide"
+        foreground: w.fg
+        accent: w.accent
+        bordered: true
+        onClicked: tab.hideTyped()
+      }
+
+      Button {
+        id: currentButton
+        anchors.verticalCenter: hideField.verticalCenter
+        text: "Current"
+        tooltipText: p.window ? "Hide " + p.window.app : ""
+        foreground: w.fg
+        accent: w.accent
+        bordered: true
+        onClicked: if (p.window) tab.setHidden(tab.hidden.concat([p.window.app]))
+      }
+    }
 
     Repeater {
-      id: knownRepeater
-      model: tab.known.filter(function(a) { return a.alias === a.app }).slice(0, 10)
+      model: tab.hidden
 
-      Rectangle {
+      Item {
         required property var modelData
-        width: chipText.implicitWidth + Style.space(12)
-        height: chipText.implicitHeight + Style.space(6)
-        radius: height / 2
-        color: chipArea.containsMouse ? Util.alpha(w.accent, 0.2) : Util.alpha(w.fg, 0.08)
+        width: tab.width
+        height: hiddenName.implicitHeight + Style.space(6)
 
         Text {
-          id: chipText
-          anchors.centerIn: parent
+          id: hiddenName
+          anchors.left: parent.left
+          anchors.leftMargin: Style.space(4)
+          anchors.verticalCenter: parent.verticalCenter
           textFormat: Text.PlainText
-          text: modelData.app
+          text: modelData
           color: w.fg
           font.family: w.fontFamily
-          font.pixelSize: Style.font.caption
+          font.pixelSize: Style.font.body
         }
 
-        MouseArea {
-          id: chipArea
-          anchors.fill: parent
-          hoverEnabled: true
-          cursorShape: Qt.PointingHandCursor
-          onClicked: {
-            aliasFrom.text = modelData.app
-            aliasTo.forceActiveFocus()
+        Text {
+          anchors.right: parent.right
+          anchors.rightMargin: Style.space(4)
+          anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
+          text: tab.closeGlyph
+          color: removeArea.containsMouse ? w.accent : Util.alpha(w.fg, 0.55)
+          font.family: w.fontFamily
+          font.pixelSize: Style.font.body
+
+          MouseArea {
+            id: removeArea
+            anchors.fill: parent
+            anchors.margins: -Style.space(4)
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: tab.setHidden(tab.hidden.filter(function(a) { return a !== modelData }))
           }
         }
       }
     }
   }
 
-  Repeater {
-    model: tab.aliasList
+  // ---- forbidden title words
+  Column {
+    width: parent.width
+    spacing: Style.space(10)
+    visible: tab.section === "words"
+    PanelSectionHeader {
+      text: "FORBIDDEN WORDS IN TITLES"
+      foreground: w.fg
+      fontFamily: w.fontFamily
+    }
 
-    Item {
-      required property var modelData
-      width: tab.width
-      height: aliasText.implicitHeight + Style.space(6)
+    Text {
+      width: parent.width
+      wrapMode: Text.WordWrap
+      textFormat: Text.PlainText
+      text: "A window whose title contains one of these words is neither counted nor written to disk. Case is ignored."
+      color: Util.alpha(w.fg, 0.55)
+      font.family: w.fontFamily
+      font.pixelSize: Style.font.caption
+    }
 
-      Text {
-        id: aliasText
-        anchors.left: parent.left
-        anchors.leftMargin: Style.space(4)
-        anchors.right: removeAliasGlyph.left
-        anchors.rightMargin: Style.space(6)
-        anchors.verticalCenter: parent.verticalCenter
-        textFormat: Text.PlainText
-        text: modelData.from + "  →  " + modelData.to
-        color: w.fg
+    Row {
+      width: parent.width
+      spacing: Style.space(6)
+
+      TextField {
+        id: wordField
+        width: parent.width - wordButton.width - parent.spacing
+        placeholderText: "Word or phrase"
+        foreground: w.fg
+        accent: w.accent
         font.family: w.fontFamily
-        font.pixelSize: Style.font.body
-        elide: Text.ElideRight
+        onAccepted: tab.addWord()
+        Keys.onEscapePressed: w.close()
+      }
+
+      Button {
+        id: wordButton
+        anchors.verticalCenter: wordField.verticalCenter
+        text: "Add"
+        foreground: w.fg
+        accent: w.accent
+        bordered: true
+        onClicked: tab.addWord()
+      }
+    }
+
+    Repeater {
+      model: tab.words
+
+      Item {
+        required property var modelData
+        width: tab.width
+        height: wordText.implicitHeight + Style.space(6)
+
+        Text {
+          id: wordText
+          anchors.left: parent.left
+          anchors.leftMargin: Style.space(4)
+          anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
+          text: modelData
+          color: w.fg
+          font.family: w.fontFamily
+          font.pixelSize: Style.font.body
+        }
+
+        Text {
+          anchors.right: parent.right
+          anchors.rightMargin: Style.space(4)
+          anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
+          text: tab.closeGlyph
+          color: wordRemoveArea.containsMouse ? w.accent : Util.alpha(w.fg, 0.55)
+          font.family: w.fontFamily
+          font.pixelSize: Style.font.body
+
+          MouseArea {
+            id: wordRemoveArea
+            anchors.fill: parent
+            anchors.margins: -Style.space(4)
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: tab.setWords(tab.words.filter(function(x) { return x !== modelData }))
+          }
+        }
+      }
+    }
+  }
+
+  // ---- aliases
+  Column {
+    width: parent.width
+    spacing: Style.space(10)
+    visible: tab.section === "aliases"
+    PanelSectionHeader {
+      text: "RENAME OR MERGE"
+      foreground: w.fg
+      fontFamily: w.fontFamily
+    }
+
+    Text {
+      width: parent.width
+      wrapMode: Text.WordWrap
+      textFormat: Text.PlainText
+      text: "Give several apps the same name to add them up. Applies to the past too."
+      color: Util.alpha(w.fg, 0.55)
+      font.family: w.fontFamily
+      font.pixelSize: Style.font.caption
+    }
+
+    Row {
+      width: parent.width
+      spacing: Style.space(6)
+
+      TextField {
+        id: aliasFrom
+        width: (parent.width - aliasButton.width - arrow.width - 3 * parent.spacing) / 2
+        placeholderText: "App"
+        foreground: w.fg
+        accent: w.accent
+        font.family: w.fontFamily
+        onAccepted: aliasTo.forceActiveFocus()
+        Keys.onEscapePressed: w.close()
       }
 
       Text {
-        id: removeAliasGlyph
-        anchors.right: parent.right
-        anchors.rightMargin: Style.space(4)
-        anchors.verticalCenter: parent.verticalCenter
+        id: arrow
+        anchors.verticalCenter: aliasFrom.verticalCenter
         textFormat: Text.PlainText
-        text: tab.closeGlyph
-        color: removeAliasArea.containsMouse ? w.accent : Util.alpha(w.fg, 0.55)
+        text: "→"
+        color: Util.alpha(w.fg, 0.5)
         font.family: w.fontFamily
         font.pixelSize: Style.font.body
+      }
 
-        MouseArea {
-          id: removeAliasArea
-          anchors.fill: parent
-          anchors.margins: -Style.space(4)
-          hoverEnabled: true
-          cursorShape: Qt.PointingHandCursor
-          onClicked: tab.removeAlias(modelData.from)
+      TextField {
+        id: aliasTo
+        width: aliasFrom.width
+        placeholderText: "New name"
+        foreground: w.fg
+        accent: w.accent
+        font.family: w.fontFamily
+        onAccepted: tab.addAlias()
+        Keys.onEscapePressed: w.close()
+      }
+
+      Button {
+        id: aliasButton
+        anchors.verticalCenter: aliasFrom.verticalCenter
+        text: "OK"
+        foreground: w.fg
+        accent: w.accent
+        bordered: true
+        onClicked: tab.addAlias()
+      }
+    }
+
+    // Recently seen apps without an alias: a click fills the first field.
+    Flow {
+      width: parent.width
+      spacing: Style.space(6)
+      visible: knownRepeater.count > 0
+
+      Repeater {
+        id: knownRepeater
+        model: tab.known.filter(function(a) { return a.alias === a.app }).slice(0, 10)
+
+        Rectangle {
+          required property var modelData
+          width: chipText.implicitWidth + Style.space(12)
+          height: chipText.implicitHeight + Style.space(6)
+          radius: height / 2
+          color: chipArea.containsMouse ? Util.alpha(w.accent, 0.2) : Util.alpha(w.fg, 0.08)
+
+          Text {
+            id: chipText
+            anchors.centerIn: parent
+            textFormat: Text.PlainText
+            text: modelData.app
+            color: w.fg
+            font.family: w.fontFamily
+            font.pixelSize: Style.font.caption
+          }
+
+          MouseArea {
+            id: chipArea
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: {
+              aliasFrom.text = modelData.app
+              aliasTo.forceActiveFocus()
+            }
+          }
+        }
+      }
+    }
+
+    Repeater {
+      model: tab.aliasList
+
+      Item {
+        required property var modelData
+        width: tab.width
+        height: aliasText.implicitHeight + Style.space(6)
+
+        Text {
+          id: aliasText
+          anchors.left: parent.left
+          anchors.leftMargin: Style.space(4)
+          anchors.right: removeAliasGlyph.left
+          anchors.rightMargin: Style.space(6)
+          anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
+          text: modelData.from + "  →  " + modelData.to
+          color: w.fg
+          font.family: w.fontFamily
+          font.pixelSize: Style.font.body
+          elide: Text.ElideRight
+        }
+
+        Text {
+          id: removeAliasGlyph
+          anchors.right: parent.right
+          anchors.rightMargin: Style.space(4)
+          anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
+          text: tab.closeGlyph
+          color: removeAliasArea.containsMouse ? w.accent : Util.alpha(w.fg, 0.55)
+          font.family: w.fontFamily
+          font.pixelSize: Style.font.body
+
+          MouseArea {
+            id: removeAliasArea
+            anchors.fill: parent
+            anchors.margins: -Style.space(4)
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: tab.removeAlias(modelData.from)
+          }
         }
       }
     }
