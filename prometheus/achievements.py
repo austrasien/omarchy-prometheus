@@ -109,6 +109,9 @@ class Context:
     session_top_share: dict = field(default_factory=dict)    # session id -> share of its top app
     challenge_states: list = field(default_factory=list)     # challenge states, oldest first
     end_dates: set = field(default_factory=set)              # local dates on which a session ended
+    quests: list = field(default_factory=list)               # every quest, with its activity (quests.summary)
+    quests_full: int = 0                                     # times ten quests were open at once
+    quest_sweeps: int = 0                                    # times the multi-day quests were all finished
 
 
 def _date(s: str) -> dt.date:
@@ -183,6 +186,10 @@ def build_context(store, now: int, level: int) -> Context:
     if goal and goal.get("period") == "day":
         ctx.goal_hours = float(goal["hours"])
     ctx.monotask = _longest_single_app(store)
+    from .quests import Quests    # late: quests imports the store, like this module
+    ctx.quests = Quests(store).summary(now)
+    ctx.quests_full = store.count_events("quests_full")
+    ctx.quest_sweeps = store.count_events("quest_sweep")
     return ctx
 
 
@@ -217,6 +224,55 @@ def _longest_single_app(store, gap_ms: int = 60_000) -> float:
 
 
 # -------------------------------------------------------------- measures
+
+
+def _quests_done(c: Context, kind: str | None = None) -> list[dict]:
+    """Short and long quests finished (deleting one later does not undo it)."""
+    return [q for q in c.quests if q["kind"] != "daily" and q["done"] is not None
+            and (kind is None or q["kind"] == kind)]
+
+
+def _count(xs) -> int | None:
+    return len(xs) or None
+
+
+def _best(c: Context, key: str) -> float | None:
+    return max((q["activity"][key] for q in c.quests), default=0) or None
+
+
+def _daily_run(c: Context) -> int | None:
+    """Longest run of consecutive days one daily quest was done."""
+    return max((_longest_run(set(q["done_days"])) for q in c.quests if q["kind"] == "daily"), default=0) or None
+
+
+def _hour_share(q: dict, hours: set[int]) -> float:
+    minutes = q["activity"]["hours"]
+    total = sum(minutes)
+    return sum(m for h, m in enumerate(minutes) if h in hours) / total if total else 0.0
+
+
+NIGHT_HOURS = {22, 23, 0, 1, 2, 3}       # after 22 h, until 4 h
+DAWN_HOURS = {4, 5, 6, 7}                # before 8 h
+TIMED_QUEST_MIN_SECONDS = H              # a night or dawn quest needs some real focus
+
+
+def _timed_quests(hours: set[int]):
+    return lambda c: _count([q for q in _quests_done(c) if q["activity"]["seconds"] >= TIMED_QUEST_MIN_SECONDS
+                             and _hour_share(q, hours) > 0.5])
+
+
+def _speedruns(c: Context) -> int | None:
+    return _count([q for q in _quests_done(c, "short") if 1 <= q["days_worked"] <= 2])
+
+
+def _marathons(c: Context) -> int | None:
+    return _count([q for q in _quests_done(c, "long") if q["first_active"] is not None
+                   and q["done"] - q["first_active"] >= 30 * DAY * 1000])
+
+
+def _pivots(c: Context) -> int | None:
+    return _count([q for q in c.quests if q["deleted"] is not None and q["activity"]["seconds"] > 5 * H])
+
 
 
 def _longest_run(dates: set[str]) -> int:
@@ -975,6 +1031,74 @@ FAMILIES: list[Family] = [
            [1, 5, 10, 20, 30],
            lambda t: f"Overclocked {t:g}", lambda t: f"Finish {t:g} sessions above 30 °C.",
            ["Above 30 °C and still shipping. Thermal throttling is for CPUs."]),
+    # ---- quests
+    Family("questfirst", "Mission statement", lambda c: _count(c.quests), [1],
+           lambda t: "Mission Statement", lambda t: "Create your first quest.",
+           ["Every empire starts as a to-do with delusions of grandeur."]),
+    Family("closer", "Closer", lambda c: _count(_quests_done(c)), [1, 3, 5, 10, 25, 50, 100],
+           lambda t: f"Closer ×{t:g}", lambda t: f"Finish {t:g} short or long quests.",
+           ["Ideas are cheap. Shipping is the whole game.",
+            "{n} quests closed. Founders talk; closers ship.",
+            "{n} done. Your roadmap is now a changelog."]),
+    Family("longgame", "Long game", lambda c: _count(_quests_done(c, "long")), [1, 3, 5, 10, 20],
+           lambda t: f"Long Game ×{t:g}", lambda t: f"Finish {t:g} long quests.",
+           ["Thiel would call it a definite future.",
+            "{n} long quests. You plan in decades and ship in weeks."]),
+    Family("rituals", "Rituals", lambda c: sum(len(q["done_days"]) for q in c.quests) or None,
+           [10, 30, 100, 250, 500, 1000],
+           lambda t: f"Rituals ×{t:g}", lambda t: f"Complete daily quests {t:g} times in all.",
+           ["Habits are just compounding with better marketing.",
+            "{n} rituals. Discipline is the API, results are the response."]),
+    Family("unbroken", "Unbroken", _daily_run, [7, 14, 30, 60, 100, 365],
+           lambda t: f"Unbroken {t:g} days", lambda t: f"Complete the same daily quest {t:g} days in a row.",
+           ["Consistency is the only moat that can't be forked.",
+            "{n} days unbroken. Your streak has better uptime than most clouds."], unit="days"),
+    Family("fullspectrum", "Full spectrum", lambda c: c.quests_full or None, [1],
+           lambda t: "Full Spectrum", lambda t: "Have ten quests open at once, all ten colors.",
+           ["A portfolio, not a bet."]),
+    Family("redthread", "Red thread",
+           lambda c: _count([q for q in _quests_done(c) if q["color"].lower() == "#f22424"]), [1, 5, 10, 25],
+           lambda t: f"Red Thread ×{t:g}", lambda t: f"Finish {t:g} red quests.",
+           ["First principles, first color.",
+            "{n} red quests down. Seeing red is a growth strategy."]),
+    Family("cleansweep", "Clean sweep", lambda c: c.quest_sweeps or None, [1],
+           lambda t: "Clean Sweep",
+           lambda t: "Finish every open short and long quest, at least three of them, without deleting any.",
+           ["Zero open loops. Pure throughput."]),
+    Family("deepquest", "Deep quest", lambda c: _best(c, "seconds"), [5 * H, 10 * H, 25 * H, 50 * H, 100 * H, 250 * H],
+           lambda t: f"Deep Quest {t / H:g} h", lambda t: f"Focus {t / H:g} h on a single quest.",
+           ["Ten thousand hours is a rounding error at this scale.",
+            "{n} h on one quest. Depth is the new scale."], unit="h", scale=H),
+    Family("attrition", "War of attrition", lambda c: _best(c, "sessions"), [5, 10, 25, 50, 100],
+           lambda t: f"War of Attrition ×{t:g}", lambda t: f"Hold {t:g} sessions on a single quest.",
+           ["Persistence is underrated because it's unglamorous.",
+            "{n} sessions on one quest. Attrition favors the stubborn."]),
+    Family("questgrinder", "Quest grinder", lambda c: _best(c, "tasks"), [5, 10, 25, 50, 100],
+           lambda t: f"Quest Grinder ×{t:g}", lambda t: f"Check {t:g} tasks while a single quest is active.",
+           ["Decompose the moonshot into tickets.",
+            "{n} tickets for one quest. Moonshots are just very long sprints."]),
+    Family("payload", "Payload", lambda c: _best(c, "xp"), [50, 100, 250, 500, 1000],
+           lambda t: f"Payload {t:g} XP", lambda t: f"Earn {t:g} XP on a single quest.",
+           ["Value capture, quest edition.",
+            "{n} XP from one quest. Margins a SaaS would kill for."], unit="XP"),
+    Family("nightshift", "Night shift", _timed_quests(NIGHT_HOURS), [1],
+           lambda t: "Night Shift",
+           lambda t: "Finish a quest with more than half of its focus (1 h at least) between 22 h and 4 h.",
+           ["The market never sleeps, neither does this quest."]),
+    Family("dawnraid", "Dawn raid", _timed_quests(DAWN_HOURS), [1],
+           lambda t: "Dawn Raid",
+           lambda t: "Finish a quest with more than half of its focus (1 h at least) between 4 h and 8 h.",
+           ["Shipped before the market opened. Pre-market alpha."]),
+    Family("speedrunner", "Speedrunner", _speedruns, [1],
+           lambda t: "Speedrunner", lambda t: "Finish a short quest in one or two days worked.",
+           ["Move fast. Ship faster."]),
+    Family("marathoner", "Marathoner", _marathons, [1],
+           lambda t: "Marathoner", lambda t: "Finish a long quest 30 days or more after first activating it.",
+           ["Patience is a strategy, not a virtue."]),
+    Family("pivot", "Pivot", _pivots, [1],
+           lambda t: "Pivot", lambda t: "Delete a quest you had already put more than 5 h into.",
+           ["Sunk cost is a tax on the weak."], secret=True),
+
     Family("frost", "Cryo mode", lambda c: sum(1 for s in c.closed if s["temp"] is not None and s["temp"] < 0) or None,
            [1, 5, 10, 20, 30],
            lambda t: f"Cryo Mode {t:g}", lambda t: f"Finish {t:g} sessions below 0 °C.",
@@ -991,6 +1115,8 @@ WEIGHTS = {
     "monotask": 2, "archaeologist": 2, "fullmonth": 2, "dailymax": 2, "dayxp": 2,
     "monomaniac": 2, "annual": 3, "bestmonth": 2, "perfectweek": 2, "purity": 2, "lockedin": 2,
     "veteran": 2,
+    "closer": 2, "longgame": 3, "unbroken": 2, "cleansweep": 2, "deepquest": 2, "payload": 2,
+    "marathoner": 3,
 }
 for _f in FAMILIES:
     _f.weight = WEIGHTS.get(_f.id, 1)

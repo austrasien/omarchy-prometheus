@@ -88,7 +88,7 @@ Column {
     if (f.value === null || f.value === undefined) return ""
     if (f.compare === "lt") return "best: " + clockLabel(f.value)
     if (f.compare === "gt") return "latest: " + clockLabel(f.value)
-    var unit = f.unit === "h" ? " h" : f.unit === "%" ? " %" : f.unit === "days" ? " days" : ""
+    var unit = f.unit === "h" ? " h" : f.unit === "%" ? " %" : f.unit === "days" ? " days" : f.unit === "XP" ? " XP" : ""
     var v = Math.floor(f.value * 10) / 10
     return next && next.threshold !== null ? v + " / " + next.threshold + unit : v + unit
   }

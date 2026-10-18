@@ -36,6 +36,8 @@ LONG_BASE, LONG_PER_DAY, LONG_CAP = 30, 5, 150
 # others draw one of the colors left. So no two open quests share a color,
 # and there can be at most ten of them.
 FIRST_COLOR = RED
+SWEEP_MIN = 3
+
 COLORS = (RED, ORANGE, LIME, GREEN, SPRING, CYAN, AZURE, INDIGO, VIOLET, PINK)
 
 
@@ -141,6 +143,22 @@ class Quests:
                 "xp": int(seconds) // focus_seconds_per_xp + task_xp + reward,
                 "rewardXp": reward}
 
+    def summary(self, at: int) -> list[dict]:
+        """Every quest ever made, deleted ones included, with its activity: what
+        the achievements are measured on."""
+        out = []
+        for r in self.db.execute("SELECT * FROM quests ORDER BY created_at").fetchall():
+            periods = self.periods(r["id"], at)
+            out.append({
+                "id": r["id"], "kind": r["kind"], "color": r["color"] or FIRST_COLOR,
+                "created": r["created_at"], "done": r["done_at"], "deleted": r["deleted_at"],
+                "first_active": periods[0][0] if periods else None,
+                "days_worked": self.days_worked(r["id"]),
+                "done_days": sorted(self._done_days(r["id"])),
+                "activity": self.activity(r["id"], at),
+            })
+        return out
+
     def active(self, at: int) -> dict | None:
         r = self.db.execute("SELECT * FROM quests WHERE active=1 AND deleted_at IS NULL LIMIT 1").fetchone()
         return self._view(r, at) if r is not None else None
@@ -176,6 +194,8 @@ class Quests:
         qid = str(uuid.uuid4())
         self.db.execute("INSERT INTO quests(id, title, kind, created_at, color) VALUES(?, ?, ?, ?, ?)",
                         (qid, title, kind, at, color))
+        if len(self._taken_colors()) == len(COLORS):
+            self.store.add_event("quests_full", at, None)    # all ten colors open at once
         return {"success": True, "quest": self._view(self._row(qid), at)}
 
     def _taken_colors(self) -> set[str]:
@@ -231,6 +251,8 @@ class Quests:
         if self._row(qid)["active"]:
             self._set_active(None, at)
         self.db.execute("UPDATE quests SET deleted_at=? WHERE id=?", (at, qid))
+        if self._open_multiday() == 0:     # emptied by deleting, not by finishing
+            self.store.set_setting("questSweepRun", 0)
         return {"success": True}
 
     def complete(self, qid, at: int) -> dict:
@@ -249,7 +271,20 @@ class Quests:
             if r["active"]:
                 self._set_active(None, at)
             self.db.execute("UPDATE quests SET done_at=?, xp=? WHERE id=?", (at, xp, qid))
+            # Clean sweep: finishing the last open short or long quest, after
+            # finishing at least SWEEP_MIN of them since the list was last empty.
+            run = int(self.store.get_setting("questSweepRun", 0) or 0) + 1
+            if self._open_multiday() == 0:
+                if run >= SWEEP_MIN:
+                    self.store.add_event("quest_sweep", at, None)
+                run = 0
+            self.store.set_setting("questSweepRun", run)
         return {"success": True, "xp": xp, "title": r["title"], "kind": r["kind"]}
+
+    def _open_multiday(self) -> int:
+        return int(self.db.execute(
+            "SELECT COUNT(*) FROM quests WHERE kind != 'daily' AND deleted_at IS NULL AND done_at IS NULL"
+        ).fetchone()[0])
 
     def uncomplete(self, qid, at: int) -> dict:
         """Undo a completion made by mistake: today's for a daily quest."""
