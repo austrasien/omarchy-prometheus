@@ -179,6 +179,12 @@ class CompetitionTest(unittest.TestCase):
         row = self.store.db.execute("SELECT bg, dot, edge FROM season_medals").fetchone()
         self.assertEqual((row["bg"], row["dot"], row["edge"]), (preview["bg"], preview["dot"], preview["edge"]))
 
+    def test_season_colors_are_the_same_for_everyone(self):
+        other = Store(":memory:")
+        for key in ("2026-autumn", "2026-winter", "2031-spring"):
+            self.assertEqual(C.pending_colors(self.store, key), C.pending_colors(other, key))
+        self.assertNotEqual(C.pending_colors(self.store, "2026-autumn"), C.pending_colors(self.store, "2026-winter"))
+
     def test_leaderboard_quest_removal_keeps_xp(self):
         q = self.core.quest_add("Ship it", "short", self.at(0))["quest"]["id"]
         self.core.quest_activate(q, self.at(0))

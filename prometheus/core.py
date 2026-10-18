@@ -639,7 +639,25 @@ class Core:
                         for s in reversed(seasons)],
             "firstDay": first.isoformat() if first else None,
             "medals": M.placard(self.store, at), "seasonMedals": C.season_medals(self.store),
+            "legendary": self._legendary_unlocked(),
+            "serviceNumber": self._service_number(first),
         }
+
+    def _legendary_unlocked(self) -> list[str]:
+        """Names of the legendary achievement tiers unlocked, best first."""
+        unlocked = self.store.unlocked_achievements()
+        out = []
+        for f in A.FAMILIES:
+            for i, t in enumerate(f.thresholds):
+                if f.tier_id(i) in unlocked and f.rarity(i) == "legendary":
+                    out.append((f.xp(i), f.name(t)))
+        return [name for _, name in sorted(out, reverse=True)]
+
+    def _service_number(self, first) -> str:
+        """A stable service number, from the handle and the enlistment day."""
+        import hashlib
+        h = hashlib.sha1(f"{self.handle()}|{first}".encode()).hexdigest().upper()
+        return f"PRM-{h[:4]}-{h[4:8]}"
 
     def set_day_start(self, hour, at: int) -> dict:
         if not isinstance(hour, (int, float)) or not 0 <= int(hour) <= 12:
@@ -739,7 +757,8 @@ class Core:
         if ch is None or ch["state"] != "active":
             raise Refused("No challenge running")
         self.store.update_challenge(ch["id"], state="abandoned", ended_at=at)
-        return {"success": True}
+        from .store import ABANDON_PENALTY
+        return {"success": True, "penalty": ABANDON_PENALTY}
 
     def profile(self, at: int) -> dict:
         # Per session, so a session's own counter adds up to the total.

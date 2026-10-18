@@ -29,7 +29,7 @@ from collections import defaultdict
 
 from . import timeutil as T
 from .bios import bio
-from .store import session_seconds
+from .store import ABANDON_PENALTY, session_seconds
 
 FOCUS_SECONDS_PER_XP = 600
 
@@ -169,6 +169,8 @@ class Ledger:
             self.tasks[d] += 1
         for r in db.execute("SELECT ended_at, xp FROM challenges WHERE state='won' AND ended_at IS NOT NULL"):
             self.xp[T.date_str(r["ended_at"])] += r["xp"]
+        for r in db.execute("SELECT ended_at FROM challenges WHERE state='abandoned' AND ended_at IS NOT NULL"):
+            self.xp[T.date_str(r["ended_at"])] -= ABANDON_PENALTY
         for r in db.execute("SELECT done_at, xp FROM quests WHERE done_at IS NOT NULL"):
             d = T.date_str(r["done_at"])
             self.xp[d] += r["xp"] or 0
@@ -431,13 +433,10 @@ def season_colors(rng: random.Random | None = None) -> dict:
 
 
 def pending_colors(store, key: str) -> dict:
-    """The colors the season's medal will have: drawn once, as the season
-    starts, so the preview shows the very medal to win."""
-    saved = store.get_setting("seasonColors") or {}
-    if key not in saved:
-        saved[key] = season_colors()
-        store.set_setting("seasonColors", saved)
-    return saved[key]
+    """The colors of a season's medal: drawn from a seed made of the season's
+    name, so every player, on any machine, gets the very same medal for the
+    same season. (`store` is kept for the call sites.)"""
+    return season_colors(random.Random("prometheus-season-medal:" + key))
 
 
 def check_season_medals(store, ledger: Ledger, now: int) -> list[dict]:

@@ -15,6 +15,9 @@ from pathlib import Path
 
 SCHEMA_VERSION = 9
 
+# Abandoning an accepted extension challenge costs this much XP.
+ABANDON_PENALTY = 3
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
   id               TEXT PRIMARY KEY,
@@ -324,10 +327,15 @@ class Store:
         won = self.db.execute(
             "SELECT COALESCE(SUM(xp), 0) FROM challenges WHERE session_id=? AND state='won'", (session_id,)
         ).fetchone()[0]
-        return int(tasks) + int(won)
+        abandoned = self.db.execute(
+            "SELECT COUNT(*) FROM challenges WHERE session_id=? AND state='abandoned'", (session_id,)
+        ).fetchone()[0]
+        return int(tasks) + int(won) - ABANDON_PENALTY * int(abandoned)
 
     def challenge_xp_total(self) -> int:
-        return int(self.db.execute("SELECT COALESCE(SUM(xp), 0) FROM challenges WHERE state='won'").fetchone()[0])
+        won = self.db.execute("SELECT COALESCE(SUM(xp), 0) FROM challenges WHERE state='won'").fetchone()[0]
+        abandoned = self.db.execute("SELECT COUNT(*) FROM challenges WHERE state='abandoned'").fetchone()[0]
+        return int(won) - ABANDON_PENALTY * int(abandoned)
 
     def set_session_env(self, sid: str, **fields) -> None:
         keys = ", ".join(f"{k}=?" for k in fields)

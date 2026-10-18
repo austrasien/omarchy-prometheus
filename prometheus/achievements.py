@@ -19,7 +19,7 @@ from typing import Callable
 
 from . import geekdates
 from . import timeutil as T
-from .store import session_seconds
+from .store import ABANDON_PENALTY, session_seconds
 
 QUALIFYING_SECONDS = 10 * 60      # shorter sessions count for nothing
 
@@ -181,6 +181,9 @@ def build_context(store, now: int, level: int) -> Context:
     for r in store.db.execute("SELECT ended_at, xp FROM challenges WHERE state='won'"):
         d = T.date_str(r["ended_at"])
         ctx.day_xp[d] = ctx.day_xp.get(d, 0) + r["xp"]
+    for r in store.db.execute("SELECT ended_at FROM challenges WHERE state='abandoned' AND ended_at IS NOT NULL"):
+        d = T.date_str(r["ended_at"])
+        ctx.day_xp[d] = ctx.day_xp.get(d, 0) - ABANDON_PENALTY
     ctx.interrupted = store.sessions_with_event("autopause") | store.sessions_with_event("absent")
     ctx.challenge_states = [r[0] for r in store.db.execute("SELECT state FROM challenges ORDER BY offered_at")]
     ctx.end_dates = {_local(s["end"]).date() for s in ctx.closed}

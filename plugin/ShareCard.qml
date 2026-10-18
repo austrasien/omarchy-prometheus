@@ -1,172 +1,357 @@
 import QtQuick
 import qs.Commons
 
-// The share card: what is grabbed into a PNG when the player shares. Built
-// from share:get. Not shown in the panel (it sits off to the side); it only
-// has to be laid out to be grabbed.
+// The share card, styled as a military ID: a league-colored band, an insignia
+// with the league gem and rank chevrons, service fields, the medal rack, the
+// legendary achievements, a holographic seal and a machine-readable strip.
+// `frame` (0 to 1) drives every shine, so the card can be captured frame by
+// frame into an animated PNG. It sits off to the side of the panel: only
+// grabbed, never seen.
 Rectangle {
   id: card
 
   property var w: null
   property var info: null          // share:get
+  property real frame: 0           // 0 to 1: where every shine is in its cycle
 
   readonly property var profile: info ? info.profile : null
   readonly property var league: info ? info.league : null
+  readonly property color leagueColor: league ? league.color : "#cd7f32"
   readonly property var medals: info ? (info.seasonMedals || []).concat(info.medals || []) : []
-  readonly property var seasons: info ? info.seasons || [] : []
+  readonly property var seasons: info ? (info.seasons || []) : []
+  readonly property var legendary: info ? (info.legendary || []) : []
+  readonly property color ink: "#e6e2cf"          // the card's printed text, warm off-white
+  readonly property color dim: Qt.rgba(0.90, 0.88, 0.81, 0.55)
+  readonly property string mono: w ? w.fontFamily : "monospace"
 
-  width: 560
-  height: content.implicitHeight + 56
-  radius: 18
-  color: "#16171f"
+  width: 600
+  // As tall as its content: compact, whatever the number of medals.
+  height: Math.max(rack.y + rack.implicitHeight, sealBox.y + sealBox.height) + 14 + strip.height
+  radius: 16
+  clip: true
+  color: "#1b2117"
   border.width: 2
-  border.color: league ? Qt.darker(league.color, 1.3) : "#333"
+  border.color: Qt.darker(leagueColor, 1.4)
 
   function gradeColor(g) {
-    return g === "S" ? w.legendaryColor : g === "A" ? w.gold : g === "B" ? w.green : g === "C" ? w.fg
-      : g === "D" ? "#ea9a23" : w.red
+    return g === "S" ? w.legendaryColor : g === "A" ? w.gold : g === "B" ? w.green : g === "C" ? ink
+      : g === "D" ? "#ea9a23" : g === "F" ? w.red : dim
+  }
+  function upper(s) { return (s || "").toUpperCase() }
+  function enlisted(iso) { return iso ? upper(Qt.formatDate(new Date(iso + "T12:00:00"), "dd MMM yyyy")) : "—" }
+  function shortSeason(label) {          // "Autumn 2026" -> "AUT 26"
+    var parts = (label || "").split(" ")
+    return parts.length === 2 ? upper(parts[0].slice(0, 3)) + " " + parts[1].slice(2) : upper(label)
+  }
+  function mrz(s, n) {
+    var t = upper(s).replace(/[^A-Z0-9]/g, "<")
+    while (t.length < n) t += "<"
+    return t.slice(0, n)
   }
 
-  function dateLabel(iso) { return iso ? Qt.formatDate(new Date(iso + "T12:00:00"), "MMMM d, yyyy") : "" }
-
-  Column {
-    id: content
-    x: 28
-    y: 28
-    width: card.width - 56
-    spacing: 14
-
-    // ---- who
-    Item {
-      width: parent.width
-      height: Math.max(title.implicitHeight + handle.implicitHeight + 4, leagueBox.height)
-
-      Text {
-        id: title
-        textFormat: Text.PlainText
-        text: "PROMETHEUS"
-        color: w.accent
-        font.family: w.fontFamily
-        font.pixelSize: 13
-        font.bold: true
-        font.letterSpacing: 3
-      }
-
-      Text {
-        id: handle
-        anchors.top: title.bottom
-        anchors.topMargin: 4
-        textFormat: Text.PlainText
-        text: card.info && card.info.handle ? "@" + card.info.handle : "@anonymous"
-        color: w.fg
-        font.family: w.fontFamily
-        font.pixelSize: 26
-        font.bold: true
-      }
-
-      Column {
-        id: leagueBox
-        anchors.right: parent.right
-        anchors.verticalCenter: parent.verticalCenter
-        spacing: 2
-
-        Text {
-          anchors.right: parent.right
-          textFormat: Text.PlainText
-          text: card.league ? card.league.name + " League" : ""
-          color: card.league ? card.league.color : w.fg
-          font.family: w.fontFamily
-          font.pixelSize: 17
-          font.bold: true
-        }
-
-        Text {
-          anchors.right: parent.right
-          textFormat: Text.PlainText
-          text: card.profile ? "Level " + card.profile.level : ""
-          color: w.gold
-          font.family: w.fontFamily
-          font.pixelSize: 15
-          font.bold: true
-        }
-      }
+  // ---- background: a soft gradient and fine guilloche lines
+  Rectangle {
+    anchors.fill: parent
+    gradient: Gradient {
+      GradientStop { position: 0.0; color: "#232b1e" }
+      GradientStop { position: 1.0; color: "#141812" }
     }
-
-    // ---- XP and the bar
-    Column {
-      width: parent.width
-      spacing: 6
-
-      Item {
-        width: parent.width
-        height: xpText.implicitHeight
-
-        Text {
-          id: xpText
-          textFormat: Text.PlainText
-          text: card.profile ? card.profile.xp + " XP" : ""
-          color: w.fg
-          font.family: w.fontFamily
-          font.pixelSize: 15
-          font.bold: true
-        }
-
-        Text {
-          anchors.right: parent.right
-          anchors.verticalCenter: xpText.verticalCenter
-          textFormat: Text.PlainText
-          text: card.profile ? card.profile.levelXp + " / " + card.profile.levelCost + " to level " + (card.profile.level + 1) : ""
-          color: Util.alpha(w.fg, 0.6)
-          font.family: w.fontFamily
-          font.pixelSize: 12
-        }
-      }
-
+  }
+  Item {
+    anchors.fill: parent
+    opacity: 0.07
+    Repeater {
+      model: 46
       Rectangle {
-        width: parent.width
-        height: 8
-        radius: 4
-        color: Util.alpha(w.fg, 0.12)
+        required property int index
+        x: index * 18 - 200
+        y: -40
+        width: 1
+        height: card.height * 1.6
+        rotation: 32
+        color: card.ink
+      }
+    }
+  }
+  // A large faint gem, watermark-style.
+  Rectangle {
+    x: card.width - 190
+    y: 70
+    width: 220
+    height: 220
+    rotation: 45
+    color: "transparent"
+    border.width: 18
+    border.color: card.leagueColor
+    opacity: 0.06
+  }
 
+  // ---- the band
+  Rectangle {
+    id: band
+    width: parent.width
+    height: 36
+    gradient: Gradient {
+      orientation: Gradient.Horizontal
+      GradientStop { position: 0.0; color: Qt.darker(card.leagueColor, 2.2) }
+      GradientStop { position: 1.0; color: Qt.darker(card.leagueColor, 3.2) }
+    }
+
+    Text {
+      x: 18
+      anchors.verticalCenter: parent.verticalCenter
+      textFormat: Text.PlainText
+      text: "PROMETHEUS"
+      color: card.ink
+      font.family: card.mono
+      font.pixelSize: 15
+      font.bold: true
+      font.letterSpacing: 4
+    }
+    Text {
+      anchors.right: parent.right
+      anchors.rightMargin: 18
+      anchors.verticalCenter: parent.verticalCenter
+      textFormat: Text.PlainText
+      text: "SERVICE IDENTIFICATION CARD"
+      color: card.dim
+      font.family: card.mono
+      font.pixelSize: 10
+      font.bold: true
+      font.letterSpacing: 2
+    }
+  }
+  Rectangle { y: band.height; width: parent.width; height: 2; color: Qt.darker(w.gold, 1.2) }
+
+  // ---- the insignia
+  Rectangle {
+    id: insignia
+    x: 18
+    y: 52
+    width: 118
+    height: 150
+    radius: 8
+    color: Qt.rgba(0, 0, 0, 0.25)
+    border.width: 1
+    border.color: Qt.rgba(0.9, 0.88, 0.8, 0.25)
+
+    // The league gem, with a glint passing over it.
+    Item {
+      id: gemBox
+      anchors.horizontalCenter: parent.horizontalCenter
+      y: 14
+      width: 54
+      height: 54
+      Rectangle {
+        anchors.centerIn: parent
+        width: 38
+        height: 38
+        rotation: 45
+        radius: 4
+        color: card.leagueColor
+        border.width: 2
+        border.color: Qt.lighter(card.leagueColor, 1.5)
+      }
+      Item {
+        anchors.centerIn: parent
+        width: 38
+        height: 38
+        rotation: 45
+        clip: true
         Rectangle {
-          height: parent.height
-          radius: parent.radius
-          width: card.profile ? parent.width * Math.min(1, card.profile.levelXp / Math.max(1, card.profile.levelCost)) : 0
-          color: w.gold
+          width: 16
+          height: 70
+          y: -16
+          rotation: 45
+          x: -20 + 80 * card.frame
+          gradient: Gradient {
+            orientation: Gradient.Horizontal
+            GradientStop { position: 0.0; color: "#00ffffff" }
+            GradientStop { position: 0.5; color: "#c8ffffff" }
+            GradientStop { position: 1.0; color: "#00ffffff" }
+          }
         }
       }
     }
 
-    // ---- every medal: the seasons' first, then month, week, day
+    // Rank chevrons: one per five levels, three at most.
+    Column {
+      anchors.horizontalCenter: parent.horizontalCenter
+      y: 76
+      spacing: -6
+      Repeater {
+        model: card.profile ? Math.max(1, Math.min(3, Math.ceil(card.profile.level / 5))) : 1
+        Text {
+          anchors.horizontalCenter: parent.horizontalCenter
+          textFormat: Text.PlainText
+          text: "︿"
+          color: w.gold
+          font.pixelSize: 22
+          font.bold: true
+        }
+      }
+    }
+
+    Text {
+      anchors.horizontalCenter: parent.horizontalCenter
+      anchors.bottom: parent.bottom
+      anchors.bottomMargin: 10
+      textFormat: Text.PlainText
+      text: card.league ? card.upper(card.league.name) : ""
+      color: card.leagueColor
+      font.family: card.mono
+      font.pixelSize: 12
+      font.bold: true
+      font.letterSpacing: 2
+    }
+  }
+
+  // ---- service fields
+  Grid {
+    id: fields
+    x: 152
+    y: 52
+    columns: 2
+    columnSpacing: 22
+    rowSpacing: 6
+
+    Repeater {
+      model: [
+        { k: "NAME", v: card.info && card.info.handle ? "@" + card.info.handle : "@anonymous", big: true },
+        { k: "SERVICE NO.", v: card.info ? card.info.serviceNumber : "" },
+        { k: "RANK", v: card.profile ? "LEVEL " + card.profile.level : "" },
+        { k: "XP", v: card.profile ? card.profile.xp + " XP" : "" },
+        { k: "LEAGUE", v: card.league ? card.upper(card.league.name) : "" },
+        { k: "ENLISTED", v: card.enlisted(card.info ? card.info.firstDay : null) }
+      ]
+      Column {
+        required property var modelData
+        spacing: 1
+        Text {
+          textFormat: Text.PlainText
+          text: modelData.k
+          color: card.dim
+          font.family: card.mono
+          font.pixelSize: 8
+          font.bold: true
+          font.letterSpacing: 1.5
+        }
+        Text {
+          textFormat: Text.PlainText
+          text: modelData.v
+          color: card.ink
+          font.family: card.mono
+          font.pixelSize: modelData.big ? 17 : 12
+          font.bold: true
+        }
+      }
+    }
+  }
+
+  // XP toward the next level, a thin bar under the fields.
+  Rectangle {
+    x: 152
+    y: fields.y + fields.height + 8
+    width: card.width - 152 - 140
+    height: 4
+    radius: 2
+    color: Qt.rgba(0.9, 0.88, 0.8, 0.15)
+    Rectangle {
+      height: parent.height
+      radius: 2
+      width: card.profile ? parent.width * Math.min(1, card.profile.levelXp / Math.max(1, card.profile.levelCost)) : 0
+      color: w.gold
+    }
+  }
+
+  // ---- service record: every season, as compact chips
+  Column {
+    x: card.width - 124
+    y: 52
+    width: 106
+    spacing: 3
+
+    Text {
+      textFormat: Text.PlainText
+      text: "SERVICE RECORD"
+      color: card.dim
+      font.family: card.mono
+      font.pixelSize: 8
+      font.bold: true
+      font.letterSpacing: 1.5
+    }
+    Repeater {
+      model: card.seasons.slice(0, 6)
+      Item {
+        required property var modelData
+        width: 106
+        height: 15
+        Text {
+          textFormat: Text.PlainText
+          text: card.shortSeason(modelData.label)
+          color: card.ink
+          font.family: card.mono
+          font.pixelSize: 10
+          font.bold: true
+          anchors.verticalCenter: parent.verticalCenter
+        }
+        RarityText {
+          anchors.right: parent.right
+          anchors.verticalCenter: parent.verticalCenter
+          width: implicitWidth
+          text: modelData.running ? "…" : modelData.grade
+          color: card.gradeColor(modelData.running ? "" : modelData.grade)
+          legendary: !modelData.running && modelData.grade === "S"
+          sweepOverride: card.frame
+          fontFamily: card.mono
+          pixelSize: 12
+        }
+      }
+    }
+  }
+
+  // ---- the medal rack
+  Column {
+    id: rack
+    x: 18
+    y: 214
+    width: card.width - 36 - 70
+    spacing: 4
+
+    Text {
+      textFormat: Text.PlainText
+      text: "DECORATIONS"
+      color: card.dim
+      font.family: card.mono
+      font.pixelSize: 8
+      font.bold: true
+      font.letterSpacing: 1.5
+    }
+
     Flow {
       width: parent.width
-      spacing: 3
-      visible: card.medals.length > 0
-
+      spacing: 2
       Repeater {
         model: card.medals
-
         Item {
           required property var modelData
           readonly property bool season: modelData.period === "season"
           width: season ? holo.width : plain.width
           height: season ? holo.height : plain.height
-
           HoloRibbon {
             id: holo
             visible: parent.season
-            size: 1.6
-            shining: false
+            size: 1.25
+            phaseOverride: card.frame
             color: parent.season ? parent.modelData.color : "#555"
             dot: parent.season ? parent.modelData.dot : "white"
             edge: parent.season ? parent.modelData.edge : "#999"
             edges: parent.season && parent.modelData.bars === 2 ? "both" : "left"
           }
-
           Ribbon {
             id: plain
             visible: !parent.season
-            size: 1.6
+            size: 1.25
             color: parent.modelData.color
             dot: parent.modelData.dot
             dots: parent.modelData.dots || 1
@@ -176,83 +361,116 @@ Rectangle {
       }
     }
 
-    Rectangle { width: parent.width; height: 1; color: Util.alpha(w.fg, 0.12) }
-
-    // ---- every season
-    Text {
-      textFormat: Text.PlainText
-      text: "SEASONS"
-      color: Util.alpha(w.fg, 0.55)
-      font.family: w.fontFamily
-      font.pixelSize: 11
-      font.bold: true
-      font.letterSpacing: 2
-    }
-
-    Repeater {
-      model: card.seasons
-
-      Item {
-        required property var modelData
-        width: content.width
-        height: seasonGrade.implicitHeight
-
-        Text {
-          id: seasonGrade
-          width: 34
-          textFormat: Text.PlainText
-          text: modelData.running ? "…" : modelData.grade
-          color: modelData.running ? Util.alpha(w.fg, 0.5) : card.gradeColor(modelData.grade)
-          font.family: w.fontFamily
-          font.pixelSize: 22
-          font.bold: true
-        }
-
-        Text {
-          anchors.left: seasonGrade.right
-          anchors.verticalCenter: seasonGrade.verticalCenter
-          textFormat: Text.PlainText
-          text: modelData.label + (modelData.running ? "  ·  in progress" : "")
-          color: w.fg
-          font.family: w.fontFamily
-          font.pixelSize: 14
-          font.bold: true
-        }
-
-        Text {
-          anchors.right: parent.right
-          anchors.verticalCenter: seasonGrade.verticalCenter
-          textFormat: Text.PlainText
-          text: modelData.xp + " / " + modelData.goal + " XP"
-          color: Util.alpha(w.fg, 0.7)
-          font.family: w.fontFamily
-          font.pixelSize: 13
-        }
-      }
-    }
-
-    Rectangle { width: parent.width; height: 1; color: Util.alpha(w.fg, 0.12) }
-
-    Item {
+    // Legendary achievements, gold and shining.
+    Flow {
       width: parent.width
-      height: since.implicitHeight
-
+      spacing: 8
+      visible: card.legendary.length > 0
       Text {
-        id: since
         textFormat: Text.PlainText
-        text: card.info && card.info.firstDay ? "Playing since " + card.dateLabel(card.info.firstDay) : ""
-        color: Util.alpha(w.fg, 0.6)
-        font.family: w.fontFamily
-        font.pixelSize: 12
+        text: "★ LEGENDARY"
+        color: w.legendaryColor
+        font.family: card.mono
+        font.pixelSize: 9
+        font.bold: true
+        font.letterSpacing: 1
       }
+      Repeater {
+        model: card.legendary.slice(0, 8)
+        RarityText {
+          required property string modelData
+          width: implicitWidth
+          text: modelData
+          color: w.legendaryColor
+          legendary: true
+          sweepOverride: card.frame
+          fontFamily: card.mono
+          pixelSize: 10
+        }
+      }
+    }
+  }
 
+  // ---- the holographic seal: a round foil, its rainbow drifting with `frame`
+  Item {
+    id: sealBox
+    x: card.width - 78
+    y: 214
+    width: 58
+    height: 58
+
+    Canvas {
+      id: seal
+      anchors.fill: parent
+      property real phase: card.frame
+      onPhaseChanged: requestPaint()
+      onPaint: {
+        var ctx = getContext("2d")
+        var r = width / 2
+        ctx.reset()
+        ctx.save()
+        ctx.beginPath()
+        ctx.arc(r, r, r - 1, 0, 2 * Math.PI)
+        ctx.clip()
+        ctx.fillStyle = "#3a3f4a"
+        ctx.fillRect(0, 0, width, height)
+        var colors = ["#ff6b6b", "#ffd66b", "#7dff7d", "#6be6ff", "#7d7dff", "#ff7dff"]
+        var span = width * 2.4
+        var start = -span + span * phase
+        var g = ctx.createLinearGradient(start, 0, start + span * 2, height * 0.6)
+        for (var k = 0; k <= 12; k++) g.addColorStop(k / 12, colors[k % colors.length])
+        ctx.globalAlpha = 0.75
+        ctx.fillStyle = g
+        ctx.fillRect(0, 0, width, height)
+        ctx.restore()
+        ctx.beginPath()
+        ctx.arc(r, r, r - 1, 0, 2 * Math.PI)
+        ctx.lineWidth = 2
+        ctx.strokeStyle = "rgba(255,255,255,0.4)"
+        ctx.stroke()
+      }
+    }
+    Text {
+      anchors.centerIn: parent
+      textFormat: Text.PlainText
+      text: "P"
+      color: Qt.rgba(1, 1, 1, 0.9)
+      font.family: card.mono
+      font.pixelSize: 24
+      font.bold: true
+      style: Text.Outline
+      styleColor: Qt.rgba(0, 0, 0, 0.35)
+    }
+  }
+
+  // ---- the machine-readable strip
+  Rectangle {
+    id: strip
+    anchors.bottom: parent.bottom
+    width: parent.width
+    height: 40
+    color: Qt.rgba(0, 0, 0, 0.28)
+    Column {
+      x: 18
+      anchors.verticalCenter: parent.verticalCenter
+      spacing: 1
       Text {
-        anchors.right: parent.right
         textFormat: Text.PlainText
-        text: "omarchy-prometheus"
-        color: Util.alpha(w.fg, 0.35)
-        font.family: w.fontFamily
+        text: "ID" + "PRM" + "<<" + card.mrz(card.info ? card.info.handle || "ANONYMOUS" : "", 28) + card.mrz("", 10)
+        color: card.dim
+        font.family: card.mono
         font.pixelSize: 11
+        font.letterSpacing: 1.5
+      }
+      Text {
+        textFormat: Text.PlainText
+        text: card.mrz((card.info ? (card.info.serviceNumber || "").replace(/-/g, "") : "") + "<"
+          + (card.info && card.info.firstDay ? card.info.firstDay.replace(/-/g, "") : "") + "<"
+          + (card.league ? card.league.name : "") + "<LV" + (card.profile ? card.profile.level : ""), 40)
+        color: card.dim
+        font.family: card.mono
+        font.pixelSize: 11
+        font.letterSpacing: 1.5
       }
     }
   }

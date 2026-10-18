@@ -635,9 +635,30 @@ BarWidget {
     }
   }
 
-  // ---- share: the card is grabbed (in the panel) to a temporary PNG, then a
-  // save dialog asks where it goes, and it is copied there.
+  // ---- share: the card is grabbed (in the panel) frame by frame, ffmpeg
+  // makes an animated PNG of the frames, then a save dialog asks where it
+  // goes, and it is copied there.
   readonly property string shareTemp: Quickshell.env("XDG_RUNTIME_DIR") + "/prometheus-share.png"
+  readonly property int shareFrames: 24          // one loop of every shine
+  readonly property real shareScale: 1.5         // 900 px wide: sharp, still light
+  function shareFrame(k) {
+    return Quickshell.env("XDG_RUNTIME_DIR") + "/prometheus-share-" + (k < 10 ? "0" : "") + k + ".png"
+  }
+
+  function encodeShare() {
+    encodeProc.command = ["ffmpeg", "-loglevel", "error", "-y", "-framerate", "12",
+      "-i", Quickshell.env("XDG_RUNTIME_DIR") + "/prometheus-share-%02d.png",
+      "-plays", "0", "-f", "apng", root.shareTemp]
+    encodeProc.running = true
+  }
+
+  Process {
+    id: encodeProc
+    onExited: function(code) {
+      if (code === 0) root.askWhereToSave()
+      else root.showToast("error", "Could not make the animated card", "ffmpeg failed", "")
+    }
+  }
   property string shareTarget: ""
 
   function askWhereToSave() {
@@ -862,19 +883,20 @@ BarWidget {
       contentWidth: panel.fittedContentWidth(Math.max(Style.space(380), Math.max(tabRow.implicitWidth, tabRow2.implicitWidth) + panel.padding * 2 + Style.space(16)))
       contentHeight: panel.fittedContentHeight(column.implicitHeight)
 
-      // Two rows: the work itself on top, progress and competition below.
+      // Two rows: the day's work and the competition on top, records and
+      // settings below.
       readonly property var workTabs: [
         { value: "session", label: "Session" },
         { value: "tasks", label: "Tasks", tooltip: p.session ? "" : "Available during a session" },
         { value: "quests", label: "Quests" },
-        { value: "stats", label: "Stats" },
-        { value: "settings", label: "Settings" }
+        { value: "leagues", label: "Leagues" },
+        { value: "seasons", label: "Seasons" }
       ]
       readonly property var progressTabs: [
         { value: "achievements", label: "Achievements" },
-        { value: "leagues", label: "Leagues" },
-        { value: "seasons", label: "Seasons" },
-        { value: "leaderboard", label: "Leaderboard" }
+        { value: "stats", label: "Stats" },
+        { value: "leaderboard", label: "Leaderboards" },
+        { value: "settings", label: "Settings" }
       ]
       readonly property var tabs: workTabs.concat(progressTabs)
       readonly property var current: root.tab === "tasks" ? tasksTab
@@ -897,17 +919,28 @@ BarWidget {
         if (!(panel.current && panel.current.focusEntry())) keyCatcher.forceActiveFocus()
       }
 
+      // The card is captured frame by frame, every shine a step further, then
+      // ffmpeg folds the frames into an animated PNG that loops.
       function share() {
         p.call("share:get", [], function(ok, d) {
           if (!ok || !d || !d.success) { root.showToast("error", "Could not build the card", "", ""); return }
           shareCard.info = d
-          // Let it lay out, then grab it, then ask where to save it.
-          Qt.callLater(function() {
-            shareCard.grabToImage(function(result) {
-              if (result.saveToFile(root.shareTemp)) root.askWhereToSave()
-              else root.showToast("error", "Could not render the card", "", "")
-            }, Qt.size(shareCard.width * 2, shareCard.height * 2))
-          })
+          root.showToast("ended", "Building your card", "a few seconds", "")
+          Qt.callLater(function() { panel.grabFrame(0) })
+        })
+      }
+
+      function grabFrame(k) {
+        if (k >= root.shareFrames) { root.encodeShare(); return }
+        shareCard.frame = k / root.shareFrames
+        Qt.callLater(function() {
+          shareCard.grabToImage(function(result) {
+            if (!result.saveToFile(root.shareFrame(k))) {
+              root.showToast("error", "Could not render the card", "", "")
+              return
+            }
+            panel.grabFrame(k + 1)
+          }, Qt.size(Math.round(shareCard.width * root.shareScale), Math.round(shareCard.height * root.shareScale)))
         })
       }
 

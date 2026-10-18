@@ -12,6 +12,8 @@ Item {
   property int pixelSize: 14
   property bool bold: true
   property int elide: Text.ElideRight
+  // Set (0 to 1) to place the shine by hand, frame by frame; -1 lets it run.
+  property real sweepOverride: -1
 
   implicitWidth: base.implicitWidth
   implicitHeight: base.implicitHeight
@@ -35,7 +37,8 @@ Item {
     width: Math.max(10, root.pixelSize * 1.6)
     height: base.height
     clip: true
-    x: -width
+    property real runX: -width
+    x: root.sweepOverride >= 0 ? -width + (base.width + width) * root.sweepOverride : runX
     opacity: 0.85
 
     Text {
@@ -48,8 +51,8 @@ Item {
       elide: base.elide
     }
 
-    SequentialAnimation on x {
-      running: root.legendary && root.visible
+    SequentialAnimation on runX {
+      running: root.legendary && root.visible && root.sweepOverride < 0
       loops: Animation.Infinite
       NumberAnimation { from: -band.width; to: base.width; duration: 1400; easing.type: Easing.InOutSine }
       PauseAnimation { duration: 1600 }

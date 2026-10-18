@@ -67,7 +67,8 @@ only what was actually used.
   relegation zones, green chevrons streaming up or red ones streaming down.
   League XP is XP from the work: focus, tasks, challenges, quests;
   achievements and medals are left out.
-- **Seasons**: the weather's: winter from December 1st, spring from March 1st,
+- **Seasons** (medal colors are drawn from the season's name, so every
+  player gets the same medal for the same season): the weather's: winter from December 1st, spring from March 1st,
   summer from June 1st, autumn from September 1st, named "Autumn 2026" and so
   on. Two goals, as weekly paces over the season's length (from your first day,
   the first season): your good weeks (the better half of the 26 weeks before)
@@ -84,9 +85,12 @@ only what was actually used.
 - **Leaderboard**: your best days and weeks (XP), sessions (focus) and quests
   (XP while active), top 10, with the current one highlighted. A quest can be
   taken off the board (an open one is deleted); its XP stays.
-- **Share**: the "share" button by the panel's title renders a PNG card (your
-  @handle, set in Settings, league, level, XP bar, every medal, every season's
-  score and grade, the date you started) and asks where to save it.
+- **Share**: the "share" button by the panel's title renders a service ID card
+  as an animated PNG (24 frames, every shine looping; about 1 MB at 900 px):
+  @handle (set in Settings), service number, rank, XP, league, enlistment
+  date, service record (every season's grade), decorations (every medal) and
+  legendary achievements, with a holographic seal. It asks where to save it
+  (zenity) and needs ffmpeg.
 - **Achievements** (a family not started yet shows only dots; tiers after the next one too; each tier has a rarity by the XP it is worth: normal under 30, common green, rare blue from 60, epic purple from 140, legendary gold and shining from 360; secrets are epic): 111 families with 724 tiers (17 on quests, 13 on leagues, seasons and leaderboards), plus a calendar of 126
   dated achievements (one per date: Roman festivals, geek days, scientists
   and writers, SpaceX and Tesla milestones, each unlocked by finishing a

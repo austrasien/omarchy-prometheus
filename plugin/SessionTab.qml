@@ -316,8 +316,8 @@ Column {
 
           Button {
             visible: p.challengeActive
-            text: "Abandon challenge"
-            tooltipText: "No bonus; the session can then be ended"
+            text: "Abandon challenge (-3 XP)"
+            tooltipText: "Costs 3 XP; the session can then be ended"
             foreground: Util.alpha(w.fg, 0.7)
             accent: w.accent
             bordered: true
@@ -341,9 +341,10 @@ Column {
         onClicked: p.toggle()
       }
 
+      // While a challenge runs, End and Procrastinate are hidden: abandon the
+      // challenge first.
       Button {
-        enabled: !p.challengeActive
-        opacity: enabled ? 1 : 0.35
+        visible: !p.challengeActive
         iconText: w.stopGlyph
         text: "End"
         tooltipText: "Saves the session and shows the recap"
@@ -357,9 +358,7 @@ Column {
       }
 
       Button {
-        visible: p.paused && !!(p.session && p.session.task)
-        enabled: !p.challengeActive
-        opacity: enabled ? 1 : 0.35
+        visible: p.paused && !!(p.session && p.session.task) && !p.challengeActive
         iconText: w.laterGlyph
         text: "Procrastinate"
         tooltipText: "Saves the time spent and puts the task back on the to-do list, not done"

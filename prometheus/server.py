@@ -82,7 +82,7 @@ class Daemon:
             "settings:setDayStart": lambda a: self.core.set_day_start(a[0] if a else None, self.clock()),
             "challenge:accept": lambda a: self.core.challenge_accept(a[0] if a else None, self.clock()),
             "challenge:decline": lambda a: self.core.challenge_decline(a[0] if a else None, self.clock()),
-            "challenge:abandon": lambda a: self.core.challenge_abandon(self.clock()),
+            "challenge:abandon": self._abandon,
             "presence:confirm": lambda a: self.core.presence_confirm(self.clock()),
             "settings:getHandle": lambda a: {"success": True, "handle": self.core.handle()},
             "settings:setHandle": lambda a: self.core.set_handle(a[0] if a else None),
@@ -121,6 +121,11 @@ class Daemon:
         reply["recap"]["reason"] = reason
         r = reply["recap"]
         self.toast("ended", self.END_REASONS[reason], f"{r.get('task') or 'Session'} · {format_short(r['durationSeconds'])}")
+        return reply
+
+    def _abandon(self, args) -> dict:
+        reply = self.core.challenge_abandon(self.clock())
+        self.toast("absent", "Challenge abandoned", f"-{reply['penalty']} XP")
         return reply
 
     def _toast_preview(self, args) -> dict:

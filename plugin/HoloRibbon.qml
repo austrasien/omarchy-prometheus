@@ -12,6 +12,9 @@ Item {
   property real size: 1
   property string edges: "both"    // left: season goal, both: hard goal
   property bool shining: true
+  // Set (0 to 1) to hold the foil at a given point of its cycle, frame by
+  // frame (the animated share card); -1 lets it run.
+  property real phaseOverride: -1
 
   implicitWidth: ribbon.implicitWidth
   implicitHeight: ribbon.implicitHeight
@@ -33,9 +36,10 @@ Item {
     anchors.margins: 1
     clip: true
 
-    property real phase: 0
-    NumberAnimation on phase {
-      running: root.shining && root.visible
+    property real runningPhase: 0
+    readonly property real phase: root.phaseOverride >= 0 ? root.phaseOverride : runningPhase
+    NumberAnimation on runningPhase {
+      running: root.shining && root.visible && root.phaseOverride < 0
       from: 0; to: 1; duration: 3200; loops: Animation.Infinite
     }
 

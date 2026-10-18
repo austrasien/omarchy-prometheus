@@ -352,7 +352,7 @@ class CoreTest(unittest.TestCase):
         c.challenge_accept(cid, self.at(60))
         c.challenge_abandon(self.at(65))
         self.assertTrue(c.end(self.at(66))["success"])
-        self.assertEqual(c.profile(self.at(66))["challengeXp"], 0)
+        self.assertEqual(c.profile(self.at(66))["challengeXp"], -3)   # abandoning costs 3 XP
         c.start("b", self.at(100))
         cid = c.update_challenge(self.at(160))[0][1]["id"]
         self.assertEqual(c.update_challenge(self.at(166))[0][0], "expired")
@@ -481,6 +481,17 @@ class CoreTest(unittest.TestCase):
         self.assertEqual(card["league"]["name"], "Bronze")
         self.assertTrue(card["firstDay"])
         self.assertTrue(card["seasons"][0]["running"])
+
+
+    def test_abandoning_a_challenge_costs_three_xp(self):
+        c = self.core
+        c.start(None, self.at(0))
+        c.update_challenge(self.at(61))                       # offered after an hour
+        ch = c.challenge_state(self.at(61))
+        c.challenge_accept(ch["id"], self.at(61))
+        before = c.profile(self.at(62))["challengeXp"]
+        self.assertEqual(c.challenge_abandon(self.at(62))["penalty"], 3)
+        self.assertEqual(c.profile(self.at(62))["challengeXp"], before - 3)
 
 
 if __name__ == "__main__":
