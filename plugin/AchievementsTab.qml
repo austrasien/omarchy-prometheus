@@ -38,8 +38,11 @@ Column {
 
   readonly property var families: achData ? achData.families || [] : []
 
-  // The 3 latest unlocks, across families, newest first.
-  readonly property var recent: {
+  // Unlocks of the last 7 days, across families, newest first (16 at most;
+  // at least the 3 latest, however old).
+  readonly property int recentDays: 7
+  readonly property int recentMax: 16
+  readonly property var unlockedAll: {
     var all = []
     for (var i = 0; i < families.length; i++) {
       var f = families[i]
@@ -47,7 +50,40 @@ Column {
         if (f.tiers[j].unlockedAt) all.push(f.tiers[j])
     }
     all.sort(function(a, b) { return b.unlockedAt - a.unlockedAt })
-    return all.slice(0, 3)
+    return all
+  }
+  readonly property var recentAll: {
+    var since = Date.now() - recentDays * 86400000
+    var out = unlockedAll.filter(function(t) { return t.unlockedAt >= since })
+    return out.length >= 3 ? out : unlockedAll.slice(0, 3)
+  }
+  readonly property var recent: recentAll.slice(0, recentMax)
+  property var picked: null              // the capsule pointed at; the newest by default
+  readonly property var detail: picked || (recent.length ? recent[0] : null)
+
+  // Capsules split into centered lines that fit the width.
+  FontMetrics { id: capMetrics; font.family: w.fontFamily; font.pixelSize: Style.font.caption; font.bold: true }
+  readonly property var capsuleLines: {
+    var lines = [], line = [], used = 0, gap = Style.space(6)
+    for (var i = 0; i < recent.length; i++) {
+      var t = recent[i]
+      var wd = capMetrics.advanceWidth("\u{F0538} " + t.name + "  +" + t.xp) + Style.space(20)
+      var need = line.length ? used + gap + wd : wd
+      if (line.length && need > width) { lines.push(line); line = []; need = wd }
+      line.push(t)
+      used = need
+    }
+    if (line.length) lines.push(line)
+    return lines
+  }
+
+  function ago(ms) {
+    var m = Math.round((Date.now() - ms) / 60000)
+    if (m < 60) return m <= 1 ? "just now" : m + " min ago"
+    var h = Math.round(m / 60)
+    if (h < 24) return h + " h ago"
+    var d = Math.round(h / 24)
+    return d === 1 ? "yesterday" : d + " days ago"
   }
 
   function doneCount(f) {
@@ -124,63 +160,68 @@ Column {
     }
   }
 
-  // ---- recent unlocks, with their lines
+  // ---- recent unlocks, as capsules (like the bar's), the picked one's lines below
   Column {
     width: parent.width
-    spacing: Style.space(6)
+    spacing: Style.space(8)
     visible: tab.recent.length > 0
 
     PanelSectionHeader {
-      text: "LATEST"
+      text: tab.recentAll.length > tab.recent.length
+        ? "LATEST  ·  " + tab.recent.length + " OF " + tab.recentAll.length + " THIS WEEK"
+        : "LATEST"
       foreground: w.fg
       fontFamily: w.fontFamily
     }
 
-    Repeater {
-      model: tab.recent
-
-      Column {
-        required property var modelData
-        width: tab.width
-        spacing: Style.space(2)
-
-        Item {
-          width: parent.width
-          height: recentName.implicitHeight
-
-          RarityText {
-            id: recentName
-            anchors.left: parent.left
-            anchors.right: recentXp.left
-            anchors.rightMargin: Style.space(6)
-            text: modelData.name
-            color: w.rarityColor(modelData.rarity)
-            legendary: modelData.rarity === "legendary"
-            fontFamily: w.fontFamily
-            pixelSize: Style.font.body
-          }
-
-          Text {
-            id: recentXp
-            anchors.right: parent.right
-            textFormat: Text.PlainText
-            text: "+" + modelData.xp + " XP"
-            color: w.gold
-            font.family: w.fontFamily
-            font.pixelSize: Style.font.caption
+    Column {
+      width: parent.width
+      spacing: Style.space(6)
+      Repeater {
+        model: tab.capsuleLines
+        Row {
+          required property var modelData
+          anchors.horizontalCenter: parent.horizontalCenter
+          spacing: Style.space(6)
+          Repeater {
+            model: modelData
+            AchCapsule {
+              required property var modelData
+              w: tab.w
+              tier: modelData
+              selected: tab.detail === modelData
+              onPicked: tab.picked = modelData
+            }
           }
         }
+      }
+    }
 
-        Text {
-          width: parent.width
-          wrapMode: Text.WordWrap
-          textFormat: Text.PlainText
-          text: modelData.quip || ""
-          color: Util.alpha(w.fg, 0.6)
-          font.family: w.fontFamily
-          font.pixelSize: Style.font.caption
-          font.italic: true
-        }
+    Column {
+      width: parent.width
+      spacing: Style.space(2)
+      visible: !!tab.detail
+
+      Text {
+        width: parent.width
+        horizontalAlignment: Text.AlignHCenter
+        wrapMode: Text.WordWrap
+        textFormat: Text.PlainText
+        text: tab.detail ? tab.detail.desc + "\u00a0\u00a0·\u00a0" + tab.ago(tab.detail.unlockedAt).replace(/ /g, "\u00a0") : ""
+        color: Util.alpha(w.fg, 0.75)
+        font.family: w.fontFamily
+        font.pixelSize: Style.font.caption
+      }
+      Text {
+        width: parent.width
+        horizontalAlignment: Text.AlignHCenter
+        wrapMode: Text.WordWrap
+        textFormat: Text.PlainText
+        text: tab.detail ? tab.detail.quip || "" : ""
+        color: Util.alpha(w.fg, 0.5)
+        font.family: w.fontFamily
+        font.pixelSize: Style.font.caption
+        font.italic: true
       }
     }
   }
