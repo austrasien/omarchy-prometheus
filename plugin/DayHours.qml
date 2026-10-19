@@ -138,22 +138,38 @@ Item {
       ctx.beginPath(); ctx.moveTo(0, root.yOfMg(info.lowMg)); ctx.lineTo(width, root.yOfMg(info.lowMg)); ctx.stroke()
       ctx.setLineDash([])
       }
-      if (pts.length > 1 && root.shown("caffeine")) {
+      // Up to now, filled; what is to come (no other cup), dashed.
+      var past = pts.filter(function(p) { return !p.future })
+      var next = pts.filter(function(p) { return p.future })
+      if (past.length && next.length) next.unshift(past[past.length - 1])
+      if (past.length > 1 && root.shown("caffeine")) {
         ctx.beginPath()
-        ctx.moveTo(root.xOf(pts[0].at), root.yOfMg(0))
-        for (var i = 0; i < pts.length; i++) ctx.lineTo(root.xOf(pts[i].at), root.yOfMg(pts[i].mg))
-        ctx.lineTo(root.xOf(pts[pts.length - 1].at), root.yOfMg(0))
+        ctx.moveTo(root.xOf(past[0].at), root.yOfMg(0))
+        for (var i = 0; i < past.length; i++) ctx.lineTo(root.xOf(past[i].at), root.yOfMg(past[i].mg))
+        ctx.lineTo(root.xOf(past[past.length - 1].at), root.yOfMg(0))
         ctx.closePath()
         ctx.fillStyle = Qt.rgba(root.coffeeColor.r, root.coffeeColor.g, root.coffeeColor.b, 0.18)
         ctx.fill()
         ctx.beginPath()
-        for (var j = 0; j < pts.length; j++) {
-          var x = root.xOf(pts[j].at), y = root.yOfMg(pts[j].mg)
+        for (var j = 0; j < past.length; j++) {
+          var x = root.xOf(past[j].at), y = root.yOfMg(past[j].mg)
           if (j === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
         }
         ctx.strokeStyle = root.coffeeColor
         ctx.lineWidth = 2
         ctx.stroke()
+      }
+      if (next.length > 1 && root.shown("caffeine")) {
+        ctx.beginPath()
+        for (var k = 0; k < next.length; k++) {
+          var nx = root.xOf(next[k].at), ny = root.yOfMg(next[k].mg)
+          if (k === 0) ctx.moveTo(nx, ny); else ctx.lineTo(nx, ny)
+        }
+        ctx.setLineDash([4, 3])
+        ctx.strokeStyle = Qt.rgba(root.coffeeColor.r, root.coffeeColor.g, root.coffeeColor.b, 0.7)
+        ctx.lineWidth = 1.5
+        ctx.stroke()
+        ctx.setLineDash([])
       }
       // Now.
       if (info.now >= info.fromMs && info.now < info.toMs) {

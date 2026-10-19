@@ -166,8 +166,10 @@ class Coffee:
                 h["cups"] += 1
         for h in hours:
             h["focus"] = round(h["focus"])
-        until = min(end, at)
-        curve = [{"at": t, "mg": round(in_body(cups, t), 1)} for t in range(start, until + 1, 10 * 60_000)]
+        # Every 10 minutes over the whole day, and now: past points measured
+        # from the cups taken, later ones what is to come if no other cup.
+        times = sorted(set(range(start, end + 1, 10 * 60_000)) | ({at} if start <= at < end else set()))
+        curve = [{"at": t, "mg": round(in_body(cups, t), 1), "future": t > at} for t in times]
         return {"success": True, "fromMs": start, "toMs": end, "now": at, "hours": hours, "sessions": sessions,
                 "quests": quests, "cups": [c for c in cups if start <= c < end], "caffeine": curve,
                 "lowMg": LOW_MG, "limitMg": DAILY_LIMIT_MG, "mgPerCup": MG_PER_CUP,
