@@ -27,6 +27,8 @@ QUALIFYING_SECONDS = 10 * 60      # shorter sessions count for nothing
 # common, rare, epic, and legendary from 360 XP. Secrets are epic; the
 # calendar's dates are common.
 RARITIES = ["normal", "common", "rare", "epic", "legendary"]
+FIXED_RARITY_XP = {"normal": 10, "common": 20, "rare": 40, "epic": 80, "legendary": 150}
+LEADERBOARD_WARMUP_DAYS = 30     # a new top-10 entry only counts this long after the first day
 RARITY_XP = [30, 60, 140, 360]
 
 
@@ -55,6 +57,9 @@ class Family:
     unit: str = ""               # shown with the progress: "", "h", "%", "days"
     scale: float = 1.0           # measure / scale is what is shown
     weight: int = 1              # x1 easy, x2 hard, x3 extreme
+    # A rarity chosen by hand, per tier (or one for all), for achievements
+    # whose difficulty is not in their numbers; XP then follows the rarity.
+    rarities: list | str | None = None
 
     @property
     def single(self) -> bool:
@@ -64,6 +69,8 @@ class Family:
         return self.id if self.single else f"{self.id}:{self.thresholds[i]:g}"
 
     def xp(self, i: int) -> int:
+        if self.rarities is not None:
+            return FIXED_RARITY_XP[self.rarity(i)]
         if self.secret:
             return 25
         if self.single:
@@ -75,6 +82,8 @@ class Family:
         return base * self.weight
 
     def rarity(self, i: int) -> str:
+        if self.rarities is not None:
+            return self.rarities if isinstance(self.rarities, str) else self.rarities[i]
         return rarity_for(self.xp(i), self.secret)
 
     def quip(self, i: int) -> str:
@@ -134,6 +143,7 @@ class Context:
     seasons: list = field(default_factory=list)              # every season, the running one last
     day_earned: dict = field(default_factory=dict)           # date -> earned XP (competition.Ledger)
     session_focus: list = field(default_factory=list)        # (start ms, focus s) of every session
+    events: dict = field(default_factory=dict)               # event kind -> count (usage of the tool)
 
 
 def _date(s: str) -> dt.date:
@@ -221,6 +231,7 @@ def build_context(store, now: int, level: int) -> Context:
     ctx.seasons = C.seasons(ledger)
     ctx.day_earned = dict(ledger.xp)
     ctx.session_focus = [(start, sec) for sec, start, _, _ in ledger.session_rows]
+    ctx.events = {r[0]: r[1] for r in store.db.execute("SELECT kind, COUNT(*) FROM events GROUP BY kind")}
     return ctx
 
 
@@ -361,6 +372,51 @@ def _session_records(c: Context) -> int | None:
 def _day_podiums(c: Context) -> int | None:
     from .competition import podiums
     return podiums([(d, x) for d, x in c.day_earned.items()]) or None
+
+
+def _event(kind: str):
+    return lambda c: c.events.get(kind, 0) or None
+
+
+SETTING_KINDS = ("setting:handle", "setting:daystart", "setting:presence", "setting:goal",
+                 "setting:apps", "setting:words", "setting:aliases")
+TABS = ("session", "tasks", "quests", "leagues", "seasons", "achievements", "stats", "leaderboard", "settings")
+
+
+def _power_user(c: Context) -> int | None:
+    touched = all(c.events.get(k) for k in SETTING_KINDS)
+    export = any(k.startswith("setting:export:") for k in c.events)
+    return 1 if touched and export else None
+
+
+def _grand_tour(c: Context) -> int | None:
+    return 1 if all(c.events.get(f"tab:{t}") for t in TABS) else None
+
+
+def _new_top10(values: list[tuple], after) -> int:
+    """Entries that made the top 10 of everything so far, from `after` on.
+    `values`: (order key, value), the order key comparable with `after`."""
+    seen, n = [], 0
+    for key, v in sorted(values):
+        if key >= after and sum(1 for x in seen if x > v) < 10:
+            n += 1
+        seen.append(v)
+    return n
+
+
+def _hall_of_fame(c: Context) -> int | None:
+    days = sorted(c.day_earned)
+    if not days:
+        return None
+    after = (_date(days[0]) + dt.timedelta(days=LEADERBOARD_WARMUP_DAYS)).isoformat()
+    return _new_top10(list(c.day_earned.items()), after) or None
+
+
+def _session_legend(c: Context) -> int | None:
+    if not c.session_focus:
+        return None
+    after = min(s for s, _ in c.session_focus) + LEADERBOARD_WARMUP_DAYS * 86_400_000
+    return _new_top10(c.session_focus, after) or None
 
 
 def _pivots(c: Context) -> int | None:
@@ -1256,6 +1312,63 @@ FAMILIES: list[Family] = [
            ["{n} podium days. Bronze is still a medal; you aim higher.",
             "{n} top-3 days. Your best is a moving target."]),
 
+    # ---- exploring the tool (rarity set by hand)
+    Family("presskit", "Press kit", _event("share_card"), [1, 5, 20],
+           lambda t: f"Press Kit ×{t:g}", lambda t: f"Generate your ID card {t:g} times.",
+           ["Your service record, minted. Personal brand: shipped.",
+            "{n} cards. Your PR team is just you, and it's enough."],
+           rarities=["common", "rare", "epic"]),
+    Family("revisionist", "Revisionist history", _event("board_remove_done"), [1],
+           lambda t: "Revisionist History", lambda t: "Take a finished quest off the leaderboard.",
+           ["History is written by the ones who ship. And edited by them too."], rarities="rare"),
+    Family("callsign", "Call sign", _event("setting:handle"), [1],
+           lambda t: "Call Sign", lambda t: "Set your @handle.",
+           ["Every founder needs a handle. Now the internet knows who to blame."], rarities="normal"),
+    Family("timezone", "Own your clock", _event("setting:daystart"), [1],
+           lambda t: "Own Your Clock", lambda t: "Change the hour your day starts.",
+           ["Midnight is a convention. You set your own."], rarities="common"),
+    Family("pacemaker", "Pacemaker", _event("setting:presence"), [1],
+           lambda t: "Pacemaker", lambda t: "Change how often \"Still there?\" asks.",
+           ["You tuned the heartbeat monitor. Trust, but verify."], rarities="common"),
+    Family("rebrand", "Rebrand", _event("setting:aliases"), [1],
+           lambda t: "Rebrand", lambda t: "Rename or merge an app.",
+           ["A rebrand. Cheaper than a pivot, almost as satisfying."], rarities="normal"),
+    Family("redacted", "Redacted", _event("setting:words"), [1],
+           lambda t: "Redacted", lambda t: "Add a forbidden word for window titles.",
+           ["Some things the logs should never see. Operational security."], rarities="rare"),
+    Family("invisible", "Invisible ink", _event("setting:apps"), [1],
+           lambda t: "Invisible Ink", lambda t: "Hide an app from the records.",
+           ["Off the books. Every empire has a back office."], rarities="common"),
+    Family("goalsetter", "Goal setter", _event("setting:goal"), [1],
+           lambda t: "Goal Setter", lambda t: "Set an hours goal.",
+           ["A number on the wall. Now the work has a scoreboard."], rarities="normal"),
+    Family("formatwar", "Format war", lambda c: sum(v for k, v in c.events.items() if k == "setting:export:apng") or None, [1],
+           lambda t: "Format War", lambda t: "Switch the share export to animated PNG.",
+           ["APNG over GIF. Taste is a competitive advantage."], rarities="rare"),
+    Family("poweruser", "Power user", _power_user, [1],
+           lambda t: "Power User", lambda t: "Change every setting at least once.",
+           ["Every knob turned. You don't use tools, you configure them."], rarities="epic"),
+    Family("grandtour", "Grand tour", _grand_tour, [1],
+           lambda t: "Grand Tour", lambda t: "Open every tab of the panel.",
+           ["Full reconnaissance. Now you know the terrain."], rarities="common"),
+    Family("historian", "Historian", _event("bio"), [1, 10, 50],
+           lambda t: f"Historian ×{t:g}", lambda t: f"Read {t:g} rival bios in the leagues.",
+           ["Know your rivals. They built the world you're optimizing.",
+            "{n} bios read. Standing on the shoulders of giants, and taking notes."],
+           rarities=["normal", "rare", "epic"]),
+
+    # ---- leaderboards: new top-10 entries, from 30 days in
+    Family("halloffame", "Hall of fame", _hall_of_fame, [1, 5, 10, 25, 50],
+           lambda t: f"Hall of Fame ×{t:g}",
+           lambda t: f"Put a day in your top 10 days, {t:g} times (from your 30th day on).",
+           ["Into the top 10. The leaderboard just got harder to read without you.",
+            "{n} hall-of-fame days. Your history is now mostly highlights."]),
+    Family("sessionlegend", "Session legend", _session_legend, [1, 5, 10, 25],
+           lambda t: f"Session Legend ×{t:g}",
+           lambda t: f"Put a session in your top 10 sessions, {t:g} times (from your 30th day on).",
+           ["A top-10 session. Deep work, certified.",
+            "{n} legendary sessions. Focus as a moat."]),
+
     Family("frost", "Cryo mode", lambda c: sum(1 for s in c.closed if s["temp"] is not None and s["temp"] < 0) or None,
            [1, 5, 10, 20, 30],
            lambda t: f"Cryo Mode {t:g}", lambda t: f"Finish {t:g} sessions below 0 °C.",
@@ -1275,7 +1388,7 @@ WEIGHTS = {
     "closer": 2, "longgame": 3, "unbroken": 2, "cleansweep": 2, "deepquest": 2, "payload": 2,
     "marathoner": 3,
     "leagueclimb": 2, "diamondhands": 3, "promostreak": 2, "seasonpass": 2, "hardmode": 3,
-    "honorroll": 2, "podium": 2, "stier": 3,
+    "honorroll": 2, "podium": 2, "stier": 3, "halloffame": 2, "sessionlegend": 2,
 }
 for _f in FAMILIES:
     _f.weight = WEIGHTS.get(_f.id, 1)

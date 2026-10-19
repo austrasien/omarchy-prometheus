@@ -401,6 +401,7 @@ class Core:
     def goal_set(self, value) -> dict:
         if value in (None, "off"):
             self.store.set_setting("hoursGoal", None)
+            self._used("setting:goal")
             return {"success": True, "goal": None}
         if not isinstance(value, dict) or value.get("period") not in GOAL_LIMITS:
             raise Refused("Invalid goal")
@@ -408,6 +409,7 @@ class Core:
         hours = round(min(hi, max(lo, float(value.get("hours", 0)))) * 2) / 2
         goal = {"hours": hours, "period": value["period"]}
         self.store.set_setting("hoursGoal", goal)
+        self._used("setting:goal")
         return {"success": True, "goal": goal}
 
     # --------------------------------------------------------------- stats
@@ -441,6 +443,7 @@ class Core:
         clean = sorted({a.strip() for a in apps if a.strip()})
         self.store.set_setting("hiddenApps", clean)
         self._split(at)  # the focused app may have just become hidden, or visible
+        self._used("setting:apps")
         return {"success": True, "hiddenApps": clean}
 
     def set_aliases(self, aliases, at: int) -> dict:
@@ -451,6 +454,7 @@ class Core:
         clean = {k.strip(): v.strip() for k, v in aliases.items() if k.strip() and v.strip() and k.strip() != v.strip()}
         self.store.set_setting("aliases", clean)
         self._split(at)  # an alias can make the focused app hidden, or visible
+        self._used("setting:aliases")
         return {"success": True, "aliases": clean}
 
     def known_apps(self, days: int, at: int) -> dict:
@@ -586,6 +590,7 @@ class Core:
                 clean.append(w)
         self.store.set_setting("hiddenTitleWords", clean)
         self._split(at)  # the focused title may contain a word just added, or removed
+        self._used("setting:words")
         return {"success": True, "hiddenTitleWords": clean}
 
     # ------------------------------------------------------------ timeline
@@ -614,6 +619,24 @@ class Core:
 
     # ------------------------------------------------------------ day start
 
+    # What the player did with the tool itself (settings changed, cards
+    # generated, tabs opened...): recorded as events, for the achievements
+    # that reward exploring it.
+    UI_EVENTS = {"bio"} | {f"tab:{t}" for t in ("session", "tasks", "quests", "leagues", "seasons",
+                                                 "achievements", "stats", "leaderboard", "settings")}
+
+    def _used(self, kind: str) -> None:
+        self.store.add_event(kind, T.now_ms(), None)
+
+    def ui_event(self, kind) -> dict:
+        """A UI action worth remembering (a tab opened once, a bio read)."""
+        if kind not in self.UI_EVENTS:
+            raise Refused("Unknown UI event")
+        if kind.startswith("tab:") and self.store.count_events(kind) > 0:
+            return {"success": True}           # a tab counts once
+        self._used(kind)
+        return {"success": True}
+
     HANDLE_CHARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-")
 
     def handle(self) -> str:
@@ -625,6 +648,7 @@ class Core:
         if h is None or len(h) > 32 or not set(h) <= self.HANDLE_CHARS:
             raise Refused("Invalid handle: up to 32 letters, digits, _ . -")
         self.store.set_setting("handle", h)
+        self._used("setting:handle")
         return {"success": True, "handle": h}
 
     SHARE_FORMATS = ("gif", "apng")
@@ -637,10 +661,12 @@ class Core:
         if fmt not in self.SHARE_FORMATS:
             raise Refused("Invalid export format (gif or apng)")
         self.store.set_setting("shareFormat", fmt)
+        self._used("setting:export:" + fmt)
         return {"success": True, "format": fmt}
 
     def share(self, at: int) -> dict:
         """Everything the share card shows."""
+        self._used("share_card")
         ledger = C.Ledger(self.store, at)
         leagues = C.leagues(ledger)
         league = leagues["current"]
@@ -687,6 +713,7 @@ class Core:
             raise Refused("Invalid day start hour (0 to 12)")
         self.store.set_setting("dayStartHour", int(hour))
         T.set_day_start_hour(int(hour))
+        self._used("setting:daystart")
         return {"success": True, "dayStartHour": T.day_start_hour()}
 
     # -------------------------------------------------------------- profile
@@ -843,6 +870,9 @@ class Core:
         return {"success": True, "seasons": seasons, "medals": C.season_medals(self.store)}
 
     def leaderboard_remove_quest(self, qid, at: int) -> dict:
+        row = self.store.db.execute("SELECT done_at FROM quests WHERE id=?", (qid,)).fetchone() if isinstance(qid, str) else None
+        if row is not None and row["done_at"] is not None:
+            self._used("board_remove_done")
         return self._quest(self.quests.remove_from_board, qid, at)
 
     def leaderboard(self, board, at: int) -> dict:
@@ -934,6 +964,7 @@ class Core:
         if not isinstance(minutes, (int, float)) or not lo <= int(minutes) <= hi:
             raise Refused(f"Invalid presence interval ({lo} to {hi} min)")
         self.store.set_setting("presenceEveryMinutes", int(minutes))
+        self._used("setting:presence")
         return {"success": True, "minutes": int(minutes)}
 
     REFLEX_MS = 10_000

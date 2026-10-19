@@ -250,7 +250,11 @@ Column {
             enabled: !player.modelData.you && !!player.modelData.bio
             hoverEnabled: true
             cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-            onClicked: tab.openBio = player.bioOpen ? "" : player.modelData.name
+            onClicked: {
+              var opening = !player.bioOpen
+              tab.openBio = opening ? player.modelData.name : ""
+              if (opening) p.call("ui:event", ["bio"])      // toward the Historian achievement
+            }
           }
 
           // Your row: the chevrons stream up or down with your zone.

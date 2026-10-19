@@ -25,12 +25,12 @@ Column {
 
   // ---- no session: task entry, with past session names
   //
-  // Nothing typed: the 6 most recent names. Typing: names starting with it,
+  // Nothing typed: the 3 most recent names, then the 4 most used. Typing: names starting with it,
   // then containing it, most used first; the best prefix match is shown
   // greyed after the cursor and Tab takes it. Up / Down pick from the list,
   // Enter starts the picked name, else what is typed, else the last name.
   property int selIndex: -1
-  readonly property var suggestions: w.suggestNames(taskField.text, 6)
+  readonly property var suggestions: w.suggestNames(taskField.text, 7)
   onSuggestionsChanged: if (selIndex >= suggestions.length) selIndex = suggestions.length - 1
 
   readonly property string completion: {

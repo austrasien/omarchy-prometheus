@@ -68,11 +68,12 @@ BarWidget {
   //
   //   [{ name, count, last (epoch ms) }]
   //
-  // Past 20 names, the ones not used for two days go first, least used
-  // first; recent names are never dropped, even past the cap.
+  // Past 20 names, each with its use count and last use. When a new one
+  // pushes past 20, the one with the fewest uses among those not used in the
+  // last three days goes; names used in the last three days are never dropped.
 
   readonly property int maxNames: 20
-  readonly property double staleAfterMs: 2 * 24 * 3600 * 1000
+  readonly property double staleAfterMs: 3 * 24 * 3600 * 1000
 
   readonly property var sessionNames: {
     var list = settings && Array.isArray(settings.sessionNames) ? settings.sessionNames : null
@@ -134,10 +135,17 @@ BarWidget {
 
   // Up to `limit` names for what is typed: names starting with it first,
   // then names containing it; within each, most used then most recent.
-  // With nothing typed, the most recent ones.
+  // With nothing typed: the 3 most recent, then the 4 most used of the rest.
   function suggestNames(query, limit) {
     var q = (query || "").trim().toLowerCase()
-    if (q === "") return recentNames.slice(0, limit)
+    if (q === "") {
+      var recent = recentNames.slice(0, 3)
+      var taken = {}
+      for (var r = 0; r < recent.length; r++) taken[recent[r].name] = true
+      var used = sessionNames.filter(function(e) { return !taken[e.name] })
+        .sort(function(a, b) { return (b.count || 0) - (a.count || 0) || b.last - a.last })
+      return recent.concat(used.slice(0, 4))
+    }
     function score(e) { return e.count * 1e13 + e.last }
     var starts = [], contains = []
     for (var i = 0; i < sessionNames.length; i++) {
@@ -226,6 +234,8 @@ BarWidget {
   property bool panelOpen: false
   // Panel tab, kept across openings.
   property string tab: "session"
+  // Each tab opened counts once toward the Grand tour achievement.
+  onTabChanged: if (panelOpen && p.live) p.call("ui:event", ["tab:" + tab])
 
   // XP just earned from an item of the panel (e.g. a task's laurel): the
   // panel flies it up into the XP bar, which then pulses.
@@ -863,7 +873,10 @@ BarWidget {
     interval: 400
   }
 
-  onPanelOpenChanged: if (!panelOpen) lingerTimer.restart()
+  onPanelOpenChanged: {
+    if (!panelOpen) lingerTimer.restart()
+    else if (p.live) p.call("ui:event", ["tab:" + tab])
+  }
 
   Loader {
     id: panelLoader
