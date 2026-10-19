@@ -15,6 +15,25 @@ Item {
   property color coffeeColor: "#c08552"
 
   readonly property var hours: info ? info.hours : []
+
+  // Series hidden from the legend (clicked off).
+  property var hidden: ({})
+  function shown(key) { return !hidden[key] }
+  function toggle(key) {
+    var h = Object.assign({}, hidden)
+    h[key] = !h[key]
+    hidden = h
+    curve.requestPaint()
+  }
+  readonly property var series: [
+    { key: "focus", label: "Session", color: w.accent },
+    { key: "tokens", label: "Tokens", color: agentColor },
+    { key: "caffeine", label: "Caffeine", color: coffeeColor },
+    { key: "cups", label: "Cups", color: coffeeColor, glyph: "☕" },
+    { key: "tasks", label: "Tasks", color: w.gold, glyph: "✓" },
+    { key: "quests", label: "Quests", color: w.red, glyph: "★" },
+    { key: "ideal", label: "Best time", color: w.green }
+  ]
   readonly property real colW: width / 24
   readonly property real chartTop: Style.space(30)
   readonly property real chartH: Style.space(70)
@@ -29,7 +48,7 @@ Item {
   function yOfMg(mg) { return chartTop + chartH - mg / maxMg * chartH }
   function clock(ms) { return Qt.formatTime(new Date(ms), "HH:mm") }
 
-  height: chartTop + chartH + Style.space(16)
+  height: chartTop + chartH + Style.space(16) + legend.implicitHeight + Style.space(6)
 
   // Above each hour: cups, tasks, quests.
   Repeater {
@@ -44,7 +63,7 @@ Item {
       Text {
         width: parent.width
         horizontalAlignment: Text.AlignHCenter
-        visible: modelData.cups > 0
+        visible: modelData.cups > 0 && root.shown("cups")
         textFormat: Text.PlainText
         text: modelData.cups > 1 ? "☕" + modelData.cups : "☕"
         color: root.coffeeColor
@@ -53,9 +72,11 @@ Item {
       Text {
         width: parent.width
         horizontalAlignment: Text.AlignHCenter
-        visible: modelData.tasks > 0 || modelData.quests > 0
+        readonly property bool q: modelData.quests > 0 && root.shown("quests")
+        readonly property bool t: modelData.tasks > 0 && root.shown("tasks")
+        visible: q || t
         textFormat: Text.PlainText
-        text: (modelData.quests > 0 ? "★" : "") + (modelData.tasks > 0 ? "✓" + modelData.tasks : "")
+        text: (q ? "★" : "") + (t ? "✓" + modelData.tasks : "")
         color: modelData.quests > 0 ? root.w.red : root.w.gold
         font.family: root.w.fontFamily
         font.pixelSize: Style.font.caption - 3
@@ -83,6 +104,7 @@ Item {
         anchors.bottom: parent.bottom
         x: 1
         width: parent.width * 0.6 - 1
+        visible: root.shown("focus")
         height: parent.height * Math.min(60, modelData.focus) / 60
         radius: 1
         color: Util.alpha(root.w.accent, 0.55)
@@ -91,7 +113,7 @@ Item {
         anchors.bottom: parent.bottom
         x: parent.width * 0.62
         width: Math.max(1, parent.width * 0.28)
-        visible: modelData.tokens > 0
+        visible: modelData.tokens > 0 && root.shown("tokens")
         height: Math.max(1, parent.height * Math.sqrt(modelData.tokens / root.maxTokens))
         color: Util.alpha(root.agentColor, 0.8)
       }
@@ -109,12 +131,14 @@ Item {
       if (!info) return
       var pts = info.caffeine
       // Threshold under which a cup is worth it.
+      if (root.shown("caffeine")) {
       ctx.setLineDash([3, 3])
       ctx.strokeStyle = Qt.rgba(root.coffeeColor.r, root.coffeeColor.g, root.coffeeColor.b, 0.5)
       ctx.lineWidth = 1
       ctx.beginPath(); ctx.moveTo(0, root.yOfMg(info.lowMg)); ctx.lineTo(width, root.yOfMg(info.lowMg)); ctx.stroke()
       ctx.setLineDash([])
-      if (pts.length > 1) {
+      }
+      if (pts.length > 1 && root.shown("caffeine")) {
         ctx.beginPath()
         ctx.moveTo(root.xOf(pts[0].at), root.yOfMg(0))
         for (var i = 0; i < pts.length; i++) ctx.lineTo(root.xOf(pts[i].at), root.yOfMg(pts[i].mg))
@@ -139,7 +163,7 @@ Item {
       }
       // Best time for the next cup.
       var ideal = info.coffee && info.coffee.ideal ? info.coffee.ideal.at : null
-      if (ideal && ideal < info.toMs) {
+      if (ideal && ideal < info.toMs && root.shown("ideal")) {
         var ix = root.xOf(ideal)
         ctx.setLineDash([2, 2])
         ctx.strokeStyle = String(root.w.green)
@@ -164,6 +188,53 @@ Item {
       color: Util.alpha(root.w.fg, 0.45)
       font.family: root.w.fontFamily
       font.pixelSize: Style.font.caption - 2
+    }
+  }
+
+  // Legend: a dot per series, click to hide or show it.
+  Flow {
+    id: legend
+    y: root.chartTop + root.chartH + Style.space(18)
+    width: root.width
+    spacing: Style.space(10)
+    Repeater {
+      model: root.series
+      Item {
+        id: item
+        required property var modelData
+        readonly property bool on: root.shown(modelData.key)
+        width: entry.implicitWidth
+        height: entry.implicitHeight
+        opacity: on ? 1 : 0.4
+      Row {
+        id: entry
+        spacing: Style.space(4)
+        Rectangle {
+          anchors.verticalCenter: parent.verticalCenter
+          width: Style.space(9)
+          height: width
+          radius: width / 2
+          color: item.on ? item.modelData.color : "transparent"
+          border.width: 1.5
+          border.color: item.modelData.color
+        }
+        Text {
+          anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
+          text: (item.modelData.glyph ? item.modelData.glyph + " " : "") + item.modelData.label
+          color: Util.alpha(root.w.fg, 0.8)
+          font.family: root.w.fontFamily
+          font.pixelSize: Style.font.caption - 1
+          font.strikeout: !item.on
+        }
+      }
+        MouseArea {
+          anchors.fill: parent
+          anchors.margins: -Style.space(3)
+          cursorShape: Qt.PointingHandCursor
+          onClicked: root.toggle(item.modelData.key)
+        }
+      }
     }
   }
 }
