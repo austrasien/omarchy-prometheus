@@ -88,6 +88,8 @@ class Daemon:
             "settings:setHandle": lambda a: self.core.set_handle(a[0] if a else None),
             "share:get": lambda a: self.core.share(self.clock()),
             "sessions:names": lambda a: self.core.session_names(self.clock()),
+            "settings:getBedtime": lambda a: {"success": True, "bedtimeHour": self.core.coffee.bedtime_hour()},
+            "settings:setBedtime": lambda a: self.core.coffee.set_bedtime(a[0] if a else None),
             "coffee:add": lambda a: self.core.coffee.add(self.clock()),
             "coffee:undo": lambda a: self.core.coffee.undo(self.clock()),
             "coffee:day": lambda a: self.core.coffee.day(a[0] if a else None, self.clock()),

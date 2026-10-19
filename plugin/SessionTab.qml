@@ -609,7 +609,7 @@ Column {
         foreground: w.fg
         accent: w.accent
         fontSize: Style.font.caption
-        tooltipText: "Take back the last coffee (10 minutes at most)"
+        tooltipText: "Take back the last coffee (3 minutes at most)"
         onClicked: tab.uncoffee()
       }
       Button {

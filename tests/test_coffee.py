@@ -35,13 +35,16 @@ class CoffeeTest(unittest.TestCase):
         ideal = now["ideal"]["at"]
         self.assertGreater(ideal, self.t9 + 2 * H)           # caffeine must run low first
         self.assertLessEqual(K.in_body([self.t9], ideal), K.LOW_MG)
-        self.assertTrue(c.undo(self.t9 + 5 * MIN)["success"])
-        self.assertFalse(c.undo(self.t9 + 5 * MIN)["success"])   # nothing left
+        self.assertTrue(c.undo(self.t9 + 2 * MIN)["success"])
+        self.assertFalse(c.undo(self.t9 + 2 * MIN)["success"])   # nothing left
         c.add(self.t9)
-        self.assertFalse(c.undo(self.t9 + 11 * MIN)["success"])  # too late
+        self.assertFalse(c.undo(self.t9 + 4 * MIN)["success"])   # too late (3 minutes)
         # No coffee within 8 h of bed (23:00).
         late = int(dt.datetime(2026, 10, 19, 16, 0).timestamp() * 1000)
         self.assertIsNone(c.ideal(late)["at"])
+        c.set_bedtime(1)                                      # 1:00, the night after
+        self.assertIsNotNone(c.ideal(late)["at"])
+        c.set_bedtime(23)
         # The daily limit.
         for i in range(3):
             c.add(self.t9 + (i + 1) * MIN)

@@ -18,6 +18,7 @@ Column {
   property var known: []       // [{ app, alias, seconds }] seen over 30 days
   property var words: []       // forbidden words in window titles
   property int dayStart: 5     // hour the day starts at
+  property int bedtime: 23     // the best time for a coffee leaves 8 h before it
   property int presenceEvery: 20   // minutes between "Still there?" checks
   property string handle: ""      // the @handle on the share card
   property string shareFormat: "gif"   // gif | apng
@@ -37,6 +38,7 @@ Column {
     p.call("apps:getAliases", [], function(ok, d) { if (ok && d && d.success) tab.aliases = d.aliases || {} })
     p.call("apps:getHiddenWords", [], function(ok, d) { if (ok && d && d.success) tab.words = d.hiddenTitleWords || [] })
     p.call("settings:getDayStart", [], function(ok, d) { if (ok && d && d.success) tab.dayStart = d.dayStartHour })
+    p.call("settings:getBedtime", [], function(ok, d) { if (ok && d && d.success) tab.bedtime = d.bedtimeHour })
     p.call("settings:getPresenceEvery", [], function(ok, d) { if (ok && d && d.success) tab.presenceEvery = d.minutes })
     p.call("settings:getHandle", [], function(ok, d) { if (ok && d && d.success) { tab.handle = d.handle; handleField.text = d.handle } })
     p.call("settings:getShareFormat", [], function(ok, d) { if (ok && d && d.success) tab.shareFormat = d.format })
@@ -55,6 +57,11 @@ Column {
       tab.aliases = d ? d.aliases || {} : {}
       p.call("apps:known", [30], function(ok, k) { if (ok && k && k.success) tab.known = k.apps || [] })
     })
+  }
+
+  function setBedtime(hour) {
+    var h = (hour + 24) % 24
+    p.act("settings:setBedtime", [h], "Bedtime", function(d) { if (d) tab.bedtime = d.bedtimeHour })
   }
 
   function setDayStart(hour) {
@@ -173,7 +180,8 @@ Column {
         { value: "goal", label: "Goal" },
         { value: "apps", label: "Hidden apps" },
         { value: "words", label: "Words" },
-        { value: "aliases", label: "Aliases" }
+        { value: "aliases", label: "Aliases" },
+        { value: "coffee", label: "Coffee" }
       ]
       value: tab.section
       foreground: w.fg
@@ -315,6 +323,61 @@ Column {
         accent: w.accent
         bordered: true
         onClicked: tab.setDayStart(tab.dayStart + 1)
+      }
+    }
+  }
+
+  // ---- coffee: bedtime
+  Column {
+    width: parent.width
+    spacing: Style.space(10)
+    visible: tab.section === "coffee"
+    PanelSectionHeader {
+      text: "BEDTIME"
+      foreground: w.fg
+      fontFamily: w.fontFamily
+    }
+
+    Text {
+      width: parent.width
+      wrapMode: Text.WordWrap
+      textFormat: Text.PlainText
+      text: "The best time for a coffee leaves 8 hours before bed, for the caffeine to clear: the last cup is suggested by "
+        + ((tab.bedtime + 16) % 24) + ":00. An hour before the day start (" + tab.dayStart + ":00) counts as the night after."
+      color: Util.alpha(w.fg, 0.55)
+      font.family: w.fontFamily
+      font.pixelSize: Style.font.caption
+    }
+
+    Row {
+      spacing: Style.space(6)
+
+      Button {
+        text: "−"
+        foreground: w.fg
+        accent: w.accent
+        bordered: true
+        onClicked: tab.setBedtime(tab.bedtime - 1)
+      }
+
+      Text {
+        anchors.verticalCenter: parent.verticalCenter
+        width: Style.space(70)
+        horizontalAlignment: Text.AlignHCenter
+        textFormat: Text.PlainText
+        text: tab.bedtime + ":00"
+        color: w.fg
+        font.family: w.fontFamily
+        font.pixelSize: Style.font.body
+        font.bold: true
+      }
+
+      Button {
+        text: "+"
+        foreground: w.fg
+        accent: w.accent
+        bordered: true
+        onClicked: tab.setBedtime(tab.bedtime + 1)
       }
     }
   }

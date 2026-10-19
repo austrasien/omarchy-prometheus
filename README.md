@@ -31,11 +31,11 @@ only what was actually used.
 - **Aliases**: rename or merge apps; applied when reading, so they rewrite
   the past too and can be undone.
 - **Coffee**: a Coffee button on the Session tab logs a cup (95 mg, one
-  standard cup; Undo for 10 minutes). Caffeine in the blood follows a
+  standard cup; Undo for 3 minutes). Caffeine in the blood follows a
   one-compartment model for a 90 kg man (absorbed in about 45 minutes,
   half-life 5 h); the best time for the next cup is when it falls under
-  60 mg and stays there, before the daily 400 mg and 8 h before a 23:00
-  bedtime. The Session tab shows the day hour by hour: time in session,
+  60 mg and stays there, before the daily 400 mg and 8 h before bedtime (23:00 by
+  default, in Settings). The Session tab shows the day hour by hour: time in session,
   agent tokens, cups, tasks and quests, the caffeine curve, now and the
   best time. Stats has a Coffee view: cups by day and week, per cup, coffee
   days against the others, and correlations with focus, tasks, tokens, XP.
@@ -232,7 +232,8 @@ bar (session ended, challenge won).
 | `toast:preview` | `[rarity]` | Show a sample achievement unlock (to see the capsule) |
 | `share:get` | | What the share card shows |
 | `sessions:names` | | Session names: the 3 last used, the 4 most worked on, and all with focus time |
-| `coffee:add` / `coffee:undo` | | Log a cup / take the last one back (10 min) |
+| `coffee:add` / `coffee:undo` | | Log a cup / take the last one back (3 min) |
+| `settings:getBedtime` / `settings:setBedtime` | `[hour]` | Bedtime, for the best time for a coffee |
 | `coffee:day` | `[fromMs]` | The day hour by hour, caffeine every 10 minutes, the best time for a cup |
 | `stats:coffee` | | Cups by day and week, per cup, correlations |
 | `stats:agents` | | Agent tokens: today, 30 days, machines, models, projects, heatmap, how |

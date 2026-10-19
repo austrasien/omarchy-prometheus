@@ -21,9 +21,9 @@ KA = math.log(2) / (10 / 60)        # absorption per hour
 KE = math.log(2) / 5                 # elimination per hour
 DAILY_LIMIT_MG = 400                 # the usual safe daily amount for an adult
 LOW_MG = 60                          # below this, another cup is worth it (about 4 h after one)
-BEDTIME_HOUR = 23
+BEDTIME_HOUR = 23                    # the default; the bedtime setting
 SLEEP_GAP_H = 8                      # no coffee in the 8 hours before bed
-UNDO_MS = 10 * 60_000                # a cup can be taken back for 10 minutes
+UNDO_MS = 3 * 60_000                 # a cup can be taken back for 3 minutes
 HOUR_MS = 3_600_000
 
 
@@ -67,10 +67,23 @@ class Coffee:
 
     # ------------------------------------------------------------ now
 
+    def bedtime_hour(self) -> int:
+        return int(self.store.get_setting("bedtimeHour", BEDTIME_HOUR))
+
+    def set_bedtime(self, hour) -> dict:
+        try:
+            h = int(hour)
+        except (TypeError, ValueError):
+            return {"success": False, "error": "Invalid hour"}
+        h %= 24
+        self.store.set_setting("bedtimeHour", h)
+        return {"success": True, "bedtimeHour": h}
+
     def _bedtime(self, at: int) -> int:
-        """Tonight's bedtime (the next BEDTIME_HOUR o'clock after the day starts)."""
+        """Tonight's bedtime: the first bedtime o'clock after the day starts
+        (1:00 with a 5:00 day start is the night after)."""
         start = T.day_start(at)
-        bed = dt.datetime.fromtimestamp(start / 1000).replace(hour=BEDTIME_HOUR, minute=0, second=0, microsecond=0)
+        bed = dt.datetime.fromtimestamp(start / 1000).replace(hour=self.bedtime_hour(), minute=0, second=0, microsecond=0)
         ms = int(bed.timestamp() * 1000)
         return ms if ms > start else ms + 86_400_000
 
@@ -90,7 +103,7 @@ class Coffee:
         while t <= cutoff and not low(t):
             t += 5 * 60_000
         if t > cutoff:
-            return {"at": None, "reason": f"Too late for coffee: {BEDTIME_HOUR}:00 bedtime, 8 h to clear it"}
+            return {"at": None, "reason": f"Too late for coffee: {self.bedtime_hour()}:00 bedtime, 8 h to clear it"}
         if t == at:
             return {"at": at, "reason": "Now: caffeine is low"}
         return {"at": t, "reason": f"Caffeine falls under {LOW_MG} mg then"}
@@ -102,6 +115,7 @@ class Coffee:
         today = [c for c in cups if c >= start]
         last = cups[-1] if cups else None
         return {"cupsToday": len(today), "mgToday": len(today) * MG_PER_CUP, "inBody": round(mg),
+                "bedtimeHour": self.bedtime_hour(), "undoMs": UNDO_MS,
                 "mgPerL": round(concentration(mg), 2), "lastAt": last,
                 "canUndo": last is not None and at - last <= UNDO_MS, "ideal": self.ideal(at)}
 
