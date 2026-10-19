@@ -24,6 +24,7 @@ LOW_MG = 60                          # below this, another cup is worth it (abou
 BEDTIME_HOUR = 23                    # the default; the bedtime setting
 SLEEP_GAP_H = 8                      # no coffee in the 8 hours before bed
 UNDO_MS = 3 * 60_000                 # a cup can be taken back for 3 minutes
+NUDGE_SNOOZE_MS = 60 * 60_000        # "Coffee?" answered no: quiet for an hour
 HOUR_MS = 3_600_000
 
 
@@ -118,6 +119,26 @@ class Coffee:
                 "bedtimeHour": self.bedtime_hour(), "undoMs": UNDO_MS,
                 "mgPerL": round(concentration(mg), 2), "lastAt": last,
                 "canUndo": last is not None and at - last <= UNDO_MS, "ideal": self.ideal(at)}
+
+    # ------------------------------------------------------------ "Coffee?"
+
+    def nudge(self, at: int, working: bool) -> dict | None:
+        """During a session, once the best time has come: "Coffee?"."""
+        if not working or at < int(self.store.get_setting("coffeeNudgeQuietUntil", 0) or 0):
+            return None
+        ideal = self.ideal(at)
+        if ideal["at"] is None or ideal["at"] > at:
+            return None
+        return {"reason": "caffeine is low", "inBody": round(in_body(self.cups(at - 86_400_000), at))}
+
+    def nudge_no(self, at: int) -> dict:
+        self.store.set_setting("coffeeNudgeQuietUntil", at + NUDGE_SNOOZE_MS)
+        self.store.add_event("coffee_declined", at, None)
+        return {"success": True}
+
+    def nudge_ok(self, at: int) -> dict:
+        self.store.add_event("coffee_accepted", at, None)
+        return self.add(at)
 
     # ------------------------------------------------------------ the day, hour by hour
 

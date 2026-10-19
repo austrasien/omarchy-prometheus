@@ -75,5 +75,26 @@ class CoffeeTest(unittest.TestCase):
             self.assertIn(aid, got)
 
 
+    def test_nudge(self):
+        c = self.core
+        k = c.coffee
+        self.assertIsNone(k.nudge(self.t9, working=False))     # only in a session
+        self.assertIsNotNone(k.nudge(self.t9, working=True))   # nothing on board: now
+        k.nudge_no(self.t9)
+        self.assertIsNone(k.nudge(self.t9 + 30 * MIN, working=True))
+        self.assertIsNotNone(k.nudge(self.t9 + 61 * MIN, working=True))
+        k.nudge_ok(self.t9 + 61 * MIN)
+        self.assertEqual(k.now(self.t9 + 62 * MIN)["cupsToday"], 1)
+        self.assertIsNone(k.nudge(self.t9 + 70 * MIN, working=True))   # just had one
+
+    def test_break_next_at(self):
+        c = self.core
+        c.start("Work", self.t9)
+        c.update_breaks(self.t9)
+        self.assertEqual(c.break_next_at(self.t9 + MIN), self.t9 + 90 * MIN)
+        c.pause(self.t9 + 10 * MIN)
+        self.assertIsNone(c.break_next_at(self.t9 + 11 * MIN))
+
+
 if __name__ == "__main__":
     unittest.main()

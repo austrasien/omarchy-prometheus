@@ -13,6 +13,8 @@ Item {
   property var info: null              // coffee:day
   property color agentColor: "#ff9e64"
   property color coffeeColor: "#c08552"
+  property color breakColor: "#2ac3de"
+  property var breakAt: null           // when "Break?" is due, in the running session
 
   readonly property var hours: info ? info.hours : []
 
@@ -32,7 +34,8 @@ Item {
     { key: "cups", label: "Cups", color: coffeeColor, glyph: "☕" },
     { key: "tasks", label: "Tasks", color: w.gold, glyph: "✓" },
     { key: "quests", label: "Quests", color: w.red, glyph: "★" },
-    { key: "ideal", label: "Best time", color: w.green }
+    { key: "ideal", label: "Best time", color: w.green },
+    { key: "break", label: "Break", color: breakColor }
   ]
   readonly property real colW: width / 24
   readonly property real chartTop: Style.space(30)
@@ -177,6 +180,15 @@ Item {
         ctx.lineWidth = 1
         ctx.beginPath(); ctx.moveTo(root.xOf(info.now), root.chartTop); ctx.lineTo(root.xOf(info.now), root.chartTop + root.chartH); ctx.stroke()
       }
+      // When "Break?" is due.
+      if (root.breakAt && root.breakAt >= info.fromMs && root.breakAt < info.toMs && root.shown("break")) {
+        var bx = root.xOf(root.breakAt)
+        ctx.setLineDash([2, 2])
+        ctx.strokeStyle = String(root.breakColor)
+        ctx.lineWidth = 1.5
+        ctx.beginPath(); ctx.moveTo(bx, root.chartTop); ctx.lineTo(bx, root.chartTop + root.chartH); ctx.stroke()
+        ctx.setLineDash([])
+      }
       // Best time for the next cup.
       var ideal = info.coffee && info.coffee.ideal ? info.coffee.ideal.at : null
       if (ideal && ideal < info.toMs && root.shown("ideal")) {
@@ -190,6 +202,7 @@ Item {
     }
   }
   onInfoChanged: curve.requestPaint()
+  onBreakAtChanged: curve.requestPaint()
   onWidthChanged: curve.requestPaint()
 
   // Hours along the bottom.

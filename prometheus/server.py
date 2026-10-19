@@ -94,6 +94,8 @@ class Daemon:
             "break:later": lambda a: self.core.break_later(self.clock()),
             "settings:getBreakEvery": lambda a: {"success": True, "minutes": self.core.break_every_minutes()},
             "settings:setBreakEvery": lambda a: self.core.set_break_every(a[0] if a else None),
+            "coffee:nudgeOk": lambda a: self.core.coffee.nudge_ok(self.clock()),
+            "coffee:nudgeNo": lambda a: self.core.coffee.nudge_no(self.clock()),
             "coffee:add": lambda a: self.core.coffee.add(self.clock()),
             "coffee:undo": lambda a: self.core.coffee.undo(self.clock()),
             "coffee:day": lambda a: self.core.coffee.day(a[0] if a else None, self.clock()),

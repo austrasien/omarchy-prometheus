@@ -28,8 +28,12 @@ only what was actually used.
   keeps idle away, so idle alone cannot tell).
 - **Breaks**: after 90 min in session without a break (a pause of 5 min or
   more, by hand or not, resets it; a setting, 30 to 180 min or off), a
-  "Break?" pill unrolls in the bar: Pause pauses the session, Later asks
-  again in 20 min.
+  "Break?" pill unrolls in the bar: OK pauses the session, No asks again
+  in 20 min. The Session tab shows when it is due ("Next break in 35 min")
+  and marks it on the hour by hour view. During a session, when the best
+  time for a coffee has come, "Coffee?": OK logs a cup, No stays quiet for
+  an hour. Questions show one at a time, the most urgent first: "Still
+  there?", the challenge offer, "Break?", "Coffee?".
 - **Privacy**: apps that are never recorded, and words that keep a window
   out of the records when its title contains them (a bank, say).
 - **Aliases**: rename or merge apps; applied when reading, so they rewrite
@@ -238,6 +242,7 @@ bar (session ended, challenge won).
 | `sessions:names` | | Session names: the 3 last used, the 4 most worked on, and all with focus time |
 | `break:take` / `break:later` | | Answer "Break?": pause the session, or ask again in 20 min |
 | `settings:getBreakEvery` / `settings:setBreakEvery` | `[minutes]` | Minutes of work before "Break?" (0 = off) |
+| `coffee:nudgeOk` / `coffee:nudgeNo` | | Answer "Coffee?": log a cup, or quiet for an hour |
 | `coffee:add` / `coffee:undo` | | Log a cup / take the last one back (3 min) |
 | `settings:getBedtime` / `settings:setBedtime` | `[hour]` | Bedtime, for the best time for a coffee |
 | `coffee:day` | `[fromMs]` | The day hour by hour, caffeine every 10 minutes, the best time for a cup |

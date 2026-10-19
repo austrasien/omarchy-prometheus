@@ -401,6 +401,8 @@ class Core:
             "agents": A_.window(self.store, T.day_start(at), at + 1),
             "coffee": self.coffee.now(at),
             "breakNudge": self.break_state(at),
+            "breakNextAt": self.break_next_at(at),
+            "coffeeNudge": self.coffee.nudge(at, self._working()),
         }
 
     # --------------------------------------------------------------- goals
@@ -1062,6 +1064,16 @@ class Core:
             return None
         return {"askedAt": st["asked"], "reason": st.get("reason") or "",
                 "workedMinutes": (at - st["since"]) // 60_000 if st.get("since") else 0}
+
+    def break_next_at(self, at: int) -> int | None:
+        """When "Break?" is due in the running session (None: paused, off)."""
+        s = self._session()
+        st = self._breaks()
+        every = self.break_every_minutes()
+        if s is None or s["pause_started_at"] is not None or not every or st.get("session") != s["id"]:
+            return None
+        since = st.get("since") or at
+        return max(since + every * 60_000, st.get("snoozed") or 0)
 
     def break_take(self, at: int) -> dict:
         st = self._breaks()

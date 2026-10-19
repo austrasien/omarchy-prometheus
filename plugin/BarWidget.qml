@@ -273,6 +273,7 @@ BarWidget {
     + (presencePill.width > 0 ? presencePill.width + Style.space(2) : 0)
     + (pill.width > 0 ? pill.width + Style.space(2) : 0)
     + (breakPill.width > 0 ? breakPill.width + Style.space(2) : 0)
+    + (coffeePill.width > 0 ? coffeePill.width + Style.space(2) : 0)
     + (toastPill.width > 0 ? toastPill.width + Style.space(4) : 0)
     + (achPill.visible ? achPill.width + Style.space(4) : 0)
   implicitHeight: button.implicitHeight
@@ -445,7 +446,7 @@ BarWidget {
 
   readonly property string crossGlyph: String.fromCodePoint(0xF0156)
   readonly property string trophyGlyph: String.fromCodePoint(0xF0538)
-  readonly property bool pillWanted: p.challengeOffered && !root.vertical
+  readonly property bool pillWanted: root.pillTurn === "challenge" && !root.vertical
 
   // 0 -> 1 as the pill draws itself in, and back when it goes.
   property real pillShown: pillWanted ? 1 : 0
@@ -551,89 +552,93 @@ BarWidget {
     }
   }
 
-  // ---- time for a break? A teal pill after the timer (and the challenge
-  // offer): the reason at rest; hovered, "Later" on the left, "Pause" on the
-  // right. Horizontal bars only.
+  // ---- questions in a pill after the timer, one at a time, the most
+  // urgent first: "Still there?" (the session pauses without an answer),
+  // the challenge offer (it expires), "Break?", then "Coffee?". The others
+  // wait their turn.
+  readonly property string pillTurn: p.presence ? "presence"
+    : p.challengeOffered ? "challenge"
+    : p.breakNudge ? "break"
+    : p.coffeeNudge ? "coffee" : ""
 
-  readonly property color breakTeal: "#2ac3de"
-  readonly property bool breakWanted: !!p.breakNudge && !root.vertical
-  property real breakShown: breakWanted ? 1 : 0
-  Behavior on breakShown { NumberAnimation { duration: 450; easing.type: Easing.OutCubic } }
+  // A question; hovered, it splits in two: No on the left, OK on the right.
+  component ChoicePill: Item {
+    id: cp
+    property bool wanted: false
+    property string label: ""
+    property color tint: root.accent
+    signal yes()
+    signal no()
 
-  TextMetrics {
-    id: breakMetrics
-    font.family: root.fontFamily
-    font.pixelSize: Style.font.caption
-    font.bold: true
-    text: breakLabel.text
-  }
-
-  Item {
-    id: breakPill
-    anchors.left: pill.width > 0 ? pill.right : presencePill.width > 0 ? presencePill.right : button.right
+    property real shown: wanted ? 1 : 0
+    Behavior on shown { NumberAnimation { duration: 450; easing.type: Easing.OutCubic } }
+    readonly property real fullWidth: cpMetrics.advanceWidth + Style.space(22)
+    readonly property bool hovered: cpArea.containsMouse
+    readonly property bool onYes: cpArea.mouseX >= width / 2
     anchors.leftMargin: Style.space(2)
     anchors.verticalCenter: button.verticalCenter
-    readonly property real fullWidth: breakMetrics.advanceWidth + Style.space(22)
-    width: Math.round(fullWidth * root.breakShown)
+    width: Math.round(fullWidth * shown)
     height: Math.round(button.height * 0.62)
     visible: width > 0
     clip: true
 
-    readonly property bool hovered: breakArea.containsMouse
-    readonly property bool onTake: breakArea.mouseX >= width / 2
+    TextMetrics {
+      id: cpMetrics
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.caption
+      font.bold: true
+      text: cp.label
+    }
 
     Rectangle {
       anchors.fill: parent
       radius: height / 2
-      color: Util.alpha(root.breakTeal, 0.16)
+      color: Util.alpha(cp.tint, 0.16)
       border.width: 1
-      border.color: Util.alpha(root.breakTeal, 0.6)
+      border.color: Util.alpha(cp.tint, 0.6)
     }
 
     Text {
-      id: breakLabel
       anchors.centerIn: parent
-      width: breakPill.fullWidth - Style.space(22)
+      width: cp.fullWidth - Style.space(22)
       horizontalAlignment: Text.AlignHCenter
-      opacity: breakPill.hovered ? 0 : 1
+      opacity: cp.hovered ? 0 : 1
       textFormat: Text.PlainText
-      text: p.breakNudge ? "Break? " + p.breakNudge.reason : ""
-      color: root.breakTeal
-      font: breakMetrics.font
+      text: cp.label
+      color: cp.tint
+      font: cpMetrics.font
       Behavior on opacity { NumberAnimation { duration: 120 } }
     }
 
     Row {
       anchors.fill: parent
-      opacity: breakPill.hovered ? 1 : 0
+      opacity: cp.hovered ? 1 : 0
       Behavior on opacity { NumberAnimation { duration: 120 } }
-
       Rectangle {
         width: parent.width / 2
         height: parent.height
         radius: height / 2
-        color: Util.alpha(root.fg, breakPill.hovered && !breakPill.onTake ? 0.22 : 0.08)
+        color: Util.alpha(root.red, cp.hovered && !cp.onYes ? 0.35 : 0.14)
         Text {
           anchors.centerIn: parent
           textFormat: Text.PlainText
-          text: "Later"
-          color: root.fg
+          text: "No"
+          color: root.red
           font.family: root.fontFamily
           font.pixelSize: Style.font.caption
           font.bold: true
         }
       }
-
       Rectangle {
         width: parent.width / 2
         height: parent.height
         radius: height / 2
-        color: Util.alpha(root.breakTeal, breakPill.hovered && breakPill.onTake ? 0.4 : 0.16)
+        color: Util.alpha(root.green, cp.hovered && cp.onYes ? 0.35 : 0.14)
         Text {
           anchors.centerIn: parent
           textFormat: Text.PlainText
-          text: root.pauseGlyph + " Pause"
-          color: root.breakTeal
+          text: "OK"
+          color: root.green
           font.family: root.fontFamily
           font.pixelSize: Style.font.caption
           font.bold: true
@@ -642,16 +647,42 @@ BarWidget {
     }
 
     MouseArea {
-      id: breakArea
+      id: cpArea
       anchors.fill: parent
-      enabled: root.breakWanted
+      enabled: cp.wanted
       hoverEnabled: true
       cursorShape: Qt.PointingHandCursor
       onClicked: function(mouse) {
-        if (mouse.x >= breakPill.width / 2) p.takeBreak()
-        else p.breakLater()
+        if (mouse.x >= cp.width / 2) cp.yes()
+        else cp.no()
       }
     }
+  }
+
+  readonly property color breakTeal: "#2ac3de"
+  readonly property color coffeeBrown: "#c08552"
+
+  // Time for a break? OK pauses the session, No asks again in 20 minutes.
+  ChoicePill {
+    id: breakPill
+    anchors.left: pill.width > 0 ? pill.right : presencePill.width > 0 ? presencePill.right : button.right
+    wanted: root.pillTurn === "break" && !root.vertical
+    label: p.breakNudge ? "Break? " + p.breakNudge.reason : ""
+    tint: root.breakTeal
+    onYes: p.takeBreak()
+    onNo: p.breakLater()
+  }
+
+  // The best time for a coffee: OK logs a cup, No stays quiet for an hour.
+  ChoicePill {
+    id: coffeePill
+    anchors.left: breakPill.width > 0 ? breakPill.right
+      : pill.width > 0 ? pill.right : presencePill.width > 0 ? presencePill.right : button.right
+    wanted: root.pillTurn === "coffee" && !root.vertical
+    label: p.coffeeNudge ? "Coffee? " + p.coffeeNudge.reason : ""
+    tint: root.coffeeBrown
+    onYes: p.coffeeOk()
+    onNo: p.coffeeNo()
   }
 
   // ---- toasts: short messages that unroll after the timer for a few
@@ -719,7 +750,7 @@ BarWidget {
 
   Item {
     id: toastPill
-    anchors.left: breakPill.width > 0 ? breakPill.right : pill.width > 0 ? pill.right : button.right
+    anchors.left: coffeePill.width > 0 ? coffeePill.right : breakPill.width > 0 ? breakPill.right : pill.width > 0 ? pill.right : button.right
     anchors.leftMargin: Style.space(4)
     anchors.verticalCenter: button.verticalCenter
     readonly property real fullWidth: toastMetrics.advanceWidth + Style.space(22)
@@ -840,7 +871,7 @@ BarWidget {
     readonly property real fullWidth: achMetrics.advanceWidth + Style.space(30)
     property real openWidth: 0
     property bool flashOn: false
-    anchors.left: breakPill.width > 0 ? breakPill.right : pill.width > 0 ? pill.right : button.right
+    anchors.left: coffeePill.width > 0 ? coffeePill.right : breakPill.width > 0 ? breakPill.right : pill.width > 0 ? pill.right : button.right
     anchors.leftMargin: Style.space(4)
     anchors.verticalCenter: button.verticalCenter
     width: Math.round(openWidth)

@@ -314,6 +314,24 @@ Column {
       font.pixelSize: Style.font.caption
     }
 
+    // When "Break?" is due (the setting, 5 minutes paused reset it).
+    Text {
+      readonly property var at: p.breakNextAt
+      width: parent.width
+      visible: !!at && !!p.session && !p.paused
+      horizontalAlignment: Text.AlignHCenter
+      textFormat: Text.PlainText
+      text: {
+        if (!at) return ""
+        var left = Math.round((at - Date.now() + 0 * p.elapsed) / 60000)   // p.elapsed ticks it every second
+        return left > 0 ? "Next break in " + (left >= 60 ? Math.floor(left / 60) + " h " + String(left % 60).padStart(2, "0") : left + " min")
+                        : "Break due"
+      }
+      color: Util.alpha("#2ac3de", 0.85)
+      font.family: w.fontFamily
+      font.pixelSize: Style.font.caption
+    }
+
     // Agents at work during the session (every machine).
     Text {
       readonly property real burnt: p.session ? p.session.agentTokens || 0 : 0
@@ -654,6 +672,7 @@ Column {
     width: parent.width
     w: tab.w
     info: tab.dayHours
+    breakAt: p.breakNextAt
   }
 
   Text {

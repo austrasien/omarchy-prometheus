@@ -41,6 +41,8 @@ Item {
   property var coffee: null       // { cupsToday, mgToday, inBody, mgPerL, lastAt, canUndo, ideal: { at, reason } }
   property var agentsToday: null  // { tokens, cost, prompts, ... } for today
   property var breakNudge: null   // { askedAt, reason, workedMinutes }: time for a break?
+  property var breakNextAt: null  // ms when "Break?" is due in the running session
+  property var coffeeNudge: null  // { reason, inBody }: the best time for a coffee has come
   property var apps: []           // today's top five { app, seconds }
   property int trackedSeconds: 0
   // The daemon's day: it starts at dayStartHour (5 h by default), so
@@ -177,6 +179,8 @@ Item {
     assign("coffee", state.coffee || null)
     assign("agentsToday", state.agents || null)
     assign("breakNudge", state.breakNudge || null)
+    assign("breakNextAt", state.breakNextAt || null)
+    assign("coffeeNudge", state.coffeeNudge || null)
     if (state.todayDate) assign("todayDate", state.todayDate)
     if (state.dayStartHour !== undefined) assign("dayStartHour", state.dayStartHour)
     recomputeElapsed()
@@ -199,6 +203,8 @@ Item {
     coffee = null
     agentsToday = null
     breakNudge = null
+    breakNextAt = null
+    coffeeNudge = null
     apps = []
     trackedSeconds = 0
     elapsed = 0
@@ -250,6 +256,8 @@ Item {
   function confirmPresence() { act("presence:confirm", [], "Presence") }
   function takeBreak() { act("break:take", [], "Break") }
   function breakLater() { act("break:later", [], "Break") }
+  function coffeeOk() { act("coffee:nudgeOk", [], "Coffee") }
+  function coffeeNo() { act("coffee:nudgeNo", [], "Coffee") }
 
   // ------------------------------------------------------------------ idle
 
