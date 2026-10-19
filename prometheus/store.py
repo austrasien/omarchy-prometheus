@@ -214,6 +214,9 @@ class Store:
         self.db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
 
     def _migrate(self) -> None:
+        # The agents' Night shift once shared the quests' family id.
+        self.db.execute("UPDATE achievements SET id = 'agentnight:' || substr(id, 12) "
+                        "WHERE id GLOB 'nightshift:1e+*'")
         cols = {r["name"] for r in self.db.execute("PRAGMA table_info(tasks)")}
         if "xp" not in cols:  # v1 -> v2: XP a task was worth when it was done
             self.db.execute("ALTER TABLE tasks ADD COLUMN xp INTEGER")

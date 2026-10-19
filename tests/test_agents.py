@@ -111,5 +111,24 @@ class AgentUsageTest(unittest.TestCase):
         self.assertEqual(sum(ledger.tokens.values()), 10**8 + 1)
 
 
+    def test_more_measures(self):
+        from prometheus import agents as AG
+        sun = int(dt.datetime(2026, 10, 18, 12, 0).timestamp() * 1000)      # a Sunday
+        sat = int(dt.datetime(2026, 10, 24, 12, 0).timestamp() * 1000)      # the Saturday after
+        entries = [self.prompt(sun), self.reply(sun, "a", read=30_000_000), self.reply(sun + 60_000, "b", read=30_000_000),
+                   self.reply(sat, "c", read=100)]
+        self.write("d.jsonl", entries)
+        self.agents.ingest_local()
+        m = AG.more_measures(self.store, [{"start": sun - 60_000, "end": sun + 120_000, "focus": 180}],
+                             quest_days={"2026-10-18"}, medal_days=set())
+        self.assertEqual(m["weekendWarriors"], 1)
+        self.assertEqual(m["spike"], 2 * 30_000_101)
+        self.assertEqual(m["monsterSession"], 2 * 30_000_101)
+        self.assertEqual(m["prompts"], 1)
+        self.assertEqual(m["laconic"], 1)               # 60M from one prompt
+        self.assertEqual(m["questFuel"], 0)             # needs 100M that day
+        self.assertEqual(m["sprawl"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

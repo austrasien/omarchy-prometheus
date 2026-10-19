@@ -579,3 +579,109 @@ def stats(store, now: int, sessions: list[tuple[int, int]]) -> dict:
         "outsideShare": round(100 * (total30 - inside) / total30) if total30 else None,
         "xpPerDay": {"tokensPerXp": TOKENS_PER_XP, "cap": DAILY_XP_CAP},
     }
+
+
+def _longest_run(days: list[str]) -> int:
+    """Longest run of consecutive dates among `days` (ISO strings)."""
+    ds = sorted({dt.date.fromisoformat(d) for d in days})
+    run = best = 0
+    for i, d in enumerate(ds):
+        run = run + 1 if i and (d - ds[i - 1]).days == 1 else 1
+        best = max(best, run)
+    return best
+
+
+def _longest_same(per_day: dict[str, set]) -> int:
+    """Longest run of consecutive active days all on the same single value."""
+    best = run = 0
+    prev_day, prev_value = None, None
+    for d in sorted(per_day):
+        values = per_day[d]
+        day = dt.date.fromisoformat(d)
+        value = next(iter(values)) if len(values) == 1 else None
+        if value is not None and value == prev_value and prev_day is not None and (day - prev_day).days == 1:
+            run += 1
+        else:
+            run = 1 if value is not None else 0
+        best = max(best, run)
+        prev_day, prev_value = day, value
+    return best
+
+
+def more_measures(store, sessions: list[dict], quest_days: set[str], medal_days: set[str]) -> dict:
+    """The second wave of agent achievements: rhythm, records, how you
+    work with them, and how they meet the rest of the app."""
+    from .competition import records
+    db = store.db
+    by_day = tokens_by_day(store)
+    hour0 = T.day_start_hour()
+
+    # Measured slots only for anything about the time of day.
+    quarter, blocks, early = {}, {}, set()
+    prompts_day, here_day, projects_week, project_day, family_day = {}, {}, {}, {}, {}
+    for slot, device, project, model, tokens, prompts, est in db.execute(
+            "SELECT slot, device, project, model, tokens, prompts, estimated FROM agent_usage"):
+        d = T.date_str(slot)
+        if device == LOCAL_DEVICE:
+            prompts_day[d] = prompts_day.get(d, 0) + prompts
+            here_day[d] = here_day.get(d, 0) + tokens
+            if project and tokens > 0:
+                projects_week.setdefault(T.week_key(dt.date.fromisoformat(d)), set()).add(project)
+                project_day.setdefault(d, set()).add(project)
+            if model and tokens > 0:
+                family_day.setdefault(d, set()).add(family(model))
+        if est or tokens <= 0:
+            continue
+        q = slot - slot % 900_000
+        quarter[q] = quarter.get(q, 0) + tokens
+        hour = dt.datetime.fromtimestamp(slot / 1000).hour
+        blocks.setdefault(d, set()).add(((hour - hour0) % 24) // 4)
+        if hour0 <= hour < 7:
+            early.add(d)
+
+    # Weeks run Sunday to Saturday: a Sunday and the Saturday six days later.
+    sundays = {d for d, t in by_day.items() if t > 0 and dt.date.fromisoformat(d).weekday() == 6}
+    warriors = sum(1 for d in sundays
+                   if by_day.get((dt.date.fromisoformat(d) + dt.timedelta(days=6)).isoformat(), 0) > 0)
+
+    # Thirty-day rolling cost.
+    cost_day = {}
+    for slot, c in db.execute("SELECT slot, SUM(cost) FROM agent_usage GROUP BY slot"):
+        d = T.date_str(slot)
+        cost_day[d] = cost_day.get(d, 0.0) + c
+    best_month, total, lo = 0.0, 0.0, 0
+    days = sorted(dt.date.fromisoformat(d) for d in cost_day)
+    for hi, day in enumerate(days):           # a sliding 30-day window
+        total += cost_day[day.isoformat()]
+        while (day - days[lo]).days >= 30:
+            total -= cost_day[days[lo].isoformat()]
+            lo += 1
+        best_month = max(best_month, total)
+
+    windows = [(s["start"], s["end"]) for s in sessions]
+    per_session = session_tokens(store, windows)
+    silent = 0
+    for r in db.execute("SELECT answered_at, ended_at FROM challenges WHERE state='won' "
+                        "AND answered_at IS NOT NULL AND ended_at IS NOT NULL"):
+        if tokens_between(store, r["answered_at"], r["ended_at"]) >= 20_000_000:
+            silent += 1
+
+    return {
+        "weekendWarriors": warriors,
+        "alwaysOn": sum(1 for b in blocks.values() if len(b) == 6),
+        "earlyBird": len(early),
+        "steadyBurn": _longest_run([d for d, t in by_day.items() if t >= 50_000_000]),
+        "spike": max(quarter.values(), default=0),
+        "personalBest": records(sorted(by_day.items())),
+        "monsterSession": max(per_session, default=0),
+        "bestMonthCost": round(best_month, 2),
+        "prompts": sum(prompts_day.values()),
+        "laconic": sum(1 for d, t in here_day.items() if t >= 10_000_000 and prompts_day.get(d, 0) < 10),
+        "chatterbox": max(prompts_day.values(), default=0),
+        "sprawl": max((len(v) for v in projects_week.values()), default=0),
+        "monogamous": _longest_same(project_day),
+        "loyalist": _longest_same(family_day),
+        "questFuel": sum(1 for d in quest_days if by_day.get(d, 0) >= 100_000_000),
+        "synergy": sum(1 for d in medal_days if by_day.get(d, 0) >= 250_000_000),
+        "silentPartner": silent,
+    }

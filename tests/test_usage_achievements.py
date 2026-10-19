@@ -21,6 +21,10 @@ class UsageAchievementTest(unittest.TestCase):
         self.core.check_achievements(at)
         return set(self.store.unlocked_achievements())
 
+    def test_family_ids_are_unique(self):
+        ids = [f.id for f in A.FAMILIES]
+        self.assertEqual(len(ids), len(set(ids)), [i for i in ids if ids.count(i) > 1])
+
     def test_rarity_is_set_by_hand_and_xp_follows(self):
         fam = {f.id: f for f in A.FAMILIES}
         self.assertEqual(fam["poweruser"].rarity(0), "epic")
