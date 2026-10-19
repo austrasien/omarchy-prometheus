@@ -501,5 +501,24 @@ class CoreTest(unittest.TestCase):
         self.assertEqual(c.profile(self.at(62))["challengeXp"], before - 3)
 
 
+    def test_extra_stats(self):
+        from prometheus import stats_extra
+        self.core.start(None, self.at(0))
+        self.core.update_presence(self.at(25))            # asked
+        self.core.presence_confirm(self.at(25.1))         # answered in 6 s
+        self.core.end(self.at(60))
+        x = stats_extra.extra(self.store, self.at(61))
+        self.assertEqual(len(x["xpSources"]), 7)
+        self.assertEqual(sum(d["focus"] for d in x["xpSources"]), 6)
+        self.assertEqual(x["presence"]["asked"], 1)
+        self.assertEqual(x["presence"]["answerRate"], 100)
+        self.assertEqual(x["presence"]["avgReactionSeconds"], 6.0)
+        self.assertEqual(len(x["heatmap"]["minutes"]), 7)
+        self.assertEqual(x["focus"]["sessions"], 1)
+        self.assertEqual(x["context"]["power"][0]["key"], "plugged")
+        cur = [s for s in self.core.seasons(self.at(61))["seasons"] if s["running"]][0]
+        self.assertEqual(cur["pace"][-1]["xp"], cur["xp"])
+
+
 if __name__ == "__main__":
     unittest.main()

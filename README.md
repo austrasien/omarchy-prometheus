@@ -30,6 +30,11 @@ only what was actually used.
   the past too and can be undone.
 - **Stats**: today and the week, each day's apps, a timeline of the day
   colored by app, the week history paged back up to 52 weeks, an hours goal.
+  Other views, one button each: XP this week by source (stacked bars), tasks
+  (done per day, to-do list size, age when checked), focus quality (session
+  length, app switches per hour, time in the main app), a weekday × hour
+  heatmap, challenges (accepted, won, XP lost to abandons), "Still there?"
+  (answer rate, reaction time, pauses), and sessions on battery or by weather.
   A day starts at 5 h by default (configurable), so a late night stays with
   its evening.
 - **Tasks**: Prometheus' own list, checked off during a session. A task is
@@ -55,7 +60,8 @@ only what was actually used.
   tasks, plus won challenges. Level 2 costs 100 XP, each next level 50 more.
 - **Leagues**: ten, Bronze, Silver, Gold, Sapphire, Ruby, Emerald, Amethyst,
   Pearl, Obsidian, Diamond, drawn as a circle, a triangle, a square, a
-  pentagon, a hexagon, then stars of four to eight points. Each two-week round (Sunday to the second Saturday) you play nine rivals, scientists and pioneers drawn by lot each
+  pentagon, a hexagon, then stars of four to eight points. The tab draws your
+  league path, round by round, as a staircase. Each two-week round (Sunday to the second Saturday) you play nine rivals, scientists and pioneers drawn by lot each
   season from a pool of 104 (never two with the same first name; a click on a name shows a one-line bio), drawn from a Gaussian fitted to your last two rounds (5 % stronger
   each league up; if that is under 87 % of the league's minimum, the floor is
   used instead) and seeded by week and
@@ -68,7 +74,8 @@ only what was actually used.
   relegation zones, green chevrons streaming up or red ones streaming down.
   League XP is XP from the work: focus, tasks, challenges, quests;
   achievements and medals are left out.
-- **Seasons** (medal colors are drawn from the season's name, so every
+- **Seasons** (the running one charts your cumulative XP against the steady
+  pace of the goal and of the hard goal; medal colors are drawn from the season's name, so every
   player gets the same medal for the same season): the weather's: winter from December 1st, spring from March 1st,
   summer from June 1st, autumn from September 1st, named "Autumn 2026" and so
   on. Two goals, as weekly paces over the season's length (from your first day,
@@ -199,6 +206,7 @@ bar (session ended, challenge won).
 | `tasks:delete` | `[id]` | Drop an open task without its XP |
 | `toast:preview` | `[rarity]` | Show a sample achievement unlock (to see the capsule) |
 | `share:get` | | What the share card shows |
+| `stats:extra` | | XP by source this week, tasks, focus quality, weekday × hour heatmap, challenges, presence checks, power and weather |
 | `ui:event` | `[tab:<name>\|bio]` | A tab opened (once each) or a rival bio read, for achievements |
 | `settings:getHandle` / `settings:setHandle` | `[handle]` | The player's @handle, shown by the panel title |
 | `settings:getShareFormat` / `settings:setShareFormat` | `[gif\|apng]` | Share export format |

@@ -314,6 +314,27 @@ Column {
     }
   }
 
+  // ---- the league path, round by round
+  Column {
+    width: parent.width
+    spacing: Style.space(6)
+    visible: !!tab.info && tab.info.history.length > 0
+
+    PanelSectionHeader {
+      text: "LEAGUE PATH"
+      foreground: w.fg
+      fontFamily: w.fontFamily
+    }
+
+    LeaguePath {
+      width: parent.width
+      w: tab.w
+      history: tab.info ? tab.info.history : []
+      leagues: tab.info ? tab.info.leagues : []
+      current: tab.info && tab.info.current ? tab.info.current.league : 0
+    }
+  }
+
   // ---- settled weeks, latest first
   Column {
     width: parent.width

@@ -188,6 +188,26 @@ Column {
     }
   }
 
+  // ---- the running season's pace against the goals
+  Column {
+    width: parent.width
+    spacing: Style.space(6)
+    visible: !!tab.cur && !!tab.cur.pace
+
+    PanelSectionHeader {
+      text: "YOUR PACE"
+      foreground: w.fg
+      fontFamily: w.fontFamily
+    }
+
+    SeasonPace {
+      width: parent.width
+      w: tab.w
+      season: tab.cur
+      lineColor: tab.cur && tab.cur.colors ? tab.cur.colors.edge : w.accent
+    }
+  }
+
   // ---- finished seasons, latest first
   Column {
     width: parent.width

@@ -942,6 +942,7 @@ class Core:
         if self.presence_asked_at is None:
             if at - self.presence_since >= self.presence_every_minutes() * 60 * 1000:
                 self.presence_asked_at = at
+                self.store.add_event("presence_asked", at, s["id"])
                 self._save_presence()
                 return [("presence", {})]
             return []
@@ -971,6 +972,9 @@ class Core:
 
     def presence_confirm(self, at: int) -> dict:
         asked = self.presence_asked_at
+        if asked is not None:
+            s0 = self._session()
+            self.store.add_event("presence_answered", at, s0["id"] if s0 is not None else None)
         if asked is not None and at - asked < self.REFLEX_MS:
             s = self._session()
             self.store.add_event("reflex", at, s["id"] if s is not None else None)

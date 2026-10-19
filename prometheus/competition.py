@@ -381,6 +381,14 @@ def seasons(ledger: Ledger) -> list[dict]:
             "bestWeek": max(weeks.values(), default=0),
         }
         if running:
+            # XP so far, day by day (cumulative), to set against the goals' pace.
+            cum, pace, d = 0, [], max(start, first)
+            while d <= ledger.today:
+                cum += ledger.xp.get(d.isoformat(), 0)
+                pace.append({"date": d.isoformat(), "xp": cum})
+                d += dt.timedelta(days=1)
+            season["pace"] = pace
+            season["firstDay"] = max(start, first).isoformat()
             total = (end - max(start, first)).days
             elapsed = (ledger.today - max(start, first)).days + 1
             season["daysLeft"] = (end - ledger.today).days
