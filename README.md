@@ -26,6 +26,10 @@ only what was actually used.
   there?". A click keeps going; unanswered, it flashes from the 3rd minute and
   the session pauses at the 4th, backdated to the question (a playing video
   keeps idle away, so idle alone cannot tell).
+- **Breaks**: after 90 min in session without a break (a pause of 5 min or
+  more, by hand or not, resets it; a setting, 30 to 180 min or off), a
+  "Break?" pill unrolls in the bar: Pause pauses the session, Later asks
+  again in 20 min.
 - **Privacy**: apps that are never recorded, and words that keep a window
   out of the records when its title contains them (a bank, say).
 - **Aliases**: rename or merge apps; applied when reading, so they rewrite
@@ -232,6 +236,8 @@ bar (session ended, challenge won).
 | `toast:preview` | `[rarity]` | Show a sample achievement unlock (to see the capsule) |
 | `share:get` | | What the share card shows |
 | `sessions:names` | | Session names: the 3 last used, the 4 most worked on, and all with focus time |
+| `break:take` / `break:later` | | Answer "Break?": pause the session, or ask again in 20 min |
+| `settings:getBreakEvery` / `settings:setBreakEvery` | `[minutes]` | Minutes of work before "Break?" (0 = off) |
 | `coffee:add` / `coffee:undo` | | Log a cup / take the last one back (3 min) |
 | `settings:getBedtime` / `settings:setBedtime` | `[hour]` | Bedtime, for the best time for a coffee |
 | `coffee:day` | `[fromMs]` | The day hour by hour, caffeine every 10 minutes, the best time for a cup |

@@ -90,6 +90,10 @@ class Daemon:
             "sessions:names": lambda a: self.core.session_names(self.clock()),
             "settings:getBedtime": lambda a: {"success": True, "bedtimeHour": self.core.coffee.bedtime_hour()},
             "settings:setBedtime": lambda a: self.core.coffee.set_bedtime(a[0] if a else None),
+            "break:take": lambda a: self.core.break_take(self.clock()),
+            "break:later": lambda a: self.core.break_later(self.clock()),
+            "settings:getBreakEvery": lambda a: {"success": True, "minutes": self.core.break_every_minutes()},
+            "settings:setBreakEvery": lambda a: self.core.set_break_every(a[0] if a else None),
             "coffee:add": lambda a: self.core.coffee.add(self.clock()),
             "coffee:undo": lambda a: self.core.coffee.undo(self.clock()),
             "coffee:day": lambda a: self.core.coffee.day(a[0] if a else None, self.clock()),
@@ -333,7 +337,8 @@ class Daemon:
                     log.exception("agent usage poll failed")
             try:
                 now = self.clock()
-                for kind, info in self.core.update_challenge(now) + self.core.update_presence(now):
+                for kind, info in (self.core.update_challenge(now) + self.core.update_presence(now)
+                                   + self.core.update_breaks(now)):
                     self.announce(kind, info)
             except Exception:
                 log.exception("challenge update failed")

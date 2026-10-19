@@ -39,6 +39,10 @@ CHALLENGE_OFFER_TTL_MS = 5 * 60 * 1000
 # playing video keeps idle away, so idle alone cannot tell). Unanswered, the
 # pill flashes, then the session pauses, backdated to when it asked.
 PRESENCE_EVERY_MINUTES = 20        # default; a setting (5 to 120)
+BREAK_EVERY_MINUTES = 90           # default; a setting (0 = off, 30 to 180)
+BREAK_MINUTES_RANGE = (30, 180)
+BREAK_RESET_MS = 5 * 60 * 1000     # a pause this long counts as a break
+BREAK_SNOOZE_MS = 20 * 60 * 1000
 PRESENCE_MINUTES_RANGE = (5, 120)
 PRESENCE_FLASH_AFTER_MS = 3 * 60 * 1000
 PRESENCE_TIMEOUT_MS = 4 * 60 * 1000
@@ -63,6 +67,7 @@ class Core:
         self.quests.repair(T.now_ms())
         self.agents = AgentUsage(store)      # polled by the daemon
         self.coffee = Coffee(store)
+        self.health = None                   # health.Health when a watch is linked
         T.set_day_start_hour(self.store.get_setting("dayStartHour", T.DEFAULT_DAY_START_HOUR))
         self.window: Window | None = None
         self.idle = False
@@ -395,6 +400,7 @@ class Core:
             "dayStartHour": T.day_start_hour(),
             "agents": A_.window(self.store, T.day_start(at), at + 1),
             "coffee": self.coffee.now(at),
+            "breakNudge": self.break_state(at),
         }
 
     # --------------------------------------------------------------- goals
@@ -1007,6 +1013,82 @@ class Core:
             self._split(at)
             return [("absent", {})]
         return []
+
+    # ---------------------------------------------------------------- breaks
+    #
+    # Time worked without a break: a pause of 5 minutes or more (by hand,
+    # idle, away) resets it. Past the setting, a "Break?" pill: Pause pauses
+    # the session, Later asks again in 20 minutes. Other reasons (sitting
+    # still, a racing heart) come from health.py when a watch is linked.
+
+    def _breaks(self) -> dict:
+        return self.store.get_setting("breaks") or {}
+
+    def update_breaks(self, at: int) -> list[tuple[str, dict]]:
+        s = self._session()
+        st = self._breaks()
+        if s is None:
+            if st:
+                self.store.set_setting("breaks", {})
+            return []
+        if st.get("session") != s["id"]:
+            st = {"session": s["id"], "since": s["started_at"]}
+        if s["pause_started_at"] is not None:
+            if at - s["pause_started_at"] >= BREAK_RESET_MS:
+                st.update(since=None, asked=None, reason=None)
+            self.store.set_setting("breaks", st)
+            return []
+        if st.get("since") is None:
+            st["since"] = at
+        out = []
+        if st.get("asked") is None and at >= (st.get("snoozed") or 0):
+            reason = None
+            every = self.break_every_minutes()
+            worked = (at - st["since"]) // 60_000
+            if every and worked >= every:
+                reason = f"{worked} min without a break"
+            elif self.health is not None:
+                reason = self.health.nudge(at)
+            if reason:
+                st.update(asked=at, reason=reason)
+                self.store.add_event("break_asked", at, s["id"])
+                out.append(("break", {"reason": reason}))
+        self.store.set_setting("breaks", st)
+        return out
+
+    def break_state(self, at: int) -> dict | None:
+        st = self._breaks()
+        if not st.get("asked"):
+            return None
+        return {"askedAt": st["asked"], "reason": st.get("reason") or "",
+                "workedMinutes": (at - st["since"]) // 60_000 if st.get("since") else 0}
+
+    def break_take(self, at: int) -> dict:
+        st = self._breaks()
+        st.update(asked=None, reason=None, snoozed=None)
+        self.store.set_setting("breaks", st)
+        self.store.add_event("break_taken", at, None)
+        return self.pause(at)
+
+    def break_later(self, at: int) -> dict:
+        st = self._breaks()
+        st.update(asked=None, reason=None, snoozed=at + BREAK_SNOOZE_MS)
+        self.store.set_setting("breaks", st)
+        self.store.add_event("break_snoozed", at, None)
+        return {"success": True}
+
+    def break_every_minutes(self) -> int:
+        return int(self.store.get_setting("breakEveryMinutes", BREAK_EVERY_MINUTES))
+
+    def set_break_every(self, minutes) -> dict:
+        try:
+            m = int(minutes)
+        except (TypeError, ValueError):
+            raise Refused("Invalid minutes") from None
+        lo, hi = BREAK_MINUTES_RANGE
+        m = 0 if m <= 0 else max(lo, min(hi, m))
+        self.store.set_setting("breakEveryMinutes", m)
+        return {"success": True, "minutes": m}
 
     def presence_every_minutes(self) -> int:
         return int(self.store.get_setting("presenceEveryMinutes", PRESENCE_EVERY_MINUTES))

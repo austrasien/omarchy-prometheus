@@ -40,6 +40,7 @@ Item {
   property var history: []        // seven { date, minutes }, oldest first
   property var coffee: null       // { cupsToday, mgToday, inBody, mgPerL, lastAt, canUndo, ideal: { at, reason } }
   property var agentsToday: null  // { tokens, cost, prompts, ... } for today
+  property var breakNudge: null   // { askedAt, reason, workedMinutes }: time for a break?
   property var apps: []           // today's top five { app, seconds }
   property int trackedSeconds: 0
   // The daemon's day: it starts at dayStartHour (5 h by default), so
@@ -175,6 +176,7 @@ Item {
     assign("trackedSeconds", state.trackedSeconds || 0)
     assign("coffee", state.coffee || null)
     assign("agentsToday", state.agents || null)
+    assign("breakNudge", state.breakNudge || null)
     if (state.todayDate) assign("todayDate", state.todayDate)
     if (state.dayStartHour !== undefined) assign("dayStartHour", state.dayStartHour)
     recomputeElapsed()
@@ -196,6 +198,7 @@ Item {
     history = []
     coffee = null
     agentsToday = null
+    breakNudge = null
     apps = []
     trackedSeconds = 0
     elapsed = 0
@@ -245,6 +248,8 @@ Item {
   function abandonChallenge() { act("challenge:abandon", [], "Challenge") }
 
   function confirmPresence() { act("presence:confirm", [], "Presence") }
+  function takeBreak() { act("break:take", [], "Break") }
+  function breakLater() { act("break:later", [], "Break") }
 
   // ------------------------------------------------------------------ idle
 

@@ -272,6 +272,7 @@ BarWidget {
   implicitWidth: button.implicitWidth
     + (presencePill.width > 0 ? presencePill.width + Style.space(2) : 0)
     + (pill.width > 0 ? pill.width + Style.space(2) : 0)
+    + (breakPill.width > 0 ? breakPill.width + Style.space(2) : 0)
     + (toastPill.width > 0 ? toastPill.width + Style.space(4) : 0)
     + (achPill.visible ? achPill.width + Style.space(4) : 0)
   implicitHeight: button.implicitHeight
@@ -550,6 +551,109 @@ BarWidget {
     }
   }
 
+  // ---- time for a break? A teal pill after the timer (and the challenge
+  // offer): the reason at rest; hovered, "Later" on the left, "Pause" on the
+  // right. Horizontal bars only.
+
+  readonly property color breakTeal: "#2ac3de"
+  readonly property bool breakWanted: !!p.breakNudge && !root.vertical
+  property real breakShown: breakWanted ? 1 : 0
+  Behavior on breakShown { NumberAnimation { duration: 450; easing.type: Easing.OutCubic } }
+
+  TextMetrics {
+    id: breakMetrics
+    font.family: root.fontFamily
+    font.pixelSize: Style.font.caption
+    font.bold: true
+    text: breakLabel.text
+  }
+
+  Item {
+    id: breakPill
+    anchors.left: pill.width > 0 ? pill.right : presencePill.width > 0 ? presencePill.right : button.right
+    anchors.leftMargin: Style.space(2)
+    anchors.verticalCenter: button.verticalCenter
+    readonly property real fullWidth: breakMetrics.advanceWidth + Style.space(22)
+    width: Math.round(fullWidth * root.breakShown)
+    height: Math.round(button.height * 0.62)
+    visible: width > 0
+    clip: true
+
+    readonly property bool hovered: breakArea.containsMouse
+    readonly property bool onTake: breakArea.mouseX >= width / 2
+
+    Rectangle {
+      anchors.fill: parent
+      radius: height / 2
+      color: Util.alpha(root.breakTeal, 0.16)
+      border.width: 1
+      border.color: Util.alpha(root.breakTeal, 0.6)
+    }
+
+    Text {
+      id: breakLabel
+      anchors.centerIn: parent
+      width: breakPill.fullWidth - Style.space(22)
+      horizontalAlignment: Text.AlignHCenter
+      opacity: breakPill.hovered ? 0 : 1
+      textFormat: Text.PlainText
+      text: p.breakNudge ? "Break? " + p.breakNudge.reason : ""
+      color: root.breakTeal
+      font: breakMetrics.font
+      Behavior on opacity { NumberAnimation { duration: 120 } }
+    }
+
+    Row {
+      anchors.fill: parent
+      opacity: breakPill.hovered ? 1 : 0
+      Behavior on opacity { NumberAnimation { duration: 120 } }
+
+      Rectangle {
+        width: parent.width / 2
+        height: parent.height
+        radius: height / 2
+        color: Util.alpha(root.fg, breakPill.hovered && !breakPill.onTake ? 0.22 : 0.08)
+        Text {
+          anchors.centerIn: parent
+          textFormat: Text.PlainText
+          text: "Later"
+          color: root.fg
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.caption
+          font.bold: true
+        }
+      }
+
+      Rectangle {
+        width: parent.width / 2
+        height: parent.height
+        radius: height / 2
+        color: Util.alpha(root.breakTeal, breakPill.hovered && breakPill.onTake ? 0.4 : 0.16)
+        Text {
+          anchors.centerIn: parent
+          textFormat: Text.PlainText
+          text: root.pauseGlyph + " Pause"
+          color: root.breakTeal
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.caption
+          font.bold: true
+        }
+      }
+    }
+
+    MouseArea {
+      id: breakArea
+      anchors.fill: parent
+      enabled: root.breakWanted
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onClicked: function(mouse) {
+        if (mouse.x >= breakPill.width / 2) p.takeBreak()
+        else p.breakLater()
+      }
+    }
+  }
+
   // ---- toasts: short messages that unroll after the timer for a few
   // seconds (session recap, challenge won, goal reached, errors), one at a
   // time. They replace desktop notifications.
@@ -615,7 +719,7 @@ BarWidget {
 
   Item {
     id: toastPill
-    anchors.left: pill.width > 0 ? pill.right : button.right
+    anchors.left: breakPill.width > 0 ? breakPill.right : pill.width > 0 ? pill.right : button.right
     anchors.leftMargin: Style.space(4)
     anchors.verticalCenter: button.verticalCenter
     readonly property real fullWidth: toastMetrics.advanceWidth + Style.space(22)
@@ -736,7 +840,7 @@ BarWidget {
     readonly property real fullWidth: achMetrics.advanceWidth + Style.space(30)
     property real openWidth: 0
     property bool flashOn: false
-    anchors.left: pill.width > 0 ? pill.right : button.right
+    anchors.left: breakPill.width > 0 ? breakPill.right : pill.width > 0 ? pill.right : button.right
     anchors.leftMargin: Style.space(4)
     anchors.verticalCenter: button.verticalCenter
     width: Math.round(openWidth)

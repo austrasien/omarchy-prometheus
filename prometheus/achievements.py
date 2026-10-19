@@ -1642,6 +1642,13 @@ FAMILIES: list[Family] = [
            ["Perfect weather outside. You chose compute.", "{n} sunny days indoors. Touch grass later."],
            rarities=["common", "rare", "rare", "epic", "legendary"]),
 
+    # ---- breaks
+    Family("recharge", "Recharge", _event("break_taken"), [1, 10, 50, 100, 250],
+           lambda t: f"Recharge ×{t:g}", lambda t: f"Take {t:g} breaks when Prometheus suggests one.",
+           ["A break when it was due. Sustainable pace is a strategy.",
+            "{n} breaks taken. Burnout is for people without systems."],
+           rarities=["normal", "common", "rare", "epic", "legendary"]),
+
     # ---- coffee
     Family("barista", "Barista", lambda c: c.coffee.get("cups") or None, [1, 10, 50, 100, 500],
            lambda t: f"Barista ×{t:g}", lambda t: f"Log {t:g} coffees.",

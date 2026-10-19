@@ -20,6 +20,7 @@ Column {
   property int dayStart: 5     // hour the day starts at
   property int bedtime: 23     // the best time for a coffee leaves 8 h before it
   property int presenceEvery: 20   // minutes between "Still there?" checks
+  property int breakEvery: 90      // minutes of work before "Break?", 0 = off
   property string handle: ""      // the @handle on the share card
   property string shareFormat: "gif"   // gif | apng
   property string section: "handle"   // the setting shown (one button each)
@@ -40,6 +41,7 @@ Column {
     p.call("settings:getDayStart", [], function(ok, d) { if (ok && d && d.success) tab.dayStart = d.dayStartHour })
     p.call("settings:getBedtime", [], function(ok, d) { if (ok && d && d.success) tab.bedtime = d.bedtimeHour })
     p.call("settings:getPresenceEvery", [], function(ok, d) { if (ok && d && d.success) tab.presenceEvery = d.minutes })
+    p.call("settings:getBreakEvery", [], function(ok, d) { if (ok && d && d.success) tab.breakEvery = d.minutes })
     p.call("settings:getHandle", [], function(ok, d) { if (ok && d && d.success) { tab.handle = d.handle; handleField.text = d.handle } })
     p.call("settings:getShareFormat", [], function(ok, d) { if (ok && d && d.success) tab.shareFormat = d.format })
     p.call("apps:known", [30], function(ok, d) { if (ok && d && d.success) tab.known = d.apps || [] })
@@ -85,6 +87,13 @@ Column {
   function setShareFormat(f) {
     if (f === shareFormat) return
     p.act("settings:setShareFormat", [f], "Export", function(d) { if (d) tab.shareFormat = d.format })
+  }
+
+  // 0 (off), then 30 to 180 by 15.
+  function setBreakEvery(minutes) {
+    var m = minutes < 30 ? (minutes < breakEvery ? 0 : 30) : Math.min(180, minutes)
+    if (m === breakEvery) return
+    p.act("settings:setBreakEvery", [m], "Breaks", function(d) { if (d) tab.breakEvery = d.minutes })
   }
 
   function setPresenceEvery(minutes) {
@@ -432,6 +441,54 @@ Column {
         accent: w.accent
         bordered: true
         onClicked: tab.setPresenceEvery(tab.presenceEvery + 5)
+      }
+    }
+
+    PanelSectionHeader {
+      text: "BREAKS"
+      foreground: w.fg
+      fontFamily: w.fontFamily
+    }
+
+    Text {
+      width: parent.width
+      wrapMode: Text.WordWrap
+      textFormat: Text.PlainText
+      text: "After this long in session without a break (a pause of 5 min or more), \"Break?\" shows up in the bar: Pause pauses the session, Later asks again in 20 min."
+      color: Util.alpha(w.fg, 0.55)
+      font.family: w.fontFamily
+      font.pixelSize: Style.font.caption
+    }
+
+    Row {
+      spacing: Style.space(6)
+
+      Button {
+        text: "−"
+        foreground: w.fg
+        accent: w.accent
+        bordered: true
+        onClicked: tab.setBreakEvery(tab.breakEvery - 15)
+      }
+
+      Text {
+        anchors.verticalCenter: parent.verticalCenter
+        width: Style.space(70)
+        horizontalAlignment: Text.AlignHCenter
+        textFormat: Text.PlainText
+        text: tab.breakEvery > 0 ? tab.breakEvery + " min" : "Off"
+        color: w.fg
+        font.family: w.fontFamily
+        font.pixelSize: Style.font.body
+        font.bold: true
+      }
+
+      Button {
+        text: "+"
+        foreground: w.fg
+        accent: w.accent
+        bordered: true
+        onClicked: tab.setBreakEvery(tab.breakEvery === 0 ? 30 : tab.breakEvery + 15)
       }
     }
   }
