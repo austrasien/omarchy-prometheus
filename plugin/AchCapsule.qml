@@ -101,7 +101,6 @@ Item {
     anchors.margins: -Style.space(2)
     hoverEnabled: true
     cursorShape: Qt.PointingHandCursor
-    onEntered: cap.picked()
     onClicked: cap.picked()
   }
 }

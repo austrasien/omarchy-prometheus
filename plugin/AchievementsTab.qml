@@ -38,10 +38,8 @@ Column {
 
   readonly property var families: achData ? achData.families || [] : []
 
-  // Unlocks of the last 7 days, across families, newest first (16 at most;
-  // at least the 3 latest, however old).
-  readonly property int recentDays: 7
-  readonly property int recentMax: 16
+  // The 7 latest unlocks, across families, newest first.
+  readonly property int recentMax: 7
   readonly property var unlockedAll: {
     var all = []
     for (var i = 0; i < families.length; i++) {
@@ -52,13 +50,11 @@ Column {
     all.sort(function(a, b) { return b.unlockedAt - a.unlockedAt })
     return all
   }
-  readonly property var recentAll: {
-    var since = Date.now() - recentDays * 86400000
-    var out = unlockedAll.filter(function(t) { return t.unlockedAt >= since })
-    return out.length >= 3 ? out : unlockedAll.slice(0, 3)
-  }
-  readonly property var recent: recentAll.slice(0, recentMax)
-  property var picked: null              // the capsule pointed at; the newest by default
+  readonly property var recent: unlockedAll.slice(0, recentMax)
+  property var picked: null              // the capsule clicked; the newest by default
+  onRecentChanged: { detailHeight = 0; if (picked && recent.indexOf(picked) < 0) picked = null }
+  // Tall enough for the longest of the 7 legends, so nothing moves on a click.
+  property real detailHeight: 0
   readonly property var detail: picked || (recent.length ? recent[0] : null)
 
   // Capsules split into centered lines that fit the width.
@@ -75,6 +71,10 @@ Column {
     }
     if (line.length) lines.push(line)
     return lines
+  }
+
+  function legendLine(t) {
+    return t.desc + "\u00a0\u00a0·\u00a0" + ago(t.unlockedAt).replace(/ /g, "\u00a0")
   }
 
   function ago(ms) {
@@ -167,9 +167,7 @@ Column {
     visible: tab.recent.length > 0
 
     PanelSectionHeader {
-      text: tab.recentAll.length > tab.recent.length
-        ? "LATEST  ·  " + tab.recent.length + " OF " + tab.recentAll.length + " THIS WEEK"
-        : "LATEST"
+      text: "LATEST"
       foreground: w.fg
       fontFamily: w.fontFamily
     }
@@ -197,17 +195,51 @@ Column {
       }
     }
 
+    // The legends, measured out of sight: the tallest sets the box.
+    Item {
+      width: parent.width
+      height: 0
+      visible: false
+      Repeater {
+        model: tab.recent
+        Column {
+          required property var modelData
+          width: parent.width
+          spacing: Style.space(2)
+          onImplicitHeightChanged: tab.detailHeight = Math.max(tab.detailHeight, implicitHeight)
+          Component.onCompleted: tab.detailHeight = Math.max(tab.detailHeight, implicitHeight)
+          Text {
+            width: parent.width
+            wrapMode: Text.WordWrap
+            textFormat: Text.PlainText
+            text: tab.legendLine(modelData)
+            font.family: w.fontFamily
+            font.pixelSize: Style.font.caption
+          }
+          Text {
+            width: parent.width
+            wrapMode: Text.WordWrap
+            textFormat: Text.PlainText
+            text: modelData.quip || ""
+            font.family: w.fontFamily
+            font.pixelSize: Style.font.caption
+            font.italic: true
+          }
+        }
+      }
+    }
+
     Column {
       width: parent.width
+      height: tab.detailHeight
       spacing: Style.space(2)
-      visible: !!tab.detail
 
       Text {
         width: parent.width
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.WordWrap
         textFormat: Text.PlainText
-        text: tab.detail ? tab.detail.desc + "\u00a0\u00a0·\u00a0" + tab.ago(tab.detail.unlockedAt).replace(/ /g, "\u00a0") : ""
+        text: tab.detail ? tab.legendLine(tab.detail) : ""
         color: Util.alpha(w.fg, 0.75)
         font.family: w.fontFamily
         font.pixelSize: Style.font.caption
