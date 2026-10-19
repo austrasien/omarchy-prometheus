@@ -367,7 +367,8 @@ class Core:
             start = T.add_days(today, -i)
             end = T.add_days(start, 1)
             secs = sum(session_seconds(r) for r in self.store.closed_sessions(start, end))
-            history.append({"date": T.date_str(start), "minutes": secs // 60})
+            history.append({"date": T.date_str(start), "minutes": secs // 60,
+                            "tokens": A_.tokens_between(self.store, start, end)})
 
         w = self.window
         return {

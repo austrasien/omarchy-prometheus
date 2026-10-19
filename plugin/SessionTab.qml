@@ -508,6 +508,11 @@ Column {
       return m
     }
     readonly property real barWidth: (width - spacing * Math.max(0, p.history.length - 1)) / Math.max(1, p.history.length)
+    readonly property real maxTokens: {
+      var m = 1
+      for (var i = 0; i < p.history.length; i++) m = Math.max(m, p.history[i].tokens || 0)
+      return m
+    }
 
     Repeater {
       model: p.history
@@ -533,6 +538,17 @@ Column {
             height: Math.max(Style.space(2), parent.height * dayColumn.minutes / week.maxMinutes)
             radius: Style.space(3)
             color: dayColumn.isToday ? w.accent : Util.alpha(w.fg, dayColumn.minutes > 0 ? 0.45 : 0.12)
+          }
+
+          // Agent tokens: a thin orange bar on the right, on their own scale.
+          Rectangle {
+            anchors.bottom: parent.bottom
+            x: parent.width / 2 + Math.min(parent.width, Style.space(22)) / 2 + Style.space(2)
+            width: Style.space(4)
+            visible: (dayColumn.modelData.tokens || 0) > 0
+            height: Math.max(Style.space(2), parent.height * (dayColumn.modelData.tokens || 0) / week.maxTokens)
+            radius: Style.space(2)
+            color: Util.alpha("#ff9e64", dayColumn.isToday ? 1 : 0.6)
           }
         }
 

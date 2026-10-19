@@ -59,7 +59,7 @@ class CoreTest(unittest.TestCase):
         state = c.state(self.at(51))
         self.assertIsNone(state["session"])
         self.assertEqual(state["today"], {"sessions": 1, "seconds": 2400})
-        self.assertEqual(state["history"][-1], {"date": T.date_str(self.t0), "minutes": 40})
+        self.assertEqual(state["history"][-1], {"date": T.date_str(self.t0), "minutes": 40, "tokens": 0})
         self.assertEqual(len(state["history"]), 7)
 
     def test_end_while_paused_counts_the_pause(self):

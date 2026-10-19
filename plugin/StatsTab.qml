@@ -150,6 +150,96 @@ Column {
     return (pct >= 0 ? "+" : "") + pct + " % vs yesterday at this time"
   }
 
+  // The inspected day, or the week's totals.
+  readonly property var selectedDay: week && selected >= 0 && week.days ? week.days[selected] : null
+
+  // ---- day timeline
+  readonly property var tlSegments: timeline ? timeline.segments || [] : []
+
+  readonly property var tlAgents: timeline ? timeline.agents || [] : []
+
+  // The span covers the apps and the agents' measured quarter hours (the
+  // ones spread over a gap could stretch it over the whole day).
+  readonly property var tlMeasured: tlAgents.filter(function(a) { return !a.estimated })
+  readonly property real tlFrom: {
+    var first = Infinity
+    if (tlSegments.length > 0) first = tlSegments[0].start
+    if (tlMeasured.length > 0) first = Math.min(first, tlMeasured[0].start)
+    return first === Infinity ? 0 : Math.floor(first / 3600000) * 3600000
+  }
+
+  readonly property real tlTo: {
+    var end = 0
+    for (var i = 0; i < tlSegments.length; i++) end = Math.max(end, tlSegments[i].end)
+    for (var j = 0; j < tlMeasured.length; j++) end = Math.max(end, tlMeasured[j].start + 900000)
+    return end > 0 ? Math.ceil(end / 3600000) * 3600000 : 0
+  }
+
+  readonly property real tlAgentMax: {
+    var m = 1
+    for (var i = 0; i < tlAgents.length; i++) m = Math.max(m, tlAgents[i].tokens)
+    return m
+  }
+
+  readonly property real tlSpan: Math.max(1, tlTo - tlFrom)
+
+  // Time per app over the day, and the total, from the strip's segments.
+  readonly property var tlTotals: {
+    var totals = {}
+    for (var i = 0; i < tlSegments.length; i++) {
+      var sg = tlSegments[i]
+      totals[sg.app] = (totals[sg.app] || 0) + (sg.end - sg.start)
+    }
+    return totals
+  }
+
+  readonly property real tlSum: {
+    var t = 0
+    for (var k in tlTotals) t += tlTotals[k]
+    return Math.max(1, t)
+  }
+
+  // Most used apps of the day get the palette, in order; the rest is grey.
+  readonly property var tlRanking: Object.keys(tlTotals).sort(function(a, b) { return tlTotals[b] - tlTotals[a] })
+
+  function percent(app) {
+    var pct = (tlTotals[app] || 0) / tlSum * 100
+    return pct >= 1 ? Math.round(pct) + " %" : "< 1 %"
+  }
+
+  readonly property real legendDot: Style.space(8)
+
+  readonly property real legendGap: Style.space(12)
+
+  // Used to measure an entry: the percent then the name, as drawn.
+  function legendLabel(app) { return percent(app) + "  " + app }
+
+  readonly property var legendLines: {
+    var apps = tlRanking.slice(0, (w.palette || []).length)
+    var lines = [], line = [], used = 0, max = tab.width
+    for (var i = 0; i < apps.length; i++) {
+      var itemWidth = legendDot + 2 * Style.space(4) + legendMetrics.advanceWidth(legendLabel(apps[i]))
+      var needed = line.length > 0 ? used + legendGap + itemWidth : itemWidth
+      if (line.length > 0 && needed > max) {
+        lines.push(line)
+        line = []
+        needed = itemWidth
+      }
+      line.push(apps[i])
+      used = needed
+    }
+    if (line.length > 0) lines.push(line)
+    return lines
+  }
+
+  function appColor(app) {
+    var i = tlRanking.indexOf(app)
+    var pal = w.palette || []
+    return i >= 0 && i < pal.length ? pal[i] : Util.alpha(w.fg, 0.3)
+  }
+
+  function clock(ms) { return Qt.formatTime(new Date(ms), "HH:mm") }
+
   ButtonGroup {
     anchors.horizontalCenter: parent.horizontalCenter
     options: [
@@ -458,8 +548,6 @@ Column {
       font.pixelSize: Style.font.caption
     }
 
-    // The inspected day, or the week's totals.
-    readonly property var selectedDay: week && selected >= 0 && week.days ? week.days[selected] : null
 
     StatRow {
       w: tab.w
@@ -502,87 +590,18 @@ Column {
       value: tab.weekStats && tab.weekStats.switchesPerHour ? String(tab.weekStats.switchesPerHour) : ""
     }
 
-    // ---- day timeline
-    readonly property var tlSegments: timeline ? timeline.segments || [] : []
-    readonly property var tlAgents: timeline ? timeline.agents || [] : []
-    // The span covers the apps and the agents' quarter hours.
-    readonly property real tlFrom: {
-      var first = Infinity
-      if (tlSegments.length > 0) first = tlSegments[0].start
-      if (tlAgents.length > 0) first = Math.min(first, tlAgents[0].start)
-      return first === Infinity ? 0 : Math.floor(first / 3600000) * 3600000
-    }
-    readonly property real tlTo: {
-      var end = 0
-      for (var i = 0; i < tlSegments.length; i++) end = Math.max(end, tlSegments[i].end)
-      for (var j = 0; j < tlAgents.length; j++) end = Math.max(end, tlAgents[j].start + 900000)
-      return end > 0 ? Math.ceil(end / 3600000) * 3600000 : 0
-    }
-    readonly property real tlAgentMax: {
-      var m = 1
-      for (var i = 0; i < tlAgents.length; i++) m = Math.max(m, tlAgents[i].tokens)
-      return m
-    }
-    readonly property real tlSpan: Math.max(1, tlTo - tlFrom)
 
-    // Time per app over the day, and the total, from the strip's segments.
-    readonly property var tlTotals: {
-      var totals = {}
-      for (var i = 0; i < tlSegments.length; i++) {
-        var sg = tlSegments[i]
-        totals[sg.app] = (totals[sg.app] || 0) + (sg.end - sg.start)
-      }
-      return totals
-    }
-    readonly property real tlSum: {
-      var t = 0
-      for (var k in tlTotals) t += tlTotals[k]
-      return Math.max(1, t)
-    }
 
-    // Most used apps of the day get the palette, in order; the rest is grey.
-    readonly property var tlRanking: Object.keys(tlTotals).sort(function(a, b) { return tlTotals[b] - tlTotals[a] })
 
-    function percent(app) {
-      var pct = (tlTotals[app] || 0) / tlSum * 100
-      return pct >= 1 ? Math.round(pct) + " %" : "< 1 %"
-    }
 
     // Legend entries split into centered lines that fit the panel width.
     // FontMetrics measures without being written to, so the binding below
     // does not depend on its own result (TextMetrics.text made it loop).
     FontMetrics { id: legendMetrics; font.family: w.fontFamily; font.pixelSize: Style.font.caption; font.bold: true }
-    readonly property real legendDot: Style.space(8)
-    readonly property real legendGap: Style.space(12)
 
-    // Used to measure an entry: the percent then the name, as drawn.
-    function legendLabel(app) { return percent(app) + "  " + app }
 
-    readonly property var legendLines: {
-      var apps = tlRanking.slice(0, (w.palette || []).length)
-      var lines = [], line = [], used = 0, max = tab.width
-      for (var i = 0; i < apps.length; i++) {
-        var itemWidth = legendDot + 2 * Style.space(4) + legendMetrics.advanceWidth(legendLabel(apps[i]))
-        var needed = line.length > 0 ? used + legendGap + itemWidth : itemWidth
-        if (line.length > 0 && needed > max) {
-          lines.push(line)
-          line = []
-          needed = itemWidth
-        }
-        line.push(apps[i])
-        used = needed
-      }
-      if (line.length > 0) lines.push(line)
-      return lines
-    }
 
-    function appColor(app) {
-      var i = tlRanking.indexOf(app)
-      var pal = w.palette || []
-      return i >= 0 && i < pal.length ? pal[i] : Util.alpha(w.fg, 0.3)
-    }
 
-    function clock(ms) { return Qt.formatTime(new Date(ms), "HH:mm") }
 
     Column {
       width: parent.width
@@ -604,6 +623,7 @@ Column {
         visible: tab.tlAgents.length > 0
         width: parent.width
         height: Style.space(18)
+        clip: true
 
         Repeater {
           model: tab.tlAgents
