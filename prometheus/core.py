@@ -413,8 +413,8 @@ class Core:
         return {"success": True, "goal": goal}
 
     def session_names(self, at: int, top: int = 4, recent: int = 3) -> dict:
-        """Names to start again from: the `top` ones with the most focus time,
-        then the last `recent` used (not already in the first group). Every
+        """Names to start again from: the last `recent` used, then the `top`
+        ones with the most focus time (not already in the first group). Every
         name used with its focus time, session count and last use, for
         completion while typing."""
         names: dict[str, dict] = {}
@@ -427,9 +427,10 @@ class Core:
             e["count"] += 1
             e["last"] = max(e["last"], r["started_at"])
         all_names = list(names.values())
-        most = sorted(all_names, key=lambda e: (-e["seconds"], -e["last"]))[:top]
-        taken = {e["name"] for e in most}
-        last = [e for e in sorted(all_names, key=lambda e: -e["last"]) if e["name"] not in taken][:recent]
+        last = sorted(all_names, key=lambda e: -e["last"])[:recent]
+        taken = {e["name"] for e in last}
+        most = [e for e in sorted(all_names, key=lambda e: (-e["seconds"], -e["last"]))
+                if e["name"] not in taken][:top]
         return {"success": True, "mostWorked": most, "recent": last, "all": all_names}
 
     # --------------------------------------------------------------- stats

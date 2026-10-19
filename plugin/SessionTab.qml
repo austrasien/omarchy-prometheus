@@ -12,8 +12,8 @@ Column {
 
   readonly property bool editing: taskField.activeFocus
 
-  // Every session name from the daemon's history (sessions:names): the 4
-  // with the most focus time, the 3 last used, and all of them for typing.
+  // Every session name from the daemon's history (sessions:names): the 3
+  // last used, the 4 with the most focus time, and all of them for typing.
   property var history: null
   function loadHistory() {
     p.call("sessions:names", [], function(ok, d) { if (ok && d && d.success) tab.history = d })
@@ -73,7 +73,7 @@ Column {
     if (taskField.text.trim().length > 0) return history ? matchNames(taskField.text, 7) : w.suggestNames(taskField.text, 7)
     if (!history) return w.suggestNames("", 7)
     function tag(list, group) { return list.map(function(e) { return { name: e.name, seconds: e.seconds, count: e.count, last: e.last, group: group } }) }
-    return tag(history.mostWorked, "most").concat(tag(history.recent, "recent"))
+    return tag(history.recent, "recent").concat(tag(history.mostWorked, "most"))
   }
   onSuggestionsChanged: if (selIndex >= suggestions.length) selIndex = suggestions.length - 1
 
