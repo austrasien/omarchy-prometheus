@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS events (
   at         INTEGER NOT NULL,
   session_id TEXT
 );
+CREATE INDEX IF NOT EXISTS idx_events_kind ON events(kind, at);
 
 -- Quests: goals that span days. Only one is active at a time. Deleting one
 -- only hides it, so the XP it earned stays in the profile.

@@ -151,6 +151,17 @@ class Daemon:
         self.core.set_idle(idle, self.clock(), seconds)
         return {"success": True, "idle": self.core.idle}
 
+    @staticmethod
+    def read_only(channel) -> bool:
+        if not isinstance(channel, str):
+            return True
+        if channel in ("state", "channels") or channel.startswith("stats:"):
+            return True
+        if channel == "share:get":           # records the card, for an achievement
+            return False
+        _, _, verb = channel.partition(":")
+        return verb.startswith(("get", "list", "known"))
+
     def dispatch(self, request: dict) -> dict:
         rid = request.get("id")
         channel = request.get("channel")
@@ -236,8 +247,10 @@ class Daemon:
                     await self._send(writer, {"ok": False, "error": f"bad request: {e}"})
                     continue
                 await self._send(writer, self.dispatch(request))
-                self.check_achievements()
-                await self.push()
+                # A read changes nothing: no achievement to check, no state to push.
+                if not self.read_only(request.get("channel")):
+                    self.check_achievements()
+                    await self.push()
         except (ConnectionError, OSError):
             pass
         finally:

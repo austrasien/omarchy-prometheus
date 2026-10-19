@@ -124,7 +124,7 @@ def focus_quality(store, now: int) -> dict:
     lengths = [session_seconds(r) / 60 for r in sessions]
     lengths = [x for x in lengths if x >= 1]
     ids = {r["id"] for r in sessions}
-    switches = A._app_switches(store)
+    switches = A._app_switches(store, min((r["started_at"] for r in sessions), default=now))
     per_app = defaultdict(lambda: defaultdict(int))
     for r in store.db.execute("SELECT session_id, app, started_at, ended_at FROM focus_spans "
                               "WHERE session_id IS NOT NULL AND started_at >= ?", (since,)):

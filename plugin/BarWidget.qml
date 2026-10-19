@@ -234,8 +234,15 @@ BarWidget {
   property bool panelOpen: false
   // Panel tab, kept across openings.
   property string tab: "session"
-  // Each tab opened counts once toward the Grand tour achievement.
-  onTabChanged: if (panelOpen && p.live) p.call("ui:event", ["tab:" + tab])
+  // Each tab opened counts once toward the Grand tour achievement: told to
+  // the daemon once per tab while the shell runs.
+  property var tabsSeen: ({})
+  function noteTab() {
+    if (!panelOpen || !p.live || tabsSeen[tab]) return
+    tabsSeen[tab] = true
+    p.call("ui:event", ["tab:" + tab])
+  }
+  onTabChanged: noteTab()
 
   // XP just earned from an item of the panel (e.g. a task's laurel): the
   // panel flies it up into the XP bar, which then pulses.
@@ -875,7 +882,7 @@ BarWidget {
 
   onPanelOpenChanged: {
     if (!panelOpen) lingerTimer.restart()
-    else if (p.live) p.call("ui:event", ["tab:" + tab])
+    else noteTab()
   }
 
   Loader {

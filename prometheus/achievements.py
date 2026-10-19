@@ -12,6 +12,7 @@ it is. Secret achievements are worth 25 XP, flat.
 from __future__ import annotations
 
 import datetime as dt
+import heapq
 import math
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -197,19 +198,9 @@ def build_context(store, now: int, level: int) -> Context:
     ctx.interrupted = store.sessions_with_event("autopause") | store.sessions_with_event("absent")
     ctx.challenge_states = [r[0] for r in store.db.execute("SELECT state FROM challenges ORDER BY offered_at")]
     ctx.end_dates = {_local(s["end"]).date() for s in ctx.closed}
-    per_session = defaultdict(lambda: defaultdict(int))
-    for r in store.db.execute("SELECT session_id, app, started_at, ended_at FROM focus_spans"):
-        d = T.date_str(r["started_at"])
-        ctx.day_tracked[d] = ctx.day_tracked.get(d, 0) + (r["ended_at"] - r["started_at"]) / 1000
-        if r["session_id"]:
-            per_session[r["session_id"]][r["app"]] += r["ended_at"] - r["started_at"]
-    for sid, apps in per_session.items():
-        total = sum(apps.values())
-        if total > 0:
-            ctx.session_top_share[sid] = max(apps.values()) / total
+    _read_spans(store, ctx)
     ctx.reflexes = store.count_events("reflex")
     ctx.inbox_zero = store.count_events("inbox_zero")
-    ctx.switches = _app_switches(store)
     ctx.challenges_won = int(store.db.execute("SELECT COUNT(*) FROM challenges WHERE state='won'").fetchone()[0])
     ctx.triples = int(store.db.execute(
         "SELECT COUNT(*) FROM (SELECT session_id FROM challenges WHERE state='won' "
@@ -220,7 +211,6 @@ def build_context(store, now: int, level: int) -> Context:
         ctx.goal = {"hours": float(goal["hours"]), "period": goal.get("period")}
     if goal and goal.get("period") == "day":
         ctx.goal_hours = float(goal["hours"])
-    ctx.monotask = _longest_single_app(store)
     from .quests import Quests    # late: quests imports the store, like this module
     ctx.quests = Quests(store).summary(now)
     ctx.quests_full = store.count_events("quests_full")
@@ -235,11 +225,50 @@ def build_context(store, now: int, level: int) -> Context:
     return ctx
 
 
-def _app_switches(store) -> dict:
+def _read_spans(store, ctx: Context, gap_ms: int = 60_000) -> None:
+    """One pass over the focus spans, the biggest table: tracked time per day,
+    the main app's share of each session, app switches per session (a pause
+    or an idle cut in one app is not a switch), and the longest stretch in one
+    app inside a session (short gaps bridged)."""
+    apps, sid, app, run_start, run_end, best = {}, None, None, 0, 0, 0
+
+    def close_session():
+        total = sum(apps.values())
+        if sid is not None and total > 0:
+            ctx.session_top_share[sid] = max(apps.values()) / total
+
+    for r in store.db.execute("SELECT session_id, app, started_at, ended_at FROM focus_spans "
+                              "ORDER BY session_id, started_at"):
+        start, end = r["started_at"], r["ended_at"]
+        d = T.date_str(start)
+        ctx.day_tracked[d] = ctx.day_tracked.get(d, 0) + (end - start) / 1000
+        if r["session_id"] is None:
+            continue
+        if r["session_id"] != sid:
+            close_session()
+            sid, app, apps = r["session_id"], r["app"], {}
+            ctx.switches[sid] = 0
+            run_start, run_end = start, end
+        else:
+            if r["app"] != app:
+                ctx.switches[sid] += 1
+            if r["app"] == app and start - run_end <= gap_ms:
+                run_end = max(run_end, end)
+            else:
+                run_start, run_end = start, end
+            app = r["app"]
+        apps[app] = apps.get(app, 0) + end - start
+        best = max(best, run_end - run_start)
+    close_session()
+    ctx.monotask = best / 1000
+
+
+def _app_switches(store, since: int = 0) -> dict:
     """App changes per session (a pause or an idle cut in one app is not a switch)."""
     out, sid, app = {}, None, None
     for r in store.db.execute(
-        "SELECT session_id, app FROM focus_spans WHERE session_id IS NOT NULL ORDER BY session_id, started_at"
+        "SELECT session_id, app FROM focus_spans WHERE session_id IS NOT NULL AND started_at >= ? "
+        "ORDER BY session_id, started_at", (since,)
     ):
         if r["session_id"] != sid:
             sid, app = r["session_id"], r["app"]
@@ -248,21 +277,6 @@ def _app_switches(store) -> dict:
             out[sid] += 1
             app = r["app"]
     return out
-
-
-def _longest_single_app(store, gap_ms: int = 60_000) -> float:
-    """Longest stretch in one app inside a session (short gaps bridged), in s."""
-    best, cur_sid, cur_app, cur_start, cur_end = 0, None, None, 0, 0
-    for r in store.db.execute(
-        "SELECT session_id, app, started_at, ended_at FROM focus_spans "
-        "WHERE session_id IS NOT NULL ORDER BY session_id, started_at"
-    ):
-        if r["session_id"] == cur_sid and r["app"] == cur_app and r["started_at"] - cur_end <= gap_ms:
-            cur_end = max(cur_end, r["ended_at"])
-        else:
-            cur_sid, cur_app, cur_start, cur_end = r["session_id"], r["app"], r["started_at"], r["ended_at"]
-        best = max(best, cur_end - cur_start)
-    return best / 1000
 
 
 # -------------------------------------------------------------- measures
@@ -396,11 +410,14 @@ def _grand_tour(c: Context) -> int | None:
 def _new_top10(values: list[tuple], after) -> int:
     """Entries that made the top 10 of everything so far, from `after` on.
     `values`: (order key, value), the order key comparable with `after`."""
-    seen, n = [], 0
+    best, n = [], 0                      # the 10 best so far, a min-heap
     for key, v in sorted(values):
-        if key >= after and sum(1 for x in seen if x > v) < 10:
+        if key >= after and (len(best) < 10 or v >= best[0]):
             n += 1
-        seen.append(v)
+        if len(best) < 10:
+            heapq.heappush(best, v)
+        elif v > best[0]:
+            heapq.heapreplace(best, v)
     return n
 
 

@@ -16,8 +16,9 @@ _day_start_hour = DEFAULT_DAY_START_HOUR
 
 
 def set_day_start_hour(hour: int) -> None:
-    global _day_start_hour
+    global _day_start_hour, _last_day
     _day_start_hour = max(0, min(12, int(hour)))
+    _last_day = (0, 0, "")
 
 
 def day_start_hour() -> int:
@@ -54,8 +55,21 @@ def add_days(day_start_ms: int, days: int) -> int:
     return _start_of(_logical_date(day_start_ms) + dt.timedelta(days=days))
 
 
+# The last day asked for, as (start ms, next start ms, date): history is read
+# in time order, so most calls fall in the same day as the one before and skip
+# the time zone arithmetic.
+_last_day = (0, 0, "")
+
+
 def date_str(ms: int) -> str:
-    return _logical_date(ms).strftime("%Y-%m-%d")
+    global _last_day
+    lo, hi, s = _last_day
+    if lo <= ms < hi:
+        return s
+    date = _logical_date(ms)
+    s = date.strftime("%Y-%m-%d")
+    _last_day = (_start_of(date), _start_of(date + dt.timedelta(days=1)), s)
+    return s
 
 
 def days_between(earlier_ms: int, later_ms: int) -> int:
