@@ -87,6 +87,7 @@ class Daemon:
             "settings:getHandle": lambda a: {"success": True, "handle": self.core.handle()},
             "settings:setHandle": lambda a: self.core.set_handle(a[0] if a else None),
             "share:get": lambda a: self.core.share(self.clock()),
+            "sessions:names": lambda a: self.core.session_names(self.clock()),
             "stats:extra": lambda a: stats_extra.extra(self.core.store, self.clock()),
             "ui:event": lambda a: self.core.ui_event(a[0] if a else None),
             "settings:getShareFormat": lambda a: {"success": True, "format": self.core.share_format()},

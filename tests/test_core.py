@@ -520,5 +520,16 @@ class CoreTest(unittest.TestCase):
         self.assertEqual(cur["pace"][-1]["xp"], cur["xp"])
 
 
+    def test_session_names(self):
+        c = self.core
+        for k, (name, minutes) in enumerate([("A", 50), ("B", 10), ("C", 30), ("D", 5), ("E", 20), ("F", 1), ("A", 5)]):
+            c.start(name, self.at(k * 100))
+            c.end(self.at(k * 100 + minutes))
+        r = c.session_names(self.at(1000))
+        self.assertEqual([e["name"] for e in r["mostWorked"]], ["A", "C", "E", "B"])
+        self.assertEqual([e["name"] for e in r["recent"]], ["F", "D"])   # A is in the first group
+        self.assertEqual(len(r["all"]), 6)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -7,7 +7,9 @@ Python daemon keeps everything in one SQLite file, and a bar plugin shows it.
 Started as a local replacement for [Promethee](https://promethee.io), keeping
 only what was actually used.
 
-- **Sessions**: start one with a task name, pause, resume, end. The timer
+- **Sessions**: start one with a task name, pause, resume, end. Under the
+  name field: the 4 names with the most focus time and the 3 last used,
+  from the whole history; click one, or arrows and Enter. The timer
   sits next to the bar icon; the recap shows up in the bar.
 - **Window tracking**: the focused Hyprland window, followed through the
   event socket rather than polled, stored as one interval per stretch in an
@@ -206,6 +208,7 @@ bar (session ended, challenge won).
 | `tasks:delete` | `[id]` | Drop an open task without its XP |
 | `toast:preview` | `[rarity]` | Show a sample achievement unlock (to see the capsule) |
 | `share:get` | | What the share card shows |
+| `sessions:names` | | Session names: the 4 most worked on, the 3 last used, and all with focus time |
 | `stats:extra` | | XP by source this week, tasks, focus quality, weekday × hour heatmap, challenges, presence checks, power and weather |
 | `ui:event` | `[tab:<name>\|bio]` | A tab opened (once each) or a rival bio read, for achievements |
 | `settings:getHandle` / `settings:setHandle` | `[handle]` | The player's @handle, shown by the panel title |

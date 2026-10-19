@@ -11,6 +11,45 @@ Column {
   property var p: null   // the Prometheus client
 
   readonly property bool editing: taskField.activeFocus
+
+  // Every session name from the daemon's history (sessions:names): the 4
+  // with the most focus time, the 3 last used, and all of them for typing.
+  property var history: null
+  function loadHistory() {
+    p.call("sessions:names", [], function(ok, d) { if (ok && d && d.success) tab.history = d })
+  }
+  onVisibleChanged: if (visible && !p.session) loadHistory()
+  Component.onCompleted: if (visible) loadHistory()
+  Connections {
+    target: tab.p
+    function onSessionChanged() { if (!tab.p.session) tab.loadHistory() }
+  }
+  readonly property string lastName: {
+    var all = history ? history.all : []
+    var best = null
+    for (var i = 0; i < all.length; i++) if (!best || all[i].last > best.last) best = all[i]
+    return best ? best.name : w.lastTask
+  }
+
+  // Typing: names starting with the text, then containing it, most worked on
+  // first; from the history plus the names remembered by the bar.
+  function matchNames(query, limit) {
+    var q = query.trim().toLowerCase()
+    var pool = {}, list = []
+    var all = history ? history.all : []
+    for (var i = 0; i < all.length; i++) { pool[all[i].name] = true; list.push(all[i]) }
+    var kept = w.sessionNames
+    for (var j = 0; j < kept.length; j++) if (!pool[kept[j].name]) list.push({ name: kept[j].name, count: kept[j].count, last: kept[j].last, seconds: 0 })
+    var starts = [], contains = []
+    for (var k = 0; k < list.length; k++) {
+      var n = list[k].name.toLowerCase()
+      if (n === q) continue
+      if (n.indexOf(q) === 0) starts.push(list[k])
+      else if (n.indexOf(q) > 0) contains.push(list[k])
+    }
+    function order(a, b) { return (b.seconds || 0) - (a.seconds || 0) || (b.count || 0) - (a.count || 0) || b.last - a.last }
+    return starts.sort(order).concat(contains.sort(order)).slice(0, limit)
+  }
   spacing: Style.space(12)
 
   function focusEntry() {
@@ -30,7 +69,12 @@ Column {
   // greyed after the cursor and Tab takes it. Up / Down pick from the list,
   // Enter starts the picked name, else what is typed, else the last name.
   property int selIndex: -1
-  readonly property var suggestions: w.suggestNames(taskField.text, 7)
+  readonly property var suggestions: {
+    if (taskField.text.trim().length > 0) return history ? matchNames(taskField.text, 7) : w.suggestNames(taskField.text, 7)
+    if (!history) return w.suggestNames("", 7)
+    function tag(list, group) { return list.map(function(e) { return { name: e.name, seconds: e.seconds, count: e.count, last: e.last, group: group } }) }
+    return tag(history.mostWorked, "most").concat(tag(history.recent, "recent"))
+  }
   onSuggestionsChanged: if (selIndex >= suggestions.length) selIndex = suggestions.length - 1
 
   readonly property string completion: {
@@ -44,7 +88,7 @@ Column {
     if (selIndex >= 0 && selIndex < suggestions.length) return suggestions[selIndex].name
     var t = taskField.text.trim()
     if (t.length > 0) return t
-    return w.lastTask
+    return tab.lastName
   }
 
   function startChosen() {
@@ -64,7 +108,7 @@ Column {
       TextField {
         id: taskField
         width: parent.width - startButton.width - parent.spacing
-        placeholderText: w.lastTask ? w.lastTask : "What are you working on?"
+        placeholderText: tab.lastName ? tab.lastName : "What are you working on?"
         foreground: w.fg
         accent: w.accent
         font.family: w.fontFamily
@@ -116,10 +160,33 @@ Column {
       Repeater {
         model: tab.suggestions
 
-        Rectangle {
-          id: sugg
+        Column {
+          id: suggRow
           required property var modelData
           required property int index
+          width: parent.width
+          // A heading above the first name of each group.
+          readonly property bool heading: !!modelData.group
+            && (index === 0 || tab.suggestions[index - 1].group !== modelData.group)
+
+          Text {
+            visible: suggRow.heading
+            topPadding: suggRow.index > 0 ? Style.space(6) : 0
+            bottomPadding: Style.space(2)
+            leftPadding: Style.space(6)
+            textFormat: Text.PlainText
+            text: suggRow.modelData.group === "most" ? "MOST WORKED ON" : "RECENT"
+            color: Util.alpha(w.fg, 0.45)
+            font.family: w.fontFamily
+            font.pixelSize: Style.font.caption - 1
+            font.bold: true
+            font.letterSpacing: 0.5
+          }
+
+        Rectangle {
+          id: sugg
+          readonly property var modelData: suggRow.modelData
+          readonly property int index: suggRow.index
           readonly property bool selected: index === tab.selIndex
           width: parent.width
           height: suggName.implicitHeight + Style.space(8)
@@ -159,7 +226,9 @@ Column {
             anchors.rightMargin: Style.space(6)
             anchors.verticalCenter: parent.verticalCenter
             textFormat: Text.PlainText
-            text: "×" + (sugg.modelData.count || 1)
+            // Focus time when known, else the number of sessions.
+            text: sugg.modelData.seconds >= 60 ? tab.p.formatShort(sugg.modelData.seconds)
+              : sugg.modelData.seconds > 0 ? "<1m" : "×" + (sugg.modelData.count || 1)
             color: Util.alpha(w.fg, 0.4)
             font.family: w.fontFamily
             font.pixelSize: Style.font.caption
@@ -175,6 +244,7 @@ Column {
               tab.startChosen()
             }
           }
+        }
         }
       }
     }
