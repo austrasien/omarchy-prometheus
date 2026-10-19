@@ -38,6 +38,8 @@ Item {
   property var seasonMedals: []   // permanent: [{ season, number, bars, color, dot, edge, name, desc }]
   property var medals: []         // the placard: [{ id, name, desc, period, color, dots, dot, edges, count, current }]
   property var history: []        // seven { date, minutes }, oldest first
+  property var coffee: null       // { cupsToday, mgToday, inBody, mgPerL, lastAt, canUndo, ideal: { at, reason } }
+  property var agentsToday: null  // { tokens, cost, prompts, ... } for today
   property var apps: []           // today's top five { app, seconds }
   property int trackedSeconds: 0
   // The daemon's day: it starts at dayStartHour (5 h by default), so
@@ -171,6 +173,8 @@ Item {
     assign("history", state.history || [])
     assign("apps", state.apps || [])
     assign("trackedSeconds", state.trackedSeconds || 0)
+    assign("coffee", state.coffee || null)
+    assign("agentsToday", state.agents || null)
     if (state.todayDate) assign("todayDate", state.todayDate)
     if (state.dayStartHour !== undefined) assign("dayStartHour", state.dayStartHour)
     recomputeElapsed()
@@ -190,6 +194,8 @@ Item {
     medals = []
     seasonMedals = []
     history = []
+    coffee = null
+    agentsToday = null
     apps = []
     trackedSeconds = 0
     elapsed = 0

@@ -566,4 +566,115 @@ Column {
       }
     }
   }
+
+  // ---- coffee, and the day hour by hour
+  property var dayHours: null          // coffee:day
+  function loadDay() {
+    p.call("coffee:day", [], function(ok, d) { if (ok && d && d.success) tab.dayHours = d })
+  }
+  Timer {
+    interval: 60 * 1000
+    repeat: true
+    running: tab.visible
+    triggeredOnStart: true
+    onTriggered: tab.loadDay()
+  }
+  function coffee() { p.act("coffee:add", [], "Coffee", tab.loadDay) }
+  function uncoffee() { p.act("coffee:undo", [], "Undo coffee", tab.loadDay) }
+
+  PanelSeparator { width: parent.width; foreground: w.fg }
+
+  Item {
+    width: parent.width
+    height: Math.max(coffeeButton.implicitHeight, coffeeText.implicitHeight)
+
+    PanelSectionHeader {
+      id: hoursHeader
+      anchors.left: parent.left
+      anchors.verticalCenter: parent.verticalCenter
+      text: "HOUR BY HOUR"
+      foreground: w.fg
+      fontFamily: w.fontFamily
+    }
+
+    Row {
+      anchors.right: parent.right
+      anchors.verticalCenter: parent.verticalCenter
+      spacing: Style.space(6)
+
+      Button {
+        visible: !!p.coffee && p.coffee.canUndo
+        anchors.verticalCenter: parent.verticalCenter
+        text: "Undo"
+        foreground: w.fg
+        accent: w.accent
+        fontSize: Style.font.caption
+        tooltipText: "Take back the last coffee (10 minutes at most)"
+        onClicked: tab.uncoffee()
+      }
+      Button {
+        id: coffeeButton
+        anchors.verticalCenter: parent.verticalCenter
+        iconText: String.fromCodePoint(0xF0176)
+        text: "Coffee"
+        foreground: "#c08552"
+        accent: "#c08552"
+        bordered: true
+        tooltipText: "Log a coffee (one standard cup, 95 mg)"
+        onClicked: tab.coffee()
+      }
+    }
+  }
+
+  Text {
+    id: coffeeText
+    width: parent.width
+    wrapMode: Text.WordWrap
+    textFormat: Text.PlainText
+    readonly property var c: p.coffee
+    text: {
+      if (!c) return ""
+      var parts = [c.cupsToday + (c.cupsToday === 1 ? " cup" : " cups") + " today",
+                   c.inBody + " mg in the body (" + c.mgPerL + " mg/L)"]
+      var ideal = c.ideal
+      if (ideal && ideal.at) {
+        var soon = ideal.at - Date.now() <= 60000
+        parts.push(soon ? "a coffee now is a good idea" : "best time for a coffee: " + Qt.formatTime(new Date(ideal.at), "HH:mm"))
+      } else if (ideal) {
+        parts.push(ideal.reason.charAt(0).toLowerCase() + ideal.reason.slice(1))
+      }
+      return parts.join("  ·  ")
+    }
+    color: Util.alpha("#c08552", 0.95)
+    font.family: w.fontFamily
+    font.pixelSize: Style.font.caption
+  }
+
+  DayHours {
+    width: parent.width
+    w: tab.w
+    info: tab.dayHours
+  }
+
+  Text {
+    width: parent.width
+    wrapMode: Text.WordWrap
+    textFormat: Text.PlainText
+    readonly property var a: p.agentsToday
+    text: {
+      var d = tab.dayHours
+      if (!d) return ""
+      var focus = 0, tasks = 0
+      for (var i = 0; i < d.hours.length; i++) { focus += d.hours[i].focus; tasks += d.hours[i].tasks }
+      var parts = ["in session " + Math.floor(focus / 60) + " h " + String(focus % 60).padStart(2, "0"),
+                   d.sessions.length + (d.sessions.length === 1 ? " session" : " sessions"),
+                   tasks + (tasks === 1 ? " task" : " tasks")]
+      if (d.quests.length) parts.push(d.quests.length + (d.quests.length === 1 ? " quest" : " quests"))
+      if (a && a.tokens) parts.push((a.tokens >= 1e9 ? (a.tokens / 1e9).toFixed(1) + "B" : Math.round(a.tokens / 1e6) + "M") + " tokens")
+      return parts.join("  ·  ")
+    }
+    color: Util.alpha(w.fg, 0.55)
+    font.family: w.fontFamily
+    font.pixelSize: Style.font.caption
+  }
 }

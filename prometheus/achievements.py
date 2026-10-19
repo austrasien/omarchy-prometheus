@@ -149,6 +149,7 @@ class Context:
     events: dict = field(default_factory=dict)               # event kind -> count (usage of the tool)
     day_tokens: dict = field(default_factory=dict)           # date -> agent tokens
     agent: dict = field(default_factory=dict)                # agent measures (agents.measures)
+    coffee: dict = field(default_factory=dict)               # coffee measures (coffee.measures)
 
 
 def _date(s: str) -> dt.date:
@@ -239,6 +240,8 @@ def build_context(store, now: int, level: int) -> Context:
     quest_periods = [(r[0], r[1], r[2] if r[2] is not None else now) for r in store.db.execute(
         "SELECT quest_id, started_at, ended_at FROM quest_active")]
     ctx.agent.update(agents.third_measures(store, ctx.closed, quest_periods))
+    from .coffee import Coffee            # late: coffee imports agents, like this module
+    ctx.coffee = Coffee(store).measures(ctx.closed, [t["done"] for t in ctx.tasks_done])
     return ctx
 
 
@@ -1637,6 +1640,56 @@ FAMILIES: list[Family] = [
     Family("indoorkid", "Indoor kid", lambda c: c.agent.get("sunny") or None, [1, 3, 10, 25, 50],
            lambda t: f"Indoor Kid ×{t:g}", lambda t: f"Burn 10M tokens during a focus session on a clear day at 20 °C or more, {t:g} times.",
            ["Perfect weather outside. You chose compute.", "{n} sunny days indoors. Touch grass later."],
+           rarities=["common", "rare", "rare", "epic", "legendary"]),
+
+    # ---- coffee
+    Family("barista", "Barista", lambda c: c.coffee.get("cups") or None, [1, 10, 50, 100, 500],
+           lambda t: f"Barista ×{t:g}", lambda t: f"Log {t:g} coffees.",
+           ["First cup logged. Fuel is a line item now.", "{n} coffees. The bean budget is real."],
+           rarities=["normal", "common", "rare", "epic", "legendary"]),
+    Family("doubleshot", "Double shot", lambda c: c.coffee.get("bestDay") or None, [2, 3, 4, 5, 6],
+           lambda t: f"Double Shot ×{t:g}", lambda t: f"Drink {t:g} coffees in a day.",
+           ["Two cups. Standard founder issue.", "{n} cups in a day. Your heart rate has a roadmap."],
+           rarities=["normal", "common", "rare", "epic", "epic"]),
+    Family("bean", "Daily grind", lambda c: c.coffee.get("streak") or None, [3, 7, 14, 30, 100],
+           lambda t: f"Daily Grind {t:g}", lambda t: f"Have coffee {t:g} days in a row.",
+           ["Three days of coffee. A habit is forming.", "{n} days straight. The grind is literal."],
+           rarities=["common", "common", "rare", "epic", "legendary"]),
+    Family("decaf", "Decaf founder", lambda c: c.coffee.get("decaf") or None, [1, 5, 10, 25, 50],
+           lambda t: f"Decaf Founder ×{t:g}", lambda t: f"Focus 2 hours on a day without coffee, {t:g} times.",
+           ["Two hours of focus, zero caffeine. Natural talent.", "{n} clean days. Your adrenal glands send their thanks."],
+           rarities=["common", "rare", "rare", "epic", "legendary"]),
+    Family("peakcaffeine", "Peak caffeine", lambda c: c.coffee.get("peak") or None, [100, 150, 200, 300, 400],
+           lambda t: f"Peak Caffeine {t:g} mg", lambda t: f"Have {t:g} mg of caffeine in the body at once.",
+           ["A hundred milligrams on board. Systems nominal.", "{n} mg at once. You can hear colors now."],
+           rarities=["normal", "common", "rare", "epic", "legendary"]),
+    Family("nightcup", "Night cup", lambda c: c.coffee.get("late") or None, [1, 5, 10, 25, 50],
+           lambda t: f"Night Cup ×{t:g}", lambda t: f"Have {t:g} coffees after 6 pm.",
+           ["Coffee after six. Sleep is for incumbents.", "{n} evening cups. Bold. Unwise. Bold."],
+           rarities=["common", "common", "rare", "rare", "epic"]),
+    Family("dawncup", "Dawn cup", lambda c: c.coffee.get("early") or None, [1, 5, 10, 25, 50],
+           lambda t: f"Dawn Cup ×{t:g}", lambda t: f"Have {t:g} coffees before 7 am.",
+           ["Coffee before seven. The day hasn't started, you have.", "{n} dawn cups. Pre-market caffeine."],
+           rarities=["common", "common", "rare", "rare", "epic"]),
+    Family("brewed", "Brewed focus", lambda c: c.coffee.get("brewed") or None, [1, 10, 25, 50, 100],
+           lambda t: f"Brewed Focus ×{t:g}", lambda t: f"Start a session of an hour or more within 45 minutes after a coffee, {t:g} times.",
+           ["Cup, then focus. The ritual works.", "{n} brewed sessions. Caffeine as a productivity stack."],
+           rarities=["normal", "common", "rare", "epic", "legendary"]),
+    Family("wired", "Wired", lambda c: c.coffee.get("wiredTasks") or None, [10, 50, 100, 250, 500],
+           lambda t: f"Wired ×{t:g}", lambda t: f"Check {t:g} tasks with more than 100 mg of caffeine on board.",
+           ["Ten tasks, fully caffeinated. Velocity.", "{n} wired tasks. The to-do list fears you."],
+           rarities=["common", "common", "rare", "epic", "legendary"]),
+    Family("fuel", "Fuel efficiency", lambda c: c.coffee.get("fuel") or None, [10e6, 50e6, 100e6, 250e6, 500e6],
+           lambda t: f"Fuel Efficiency {agents.short(t)}", lambda t: f"Have agents burn {agents.short(t)} tokens in the 2 hours after a coffee.",
+           ["One cup, ten million tokens. Best ROI in the building.", "{n} tokens on one cup. Caffeine scales."],
+           unit="M", scale=1e6, rarities=["common", "rare", "rare", "epic", "legendary"]),
+    Family("sensible", "Sensible dose", lambda c: c.coffee.get("sensible") or None, [1, 4, 12, 26, 52],
+           lambda t: f"Sensible Dose ×{t:g}", lambda t: f"Weeks with coffee that never went over 400 mg a day: {t:g}.",
+           ["A week within limits. Sustainable pace.", "{n} sensible weeks. Your cardiologist is bored."],
+           rarities=["normal", "common", "rare", "epic", "legendary"]),
+    Family("perfecttiming", "Perfect timing", lambda c: c.coffee.get("timed") or None, [1, 5, 10, 25, 50],
+           lambda t: f"Perfect Timing ×{t:g}", lambda t: f"Have a coffee within 15 minutes of the best time shown, {t:g} times.",
+           ["Right on schedule. Data-driven caffeine.", "{n} perfectly timed cups. You optimize everything."],
            rarities=["common", "rare", "rare", "epic", "legendary"]),
 
     # ---- leaderboards: new top-10 entries, from 30 days in

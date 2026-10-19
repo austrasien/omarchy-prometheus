@@ -30,6 +30,15 @@ only what was actually used.
   out of the records when its title contains them (a bank, say).
 - **Aliases**: rename or merge apps; applied when reading, so they rewrite
   the past too and can be undone.
+- **Coffee**: a Coffee button on the Session tab logs a cup (95 mg, one
+  standard cup; Undo for 10 minutes). Caffeine in the blood follows a
+  one-compartment model for a 90 kg man (absorbed in about 45 minutes,
+  half-life 5 h); the best time for the next cup is when it falls under
+  60 mg and stays there, before the daily 400 mg and 8 h before a 23:00
+  bedtime. The Session tab shows the day hour by hour: time in session,
+  agent tokens, cups, tasks and quests, the caffeine curve, now and the
+  best time. Stats has a Coffee view: cups by day and week, per cup, coffee
+  days against the others, and correlations with focus, tasks, tokens, XP.
 - **Agent tokens**: tokens burned by coding agents count as a sign of work.
   This machine: Claude Code's transcripts (`~/.claude/projects`), read as
   they grow, per minute, conversation, project and model, with the input /
@@ -119,10 +128,10 @@ only what was actually used.
   legendary achievements, a stamp per shining league with at least one
   round finished in it, rarest first, with the count, with a holographic seal. It asks where to save it
   (zenity) and needs ffmpeg.
-- **Achievements** (a family not started yet shows only dots; tiers after the next one too; each tier has a rarity by the XP it is worth: normal under 30, common green, rare blue from 60, epic purple from 140, legendary gold and shining from 360; secrets are epic): 171 families with 1133 tiers, five at least each (agent tokens, quests, leagues, seasons, leaderboards, and exploring the tool: settings changed, cards generated, tabs opened, bios read, rarity set by hand), plus a calendar of 126
+- **Achievements** (a family not started yet shows only dots; tiers after the next one too; each tier has a rarity by the XP it is worth: normal under 30, common green, rare blue from 60, epic purple from 140, legendary gold and shining from 360; secrets are epic): 183 families with 1193 tiers, five at least each (agent tokens, quests, leagues, seasons, leaderboards, and exploring the tool: settings changed, cards generated, tabs opened, bios read, rarity set by hand), plus a calendar of 126
   dated achievements (one per date: Roman festivals, geek days, scientists
   and writers, SpaceX and Tesla milestones, each unlocked by finishing a
-  session that day, 10 XP), so 1259 in all, computed from Prometheus' own
+  session that day, 10 XP), so 1319 in all, computed from Prometheus' own
   records: sessions, tasks (same-day, inbox zero, redemptions), cumulative
   hours (100 h to 10,000 h), levels, endurance, intensity, 3-day and weekly
   hours, streaks, active days and months, early and late sessions, midnight
@@ -223,6 +232,9 @@ bar (session ended, challenge won).
 | `toast:preview` | `[rarity]` | Show a sample achievement unlock (to see the capsule) |
 | `share:get` | | What the share card shows |
 | `sessions:names` | | Session names: the 3 last used, the 4 most worked on, and all with focus time |
+| `coffee:add` / `coffee:undo` | | Log a cup / take the last one back (10 min) |
+| `coffee:day` | `[fromMs]` | The day hour by hour, caffeine every 10 minutes, the best time for a cup |
+| `stats:coffee` | | Cups by day and week, per cup, correlations |
 | `stats:agents` | | Agent tokens: today, 30 days, machines, models, projects, heatmap, how |
 | `stats:extra` | | XP by source this week, tasks, focus quality, weekday × hour heatmap, challenges, presence checks, power and weather |
 | `ui:event` | `[tab:<name>\|bio]` | A tab opened (once each) or a rival bio read, for achievements |

@@ -110,6 +110,13 @@ CREATE TABLE IF NOT EXISTS agent_usage (
   PRIMARY KEY (device, slot, conversation, model)
 );
 CREATE INDEX IF NOT EXISTS idx_agent_slot ON agent_usage(slot);
+
+-- Coffees logged from the bar (coffee.py).
+CREATE TABLE IF NOT EXISTS coffees (
+  at INTEGER NOT NULL,
+  mg INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_coffees_at ON coffees(at);
 -- How far each transcript was read, and the replies already counted.
 CREATE TABLE IF NOT EXISTS agent_files (path TEXT PRIMARY KEY, offset INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS agent_messages (id TEXT PRIMARY KEY) WITHOUT ROWID;

@@ -17,6 +17,7 @@ from . import quests as Q
 from . import timeutil as T
 from . import agents as A_
 from .agents import AgentUsage
+from .coffee import Coffee
 from .store import Store, clipped_seconds, session_seconds
 
 CHECKPOINT_GAP_MS = 90_000      # a checkpoint later than this means the machine slept
@@ -61,6 +62,7 @@ class Core:
         self.quests = Q.Quests(store)
         self.quests.repair(T.now_ms())
         self.agents = AgentUsage(store)      # polled by the daemon
+        self.coffee = Coffee(store)
         T.set_day_start_hour(self.store.get_setting("dayStartHour", T.DEFAULT_DAY_START_HOUR))
         self.window: Window | None = None
         self.idle = False
@@ -392,6 +394,7 @@ class Core:
             "todayDate": T.date_str(at),
             "dayStartHour": T.day_start_hour(),
             "agents": A_.window(self.store, T.day_start(at), at + 1),
+            "coffee": self.coffee.now(at),
         }
 
     # --------------------------------------------------------------- goals

@@ -23,6 +23,7 @@ Column {
   }
   property var extra: null     // stats:extra
   property var agents: null    // stats:agents
+  property var coffee: null    // stats:coffee
 
   property var goal: null      // hoursGoal:get -> { goal, progress }
   property var insights: null  // stats:insights
@@ -90,6 +91,7 @@ Column {
   function refresh() {
     p.call("stats:extra", [], function(ok, d) { if (ok && d && d.success) tab.extra = d })
     p.call("stats:agents", [], function(ok, d) { if (ok && d && d.success) tab.agents = d })
+    p.call("stats:coffee", [], function(ok, d) { if (ok && d && d.success) tab.coffee = d })
     if (!p || !p.live) return
     p.call("hoursGoal:get", [], function(ok, d) { if (ok && d && d.success) tab.goal = d })
     p.call("stats:insights", [], function(ok, d) { if (ok && d && d.success) tab.insights = d })
@@ -264,7 +266,8 @@ Column {
       { value: "heatmap", label: "Heatmap" },
       { value: "challenges", label: "Challenges" },
       { value: "presence", label: "Presence" },
-      { value: "context", label: "Context" }
+      { value: "context", label: "Context" },
+      { value: "coffee", label: "Coffee" }
     ]
     value: tab.view
     foreground: w.fg
@@ -286,9 +289,17 @@ Column {
     tokensText: tab.tokensText
   }
 
+  StatsCoffee {
+    width: parent.width
+    visible: tab.view === "coffee"
+    w: tab.w
+    info: tab.coffee
+    tokensText: tab.tokensText
+  }
+
   StatsExtra {
     width: parent.width
-    visible: tab.view !== "overview" && tab.view !== "agents"
+    visible: tab.view !== "overview" && tab.view !== "agents" && tab.view !== "coffee"
     w: tab.w
     info: tab.extra
     view: tab.view
