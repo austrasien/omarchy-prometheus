@@ -10,7 +10,16 @@ Item {
   property var w: null
   property var tier: null            // a tier from achievements:list
   property bool selected: false
+  property bool dimmed: false          // another one is selected
   signal picked()
+
+  // The selected one stands out: bigger, a white ring, a caret pointing at
+  // its legend below; the others step back.
+  scale: selected ? 1.1 : 1
+  opacity: dimmed ? 0.4 : 1
+  z: selected ? 1 : 0
+  Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutBack } }
+  Behavior on opacity { NumberAnimation { duration: 160 } }
 
   readonly property string rarity: tier ? tier.rarity || "normal" : "normal"
   readonly property color tint: rarity === "normal" ? w.gold : w.rarityColor(rarity)
@@ -25,9 +34,24 @@ Item {
     height: parent.height + Style.space(4)
     radius: height / 2
     color: "transparent"
-    border.width: 1.5
-    border.color: cap.tint
+    border.width: cap.selected ? 2.5 : 1.5
+    border.color: cap.selected ? "white" : cap.tint
     visible: cap.selected || area.containsMouse
+  }
+
+  Canvas {
+    visible: cap.selected
+    width: 10
+    height: 6
+    anchors.horizontalCenter: parent.horizontalCenter
+    anchors.top: parent.bottom
+    anchors.topMargin: 4
+    onPaint: {
+      var ctx = getContext("2d")
+      ctx.reset()
+      ctx.fillStyle = "white"
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(width, 0); ctx.lineTo(width / 2, height); ctx.closePath(); ctx.fill()
+    }
   }
 
   Rectangle {

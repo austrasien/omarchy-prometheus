@@ -52,7 +52,10 @@ Column {
   }
   readonly property var recent: unlockedAll.slice(0, recentMax)
   property var picked: null              // the capsule clicked; the newest by default
-  onRecentChanged: { detailHeight = 0; if (picked && recent.indexOf(picked) < 0) picked = null }
+  onRecentChanged: {
+    detailHeight = 0
+    if (picked && !recent.some(function(t) { return t.id === picked.id })) picked = null
+  }
   // Tall enough for the longest of the 7 legends, so nothing moves on a click.
   property real detailHeight: 0
   readonly property var detail: picked || (recent.length ? recent[0] : null)
@@ -174,7 +177,7 @@ Column {
 
     Column {
       width: parent.width
-      spacing: Style.space(6)
+      spacing: Style.space(9)
       Repeater {
         model: tab.capsuleLines
         Row {
@@ -187,7 +190,9 @@ Column {
               required property var modelData
               w: tab.w
               tier: modelData
-              selected: tab.detail === modelData
+              // By id: the Repeater hands out copies, never the same object.
+              selected: !!tab.detail && tab.detail.id === modelData.id
+              dimmed: !!tab.detail && tab.detail.id !== modelData.id
               onPicked: tab.picked = modelData
             }
           }
