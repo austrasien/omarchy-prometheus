@@ -19,6 +19,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Callable
 
+from . import agents
 from . import geekdates
 from . import timeutil as T
 from .store import ABANDON_PENALTY, session_seconds
@@ -146,6 +147,8 @@ class Context:
     day_earned: dict = field(default_factory=dict)           # date -> earned XP (competition.Ledger)
     session_focus: list = field(default_factory=list)        # (start ms, focus s) of every session
     events: dict = field(default_factory=dict)               # event kind -> count (usage of the tool)
+    day_tokens: dict = field(default_factory=dict)           # date -> agent tokens
+    agent: dict = field(default_factory=dict)                # agent measures (agents.measures)
 
 
 def _date(s: str) -> dt.date:
@@ -198,6 +201,9 @@ def build_context(store, now: int, level: int) -> Context:
     for r in store.db.execute("SELECT ended_at FROM challenges WHERE state='abandoned' AND ended_at IS NOT NULL"):
         d = T.date_str(r["ended_at"])
         ctx.day_xp[d] = ctx.day_xp.get(d, 0) - ABANDON_PENALTY
+    ctx.day_tokens = agents.tokens_by_day(store)
+    for d, tokens in ctx.day_tokens.items():
+        ctx.day_xp[d] = ctx.day_xp.get(d, 0) + agents.xp_for(tokens)
     ctx.interrupted = store.sessions_with_event("autopause") | store.sessions_with_event("absent")
     ctx.challenge_states = [r[0] for r in store.db.execute("SELECT state FROM challenges ORDER BY offered_at")]
     ctx.end_dates = {_local(s["end"]).date() for s in ctx.closed}
@@ -225,6 +231,7 @@ def build_context(store, now: int, level: int) -> Context:
     ctx.day_earned = dict(ledger.xp)
     ctx.session_focus = [(start, sec) for sec, start, _, _ in ledger.session_rows]
     ctx.events = {r[0]: r[1] for r in store.db.execute("SELECT kind, COUNT(*) FROM events GROUP BY kind")}
+    ctx.agent = agents.measures(store, ctx.closed)
     return ctx
 
 
@@ -471,6 +478,14 @@ def _hall_of_fame(c: Context) -> int | None:
         return None
     after = (_date(days[0]) + dt.timedelta(days=LEADERBOARD_WARMUP_DAYS)).isoformat()
     return _new_top10(list(c.day_earned.items()), after) or None
+
+
+def _token_fame(c: Context) -> int | None:
+    days = sorted(d for d, v in c.day_tokens.items() if v > 0)
+    if not days:
+        return None
+    after = (_date(days[0]) + dt.timedelta(days=LEADERBOARD_WARMUP_DAYS)).isoformat()
+    return _new_top10(list(c.day_tokens.items()), after) or None
 
 
 def _session_legend(c: Context) -> int | None:
@@ -1378,7 +1393,7 @@ FAMILIES: list[Family] = [
            lambda t: f"Press Kit ×{t:g}", lambda t: f"Generate your ID card {t:g} times.",
            ["Your service record, minted. Personal brand: shipped.",
             "{n} cards. Your PR team is just you, and it's enough."],
-           rarities=["common", "rare", "epic"]),
+           unit="M", scale=1e6, rarities=["common", "rare", "epic"]),
     Family("revisionist", "Revisionist history", _event("board_remove_done"), [1],
            lambda t: "Revisionist History", lambda t: "Take a finished quest off the leaderboard.",
            ["History is written by the ones who ship. And edited by them too."], rarities="rare"),
@@ -1418,6 +1433,60 @@ FAMILIES: list[Family] = [
             "{n} bios read. Standing on the shoulders of giants, and taking notes."],
            rarities=["normal", "rare", "epic"]),
 
+    # ---- coding agents: tokens burned (rarity set by hand)
+    Family("burner", "Token burner", lambda c: max(c.day_tokens.values(), default=0) or None,
+           [10e6, 50e6, 100e6, 250e6, 500e6, 1e9],
+           lambda t: f"Burner {agents.short(t)}", lambda t: f"Burn {agents.short(t)} agent tokens in a day.",
+           ["The GPUs felt that one. Somewhere a datacenter fan spun up for you.",
+            "{n}. Your agents worked harder than most teams."],
+           unit="M", scale=1e6, rarities=["normal", "common", "rare", "epic", "epic", "legendary"]),
+    Family("lifetime", "Lifetime burn", lambda c: c.agent.get("lifetime") or None, [100e6, 1e9, 5e9, 10e9, 50e9],
+           lambda t: f"Lifetime {agents.short(t)}", lambda t: f"Burn {agents.short(t)} agent tokens in all.",
+           ["A hundred million tokens. Compute is the new payroll.",
+            "{n} tokens. You don't write code anymore, you allocate intelligence."],
+           unit="M", scale=1e6, rarities=["common", "rare", "epic", "legendary", "legendary"]),
+    Family("orchestrator", "Orchestrator", lambda c: c.agent.get("maxParallel") or None, [3, 5, 10],
+           lambda t: f"Orchestrator ×{t:g}", lambda t: f"Have {t:g} agent conversations working in the same minute.",
+           ["Three agents at once. You're not a developer, you're a conductor.",
+            "{n} in parallel. Span of control: unreasonable."],
+           rarities=["common", "rare", "epic"]),
+    Family("polyglot", "Polyglot", lambda c: c.agent.get("maxModels") or None, [3, 4],
+           lambda t: f"Polyglot ×{t:g}", lambda t: f"Use {t:g} model families in one day.",
+           ["Right model, right job. Portfolio thinking.", "Every model in the stable. A true multi-model shop."],
+           rarities=["rare", "epic"]),
+    Family("fleet", "Remote fleet", lambda c: c.agent.get("remoteDays") or None, [1, 7, 30],
+           lambda t: f"Remote Fleet ×{t:g}", lambda t: f"Burn more on other machines than here, {t:g} days.",
+           ["The real work happens on the server. You just steer.", "{n} days run from afar. Distributed company."],
+           rarities=["common", "rare", "epic"]),
+    Family("cachewhisperer", "Cache whisperer", lambda c: c.agent.get("cacheDays") or None, [1, 10],
+           lambda t: f"Cache Whisperer ×{t:g}", lambda t: f"Keep 97 % of a day's tokens (1M at least) in the cache, {t:g} days.",
+           ["Unit economics: excellent. Investors love a cache hit.", "{n} lean days. Margins like a SaaS."],
+           rarities=["rare", "epic"]),
+    Family("nightshift", "Night shift", lambda c: c.agent.get("bestNight") or None, [10e6, 100e6],
+           lambda t: f"Night Shift {agents.short(t)}", lambda t: f"Have agents burn {agents.short(t)} tokens between midnight and 6 am.",
+           ["You slept. They didn't. Leverage.", "A whole night of agents. The company never sleeps."],
+           rarities=["rare", "epic"]),
+    Family("deeppair", "Deep pair", lambda c: c.agent.get("deepPairs") or None, [1, 10],
+           lambda t: f"Deep Pair ×{t:g}", lambda t: f"Focus 2 hours while agents burn 10M tokens, {t:g} times.",
+           ["Human and machine in lockstep. That's the future of work.", "{n} deep pairings. Cyborg mode."],
+           rarities=["epic", "legendary"]),
+    Family("agentstreak", "Agent streak", lambda c: c.agent.get("streak") or None, [7, 30, 100],
+           lambda t: f"Agent Streak {t:g}", lambda t: f"Have agents at work {t:g} days in a row.",
+           ["A week of agents every day. Habit formed.", "{n} days running. The machine is part of the team."],
+           rarities=["common", "epic", "legendary"]),
+    Family("delegator", "Delegator", lambda c: c.agent.get("bestOutside") or None, [50e6, 200e6],
+           lambda t: f"Delegator {agents.short(t)}", lambda t: f"Have agents burn {agents.short(t)} tokens in a day outside your focus sessions.",
+           ["Work happened without you. That's what managers call leverage.", "{n} while you were elsewhere. Pure delegation."],
+           unit="M", scale=1e6, rarities=["rare", "epic"]),
+    Family("bigspender", "Big spender", lambda c: c.agent.get("bestCost") or None, [50, 100, 250],
+           lambda t: f"Big Spender ${t:g}", lambda t: f"Burn ${t:g} of agent compute in a day (API prices).",
+           ["Burn rate: healthy. The board would ask questions.", "${n} in a day. Compute is cheaper than hires."],
+           rarities=["common", "rare", "epic"]),
+    Family("tokenfame", "Token hall of fame", lambda c: _token_fame(c), [1, 5, 10],
+           lambda t: f"Token Hall of Fame ×{t:g}",
+           lambda t: f"Put a day in your top 10 token days, {t:g} times (from your 30th day on).",
+           ["A top-10 burn day. The leaderboard noticed.", "{n} record days of compute."]),
+
     # ---- leaderboards: new top-10 entries, from 30 days in
     Family("halloffame", "Hall of fame", _hall_of_fame, [1, 5, 10, 25, 50],
            lambda t: f"Hall of Fame ×{t:g}",
@@ -1449,7 +1518,7 @@ WEIGHTS = {
     "closer": 2, "longgame": 3, "unbroken": 2, "cleansweep": 2, "deepquest": 2, "payload": 2,
     "marathoner": 3,
     "leagueclimb": 2, "diamondhands": 3, "promostreak": 2, "seasonpass": 2, "hardmode": 3,
-    "honorroll": 2, "podium": 2, "stier": 3, "halloffame": 2, "sessionlegend": 2,
+    "honorroll": 2, "podium": 2, "stier": 3, "halloffame": 2, "sessionlegend": 2, "tokenfame": 2,
 }
 for _f in FAMILIES:
     _f.weight = WEIGHTS.get(_f.id, 1)

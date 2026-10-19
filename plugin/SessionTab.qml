@@ -314,6 +314,20 @@ Column {
       font.pixelSize: Style.font.caption
     }
 
+    // Agents at work during the session (every machine).
+    Text {
+      readonly property real burnt: p.session ? p.session.agentTokens || 0 : 0
+      width: parent.width
+      visible: burnt > 0
+      horizontalAlignment: Text.AlignHCenter
+      textFormat: Text.PlainText
+      text: "Agents: " + (burnt >= 1e9 ? (burnt / 1e9).toFixed(1) + "B" : burnt >= 1e6 ? (burnt / 1e6).toFixed(1) + "M"
+        : Math.round(burnt / 1e3) + "k") + " tokens this session"
+      color: Util.alpha("#ff9e64", 0.85)
+      font.family: w.fontFamily
+      font.pixelSize: Style.font.caption
+    }
+
     // ---- extension challenge: offered, then running
     Rectangle {
       width: parent.width

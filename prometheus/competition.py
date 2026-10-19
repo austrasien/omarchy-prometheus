@@ -28,6 +28,7 @@ import math
 import random
 from collections import defaultdict
 
+from . import agents
 from . import timeutil as T
 from .bios import bio
 from .store import ABANDON_PENALTY, session_seconds
@@ -155,6 +156,7 @@ class Ledger:
         self.sessions = defaultdict(int)    # date -> sessions
         self.tasks = defaultdict(int)       # date -> tasks checked
         self.quests = defaultdict(int)      # date -> short or long quests finished
+        self.tokens = defaultdict(int)      # date -> agent tokens
         self.session_rows = []              # (focus seconds, start ms, task, open)
         for r in store.all_sessions():
             sec = session_seconds(r, until=now)
@@ -178,6 +180,10 @@ class Ledger:
             self.quests[d] += 1
         for r in db.execute("SELECT done_at, xp FROM quest_done"):
             self.xp[T.date_str(r["done_at"])] += r["xp"]
+        # Agents: 1 XP per 75,000 tokens, 10 a day at most.
+        for d, tokens in agents.tokens_by_day(store).items():
+            self.tokens[d] = tokens
+            self.xp[d] += agents.xp_for(tokens)
 
     @property
     def first_day(self) -> dt.date | None:
@@ -378,6 +384,7 @@ def seasons(ledger: Ledger) -> list[dict]:
             "bars": 2 if xp >= hard else 1 if xp >= goal else 0,
             "grade": None if running else _grade(xp, goal, hard),
             "hours": round(ledger.between(ledger.focus, start, end) / 3600, 1),
+            "tokens": ledger.between(ledger.tokens, start, end),
             "sessions": ledger.between(ledger.sessions, start, end),
             "tasks": ledger.between(ledger.tasks, start, end),
             "quests": ledger.between(ledger.quests, start, end),
@@ -494,7 +501,7 @@ def season_xp_total(store) -> int:
 # ----------------------------------------------------------- leaderboards
 
 
-BOARDS = ("days", "weeks", "sessions", "quests")
+BOARDS = ("days", "weeks", "sessions", "quests", "tokens", "tokenSessions")
 BOARD_SIZE = 10
 
 
@@ -514,6 +521,22 @@ def leaderboard(store, ledger: Ledger, board: str, quests: list[dict] | None = N
                 when = dt.datetime.fromtimestamp(start / 1000)
                 entries.append({"label": (task or "Session") + " · " + when.strftime("%b %-d, %Y"),
                                 "value": sec, "unit": "s", "date": T.date_str(start), "current": is_open})
+    elif board == "tokens":
+        days = dict(ledger.tokens)
+        days.setdefault(today, 0)
+        for d, t in days.items():
+            if t > 0 or d == today:
+                entries.append({"label": _date(d).strftime("%a %b %-d, %Y"), "value": t, "unit": "tokens",
+                                "date": d, "current": d == today})
+    elif board == "tokenSessions":
+        rows = [r for r in ledger.session_rows if r[0] > 0]
+        ends = {r["started_at"]: (r["ended_at"] or ledger.now) for r in store.all_sessions()}
+        burnt = agents.session_tokens(store, [(start, ends.get(start, ledger.now)) for _, start, _, _ in rows])
+        for (sec, start, task, is_open), t in zip(rows, burnt):
+            if t > 0 or is_open:
+                when = dt.datetime.fromtimestamp(start / 1000)
+                entries.append({"label": (task or "Session") + " · " + when.strftime("%b %-d, %Y"),
+                                "value": t, "unit": "tokens", "date": T.date_str(start), "current": is_open})
     elif board == "quests":
         for q in quests or []:
             if q.get("board_hidden"):

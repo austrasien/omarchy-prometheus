@@ -13,7 +13,16 @@ Column {
   property var w: null
   property var p: null
   property string view: "overview"
+  // Agent tokens: their own color and scale next to the focus bars.
+  readonly property color agentColor: "#ff9e64"
+  function tokensText(n) {
+    if (n >= 1e9) return (n / 1e9).toFixed(n >= 1e10 ? 0 : 1) + "B"
+    if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + "M"
+    if (n >= 1e3) return Math.round(n / 1e3) + "k"
+    return String(n)
+  }
   property var extra: null     // stats:extra
+  property var agents: null    // stats:agents
 
   property var goal: null      // hoursGoal:get -> { goal, progress }
   property var insights: null  // stats:insights
@@ -80,6 +89,7 @@ Column {
 
   function refresh() {
     p.call("stats:extra", [], function(ok, d) { if (ok && d && d.success) tab.extra = d })
+    p.call("stats:agents", [], function(ok, d) { if (ok && d && d.success) tab.agents = d })
     if (!p || !p.live) return
     p.call("hoursGoal:get", [], function(ok, d) { if (ok && d && d.success) tab.goal = d })
     p.call("stats:insights", [], function(ok, d) { if (ok && d && d.success) tab.insights = d })
@@ -144,6 +154,7 @@ Column {
     anchors.horizontalCenter: parent.horizontalCenter
     options: [
       { value: "overview", label: "Overview" },
+      { value: "agents", label: "Agents" },
       { value: "xp", label: "XP" },
       { value: "tasks", label: "Tasks" },
       { value: "focus", label: "Focus" }
@@ -176,9 +187,18 @@ Column {
 
   PanelSeparator { width: parent.width; foreground: w.fg }
 
+  StatsAgents {
+    width: parent.width
+    visible: tab.view === "agents"
+    w: tab.w
+    info: tab.agents
+    ink: tab.agentColor
+    tokensText: tab.tokensText
+  }
+
   StatsExtra {
     width: parent.width
-    visible: tab.view !== "overview"
+    visible: tab.view !== "overview" && tab.view !== "agents"
     w: tab.w
     info: tab.extra
     view: tab.view
@@ -336,6 +356,11 @@ Column {
         return m
       }
       readonly property real barWidth: (width - spacing * 6) / 7
+      readonly property real maxTokens: {
+        var m = 1
+        for (var i = 0; i < days.length; i++) m = Math.max(m, days[i].tokens || 0)
+        return m
+      }
 
       Repeater {
         model: bars.days
@@ -385,6 +410,17 @@ Column {
                 radius: Style.space(3)
                 color: dayCol.isSelected || dayCol.isToday || dayCol.hovered ? w.accent : Util.alpha(w.accent, 0.55)
               }
+
+              // Agent tokens: a thin bar on the right, on the week's own scale.
+              Rectangle {
+                anchors.bottom: parent.bottom
+                x: parent.width / 2 + Math.min(parent.width, Style.space(22)) / 2 + Style.space(2)
+                width: Style.space(4)
+                visible: (dayCol.modelData.tokens || 0) > 0
+                height: Math.max(Style.space(2), parent.height * (dayCol.modelData.tokens || 0) / bars.maxTokens)
+                radius: Style.space(2)
+                color: dayCol.isSelected || dayCol.isToday || dayCol.hovered ? tab.agentColor : Util.alpha(tab.agentColor, 0.6)
+              }
             }
 
             Text {
@@ -433,6 +469,17 @@ Column {
     }
     StatRow {
       w: tab.w
+      label: "Agent tokens"
+      visible: value !== "0"
+      value: {
+        if (tab.selectedDay) return tab.tokensText(tab.selectedDay.tokens || 0)
+        var t = 0, days = tab.week ? tab.week.days || [] : []
+        for (var i = 0; i < days.length; i++) t += days[i].tokens || 0
+        return tab.tokensText(t)
+      }
+    }
+    StatRow {
+      w: tab.w
       label: "Tracked time"
       value: {
         if (tab.selectedDay) return p.formatShort(tab.selectedDay.trackedSeconds)
@@ -457,11 +504,24 @@ Column {
 
     // ---- day timeline
     readonly property var tlSegments: timeline ? timeline.segments || [] : []
-    readonly property real tlFrom: tlSegments.length > 0 ? Math.floor(tlSegments[0].start / 3600000) * 3600000 : 0
+    readonly property var tlAgents: timeline ? timeline.agents || [] : []
+    // The span covers the apps and the agents' quarter hours.
+    readonly property real tlFrom: {
+      var first = Infinity
+      if (tlSegments.length > 0) first = tlSegments[0].start
+      if (tlAgents.length > 0) first = Math.min(first, tlAgents[0].start)
+      return first === Infinity ? 0 : Math.floor(first / 3600000) * 3600000
+    }
     readonly property real tlTo: {
       var end = 0
       for (var i = 0; i < tlSegments.length; i++) end = Math.max(end, tlSegments[i].end)
+      for (var j = 0; j < tlAgents.length; j++) end = Math.max(end, tlAgents[j].start + 900000)
       return end > 0 ? Math.ceil(end / 3600000) * 3600000 : 0
+    }
+    readonly property real tlAgentMax: {
+      var m = 1
+      for (var i = 0; i < tlAgents.length; i++) m = Math.max(m, tlAgents[i].tokens)
+      return m
     }
     readonly property real tlSpan: Math.max(1, tlTo - tlFrom)
 
@@ -536,6 +596,26 @@ Column {
           : "DAY"
         foreground: w.fg
         fontFamily: w.fontFamily
+      }
+
+      // Agent tokens per quarter hour, above the apps; paler where spread
+      // over a gap between two snapshots of another machine.
+      Item {
+        visible: tab.tlAgents.length > 0
+        width: parent.width
+        height: Style.space(18)
+
+        Repeater {
+          model: tab.tlAgents
+          Rectangle {
+            required property var modelData
+            anchors.bottom: parent.bottom
+            x: (modelData.start - tab.tlFrom) / tab.tlSpan * parent.width
+            width: Math.max(1, 900000 / tab.tlSpan * parent.width - 1)
+            height: Math.max(1, parent.height * Math.sqrt(modelData.tokens / tab.tlAgentMax))
+            color: Util.alpha(tab.agentColor, modelData.estimated ? 0.3 : 0.85)
+          }
+        }
       }
 
       Text {

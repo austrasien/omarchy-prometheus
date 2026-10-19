@@ -30,9 +30,13 @@ Column {
   }
 
   readonly property string currentName: board === "days" ? "Today" : board === "weeks" ? "This week"
-    : board === "sessions" ? "This session" : "Active quest"
+    : board === "sessions" || board === "tokenSessions" ? "This session" : board === "tokens" ? "Today" : "Active quest"
 
   function value(e) {
+    if (e.unit === "tokens") {
+      var t = e.value
+      return (t >= 1e9 ? (t / 1e9).toFixed(2) + "B" : t >= 1e6 ? (t / 1e6).toFixed(1) + "M" : Math.round(t / 1e3) + "k") + " tokens"
+    }
     if (e.unit !== "s") return e.value + " XP"
     var m = Math.floor(e.value / 60), h = Math.floor(m / 60)
     return h > 0 ? h + "h" + String(m % 60).padStart(2, "0") : m + " min"
@@ -54,6 +58,22 @@ Column {
       { value: "weeks", label: "Weeks" },
       { value: "sessions", label: "Sessions" },
       { value: "quests", label: "Quests" }
+    ]
+    value: tab.board
+    foreground: w.fg
+    accent: w.accent
+    fontFamily: w.fontFamily
+    fontSize: Style.font.caption
+    focusable: false
+    onChanged: function(v) { tab.board = v }
+  }
+
+  // Agent tokens: the days and the focus sessions that burned the most.
+  ButtonGroup {
+    anchors.horizontalCenter: parent.horizontalCenter
+    options: [
+      { value: "tokens", label: "Token days" },
+      { value: "tokenSessions", label: "Token sessions" }
     ]
     value: tab.board
     foreground: w.fg

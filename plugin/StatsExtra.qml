@@ -14,12 +14,12 @@ Column {
 
   spacing: Style.space(8)
 
-  readonly property var sourceKeys: ["focus", "tasks", "challenges", "quests", "medals", "achievements"]
+  readonly property var sourceKeys: ["focus", "tasks", "challenges", "quests", "medals", "achievements", "agents"]
   readonly property var sourceNames: ({ focus: "Focus", tasks: "Tasks", challenges: "Challenges",
-                                        quests: "Quests", medals: "Medals", achievements: "Achievements" })
+                                        quests: "Quests", medals: "Medals", achievements: "Achievements", agents: "Agents" })
   function sourceColor(k) {
     return k === "focus" ? w.accent : k === "tasks" ? w.gold : k === "challenges" ? w.green
-      : k === "quests" ? w.red : k === "medals" ? w.epicColor : "#7dcfff"
+      : k === "quests" ? w.red : k === "medals" ? w.epicColor : k === "agents" ? "#ff9e64" : "#7dcfff"
   }
   function letter(iso) { return ["S", "M", "T", "W", "T", "F", "S"][new Date(iso + "T12:00:00").getDay()] }
   function pct(v) { return v === null || v === undefined ? "—" : v + " %" }

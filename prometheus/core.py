@@ -15,6 +15,8 @@ from . import env
 from . import medals as M
 from . import quests as Q
 from . import timeutil as T
+from . import agents as A_
+from .agents import AgentUsage
 from .store import Store, clipped_seconds, session_seconds
 
 CHECKPOINT_GAP_MS = 90_000      # a checkpoint later than this means the machine slept
@@ -58,6 +60,7 @@ class Core:
         self.store = store
         self.quests = Q.Quests(store)
         self.quests.repair(T.now_ms())
+        self.agents = AgentUsage(store)      # polled by the daemon
         T.set_day_start_hour(self.store.get_setting("dayStartHour", T.DEFAULT_DAY_START_HOUR))
         self.window: Window | None = None
         self.idle = False
@@ -329,6 +332,7 @@ class Core:
                 "endedAt": at,
                 "durationSeconds": seconds,
                 "apps": apps[:3],
+                "agents": A_.window(self.store, s["started_at"], at + 1),
             },
         }
 
@@ -349,6 +353,7 @@ class Core:
             "bonusXp": self.store.session_bonus_xp(s["id"]),
             "secondsPerXp": FOCUS_SECONDS_PER_XP,
             "autoPaused": self.auto_paused(),   # [] or reasons: idle, locked
+            "agentTokens": A_.tokens_between(self.store, s["started_at"], T.now_ms() + 1),
         }
 
     def state(self, at: int) -> dict:
@@ -385,6 +390,7 @@ class Core:
             "trackedSeconds": sum(a["seconds"] for a in apps),
             "todayDate": T.date_str(at),
             "dayStartHour": T.day_start_hour(),
+            "agents": A_.window(self.store, T.day_start(at), at + 1),
         }
 
     # --------------------------------------------------------------- goals
@@ -510,6 +516,8 @@ class Core:
         first = self.store.db.execute(
             "SELECT MIN(started_at) FROM (SELECT started_at FROM sessions UNION ALL SELECT started_at FROM focus_spans)"
         ).fetchone()[0]
+        for d in out:                       # agent tokens, every machine
+            d["tokens"] = 0 if d.get("future") else A_.tokens_between(self.store, d["fromMs"], T.add_days(d["fromMs"], 1))
         has_older = first is not None and first < monday
         return {"success": True, "weekOffset": offset, "days": out, "hasOlder": has_older,
                 "isoWeek": T.iso_week(monday)}
@@ -636,7 +644,17 @@ class Core:
         for r in self.store.overlapping_sessions(start, end):
             s_end = r["ended_at"] if r["ended_at"] is not None else at
             sessions.append({"task": r["task"], "start": max(r["started_at"], start), "end": min(s_end, end)})
-        return {"success": True, "fromMs": start, "toMs": end, "segments": segments, "sessions": sessions}
+        # Agent tokens per quarter hour (estimated ones apart: spread over a gap).
+        agents = {}
+        for slot, tokens, est in self.store.db.execute(
+                "SELECT slot, SUM(tokens), MAX(estimated) FROM agent_usage WHERE slot >= ? AND slot < ? "
+                "GROUP BY slot", (start, end)):
+            q = slot - (slot - start) % 900_000
+            a = agents.setdefault(q, {"start": q, "tokens": 0, "estimated": False})
+            a["tokens"] += tokens
+            a["estimated"] = a["estimated"] or bool(est)
+        return {"success": True, "fromMs": start, "toMs": end, "segments": segments, "sessions": sessions,
+                "agents": sorted(agents.values(), key=lambda a: a["start"])}
 
     # ------------------------------------------------------------ day start
 
@@ -711,6 +729,7 @@ class Core:
             "format": self.share_format(),
             "stamps": stamps,
             "serviceNumber": self._service_number(first),
+            "agents": A_.window(self.store, 0, at + 1),
         }
 
     def _legendary_unlocked(self) -> list[str]:
@@ -839,9 +858,11 @@ class Core:
         trophies = self.store.achievement_xp_total()
         decorations = self.store.medal_xp_total() + C.season_xp_total(self.store)
         quest_xp = self.quests.xp_total()
-        total = focus_xp + task_xp + bonus + trophies + decorations + quest_xp
+        agent_xp = sum(A_.xp_for(t) for t in A_.tokens_by_day(self.store).values())
+        total = focus_xp + task_xp + bonus + trophies + decorations + quest_xp + agent_xp
         return dict(self.level_for(total), xp=total, focusXp=focus_xp, taskXp=task_xp,
-                    challengeXp=bonus, achievementXp=trophies, medalXp=decorations, questXp=quest_xp)
+                    challengeXp=bonus, achievementXp=trophies, medalXp=decorations, questXp=quest_xp,
+                    agentXp=agent_xp)
 
     # --------------------------------------------------------------- quests
 
@@ -889,6 +910,11 @@ class Core:
         for s in seasons:      # the medal's colors, won or still to win
             s["colors"] = C.pending_colors(self.store, s["key"])
         return {"success": True, "seasons": seasons, "medals": C.season_medals(self.store)}
+
+    def agents_stats(self, at: int) -> dict:
+        sessions = [(r["started_at"], r["ended_at"] if r["ended_at"] is not None else at)
+                    for r in self.store.all_sessions()]
+        return A_.stats(self.store, at, sessions)
 
     def leaderboard_remove_quest(self, qid, at: int) -> dict:
         row = self.store.db.execute("SELECT done_at FROM quests WHERE id=?", (qid,)).fetchone() if isinstance(qid, str) else None

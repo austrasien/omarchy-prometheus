@@ -17,7 +17,7 @@ import signal
 import subprocess
 from pathlib import Path
 
-from . import hypr, procfs, stats_extra
+from . import agents, hypr, procfs, stats_extra
 from .apps import AppNames
 from .core import Core, Refused, Window
 from .store import Store
@@ -88,6 +88,7 @@ class Daemon:
             "settings:setHandle": lambda a: self.core.set_handle(a[0] if a else None),
             "share:get": lambda a: self.core.share(self.clock()),
             "sessions:names": lambda a: self.core.session_names(self.clock()),
+            "stats:agents": lambda a: self.core.agents_stats(self.clock()),
             "stats:extra": lambda a: stats_extra.extra(self.core.store, self.clock()),
             "ui:event": lambda a: self.core.ui_event(a[0] if a else None),
             "settings:getShareFormat": lambda a: {"success": True, "format": self.core.share_format()},
@@ -125,7 +126,11 @@ class Daemon:
         reply = self.core.end(self.clock(), reason)
         reply["recap"]["reason"] = reason
         r = reply["recap"]
-        self.toast("ended", self.END_REASONS[reason], f"{r.get('task') or 'Session'} · {format_short(r['durationSeconds'])}")
+        text = f"{r.get('task') or 'Session'} · {format_short(r['durationSeconds'])}"
+        burnt = (r.get("agents") or {}).get("tokens", 0)
+        if burnt:                       # agents at work meanwhile
+            text += f" · {agents.short(burnt)} tokens · ${r['agents']['cost']:.2f}"
+        self.toast("ended", self.END_REASONS[reason], text)
         return reply
 
     def _abandon(self, args) -> dict:
@@ -276,8 +281,18 @@ class Daemon:
                 self.toast("achievement", f"{len(new)} achievements from your history", f"+{xp} XP")
             self.check_medals()
             return
-        for a in new:
-            self.toast("achievement", a["name"], f"+{a['xp']} XP · {a['quip']}", a.get("rarity"))
+        if len(new) > 3:
+            # A burst (a new kind of history read at once): one toast, at
+            # the rarest one's rarity, naming the rarest.
+            order = ["normal", "common", "rare", "epic", "legendary"]
+            ranked = sorted(new, key=lambda a: -order.index(a.get("rarity") or "normal"))
+            xp = sum(a["xp"] for a in new)
+            names = ", ".join(a["name"] for a in ranked[:2])
+            self.toast("achievement", f"{len(new)} achievements unlocked",
+                       f"+{xp} XP · {names}…", ranked[0].get("rarity"))
+        else:
+            for a in new:
+                self.toast("achievement", a["name"], f"+{a['xp']} XP · {a['quip']}", a.get("rarity"))
         self.check_medals()
 
     def check_medals(self) -> None:
@@ -304,6 +319,12 @@ class Daemon:
             ticks += 1
             if ticks % 30 == 1:          # about once a minute, and at start
                 self.check_achievements()
+            # Agent tokens: every 30 s, every tick while the first import runs.
+            if ticks % 15 == 1 or self.core.agents.backlog:
+                try:
+                    self.core.agents.poll()
+                except Exception:
+                    log.exception("agent usage poll failed")
             try:
                 now = self.clock()
                 for kind, info in self.core.update_challenge(now) + self.core.update_presence(now):

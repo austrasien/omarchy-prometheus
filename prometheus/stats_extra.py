@@ -8,6 +8,7 @@ import datetime as dt
 from collections import defaultdict
 
 from . import achievements as A
+from . import agents
 from . import timeutil as T
 from .store import ABANDON_PENALTY, session_seconds
 
@@ -32,8 +33,8 @@ def xp_sources(store, now: int) -> list[dict]:
     first = T.week_start(now)
     days = _days(first, 7)
     keys = [T.date_str(d) for d in days]
-    out = {k: {"date": k, "focus": 0, "tasks": 0, "challenges": 0, "quests": 0, "medals": 0, "achievements": 0}
-           for k in keys}
+    out = {k: {"date": k, "focus": 0, "tasks": 0, "challenges": 0, "quests": 0, "medals": 0, "achievements": 0,
+               "agents": 0} for k in keys}
 
     def add(ms, source, xp):
         k = T.date_str(ms)
@@ -57,6 +58,9 @@ def xp_sources(store, now: int) -> list[dict]:
         add(r["awarded_at"], "medals", r["xp"])
     for r in db.execute("SELECT unlocked_at, xp FROM achievements"):
         add(r["unlocked_at"], "achievements", r["xp"])
+    for d, tokens in agents.tokens_by_day(store).items():
+        if d in out:
+            out[d]["agents"] += agents.xp_for(tokens)
     return [out[k] for k in keys]
 
 

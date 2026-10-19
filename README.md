@@ -30,6 +30,20 @@ only what was actually used.
   out of the records when its title contains them (a bank, say).
 - **Aliases**: rename or merge apps; applied when reading, so they rewrite
   the past too and can be undone.
+- **Agent tokens**: tokens burned by coding agents count as a sign of work.
+  This machine: Claude Code's transcripts (`~/.claude/projects`), read as
+  they grow, per minute, conversation, project and model, with the input /
+  output / cache split and a cost at API prices (only counts are read,
+  never what was said). Other machines: the snapshots the agents panel
+  (`austraz.agents`, `remoteHosts`) pulls every 10 minutes, compared one to
+  the next; when the laptop slept, the gap is spread evenly and marked
+  estimated (the pull service's journal fills in what came before). Every
+  token counts (input, output, cache). 1 XP per 75,000 tokens, 10 a day at
+  most. Shown next to the week's focus bars, above the day timeline (per
+  quarter hour), during a session and in its recap, in a Stats view
+  (30 days, machines, models, projects, heatmap, cache share, tokens per
+  prompt, parallel conversations, share outside focus sessions), in the
+  leaderboards (token days, token sessions), on seasons and on the ID card.
 - **Stats**: today and the week, each day's apps, a timeline of the day
   colored by app, the week history paged back up to 52 weeks, an hours goal.
   Other views, one button each: XP this week by source (stacked bars), tasks
@@ -209,6 +223,7 @@ bar (session ended, challenge won).
 | `toast:preview` | `[rarity]` | Show a sample achievement unlock (to see the capsule) |
 | `share:get` | | What the share card shows |
 | `sessions:names` | | Session names: the 3 last used, the 4 most worked on, and all with focus time |
+| `stats:agents` | | Agent tokens: today, 30 days, machines, models, projects, heatmap, how |
 | `stats:extra` | | XP by source this week, tasks, focus quality, weekday × hour heatmap, challenges, presence checks, power and weather |
 | `ui:event` | `[tab:<name>\|bio]` | A tab opened (once each) or a rival bio read, for achievements |
 | `settings:getHandle` / `settings:setHandle` | `[handle]` | The player's @handle, shown by the panel title |

@@ -13,6 +13,9 @@ Column {
   property var info: null      // seasons:get
 
   readonly property bool editing: false
+  function tokensText(t) {
+    return t >= 1e9 ? (t / 1e9).toFixed(1) + "B" : t >= 1e6 ? Math.round(t / 1e6) + "M" : Math.round(t / 1e3) + "k"
+  }
   function focusEntry() { return false }
   spacing: Style.space(10)
 
@@ -168,6 +171,7 @@ Column {
       textFormat: Text.PlainText
       text: !tab.cur ? ""
         : tab.cur.xp + " XP so far  ·  projected grade " + tab.cur.projected
+          + (tab.cur.tokens > 0 ? "  ·  agents " + tab.tokensText(tab.cur.tokens) + " tokens" : "")
           + (tab.cur.bars === 2 ? "  ·  both bars won" : tab.cur.bars === 1 ? "  ·  first bar won, " + (tab.cur.hardGoal - tab.cur.xp) + " XP to the second"
              : "  ·  " + (tab.cur.goal - tab.cur.xp) + " XP to the medal")
       color: Util.alpha(w.fg, 0.8)
@@ -179,7 +183,7 @@ Column {
       width: parent.width
       wrapMode: Text.WordWrap
       textFormat: Text.PlainText
-      text: !tab.cur ? "" : "XP from focus, tasks, challenges and quests. The goals are a weekly pace over the season: your good weeks (the better half of the last 26), "
+      text: !tab.cur ? "" : "XP from focus, tasks, challenges, quests and agents (1 per 75k tokens, 10 a day at most). The goals are a weekly pace over the season: your good weeks (the better half of the last 26), "
         + tab.cur.weeklyGoal + " XP a week for the goal (250 at least), " + tab.cur.weeklyHard
         + " for the hard one (30 % more, 350 at least). Grades: S 20 % beyond the hard goal, A hard goal, B goal, C 80 %, D 60 %, F below."
       color: Util.alpha(w.fg, 0.45)
@@ -274,6 +278,7 @@ Column {
             text: pastRow.modelData.hours + " h  ·  " + pastRow.modelData.sessions + " sessions  ·  "
               + pastRow.modelData.tasks + " tasks  ·  " + pastRow.modelData.quests + " quests  ·  best week "
               + pastRow.modelData.bestWeek + " XP"
+              + (pastRow.modelData.tokens > 0 ? "  ·  agents " + tab.tokensText(pastRow.modelData.tokens) + " tokens" : "")
             color: Util.alpha(w.fg, 0.5)
             font.family: w.fontFamily
             font.pixelSize: Style.font.caption

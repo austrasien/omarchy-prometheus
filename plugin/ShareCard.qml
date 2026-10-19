@@ -37,7 +37,11 @@ Rectangle {
     return g === "S" ? w.legendaryColor : g === "A" ? w.gold : g === "B" ? w.green : g === "C" ? ink
       : g === "D" ? "#ea9a23" : g === "F" ? w.red : dim
   }
-  function upper(s) { return (s || "").toUpperCase() }
+  function tokens(t) {
+    return t >= 1e9 ? (t / 1e9).toFixed(2) + "B" : t >= 1e6 ? (t / 1e6).toFixed(1) + "M" : t >= 1e3 ? Math.round(t / 1e3) + "K" : String(t)
+  }
+
+    function upper(s) { return (s || "").toUpperCase() }
   function enlisted(iso) { return iso ? upper(Qt.formatDate(new Date(iso + "T12:00:00"), "dd MMM yyyy")) : "—" }
   function shortSeason(label) {          // "Autumn 2026" -> "AUT 26"
     var parts = (label || "").split(" ")
@@ -194,7 +198,9 @@ Rectangle {
         { k: "RANK", v: card.profile ? "LEVEL " + card.profile.level : "" },
         { k: "XP", v: card.profile ? card.profile.xp + " XP" : "" },
         { k: "LEAGUE", v: card.league ? card.upper(card.league.name) : "" },
-        { k: "ENLISTED", v: card.enlisted(card.info ? card.info.firstDay : null) }
+        { k: "ENLISTED", v: card.enlisted(card.info ? card.info.firstDay : null) },
+        { k: "TOKENS BURNED", v: card.tokens(card.info && card.info.agents ? card.info.agents.tokens : 0) },
+        { k: "COMPUTE", v: card.info && card.info.agents ? "$" + Math.round(card.info.agents.cost) : "$0" }
       ]
       Column {
         required property var modelData

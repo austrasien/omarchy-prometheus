@@ -13,7 +13,7 @@ import sqlite3
 import uuid
 from pathlib import Path
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 # Abandoning an accepted extension challenge costs this much XP.
 ABANDON_PENALTY = 3
@@ -89,6 +89,30 @@ CREATE TABLE IF NOT EXISTS events (
   session_id TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_events_kind ON events(kind, at);
+
+-- Tokens burned by coding agents (agents.py): per device, minute (ten
+-- minutes for other machines), conversation and model. estimated: spread
+-- over a gap between two snapshots.
+CREATE TABLE IF NOT EXISTS agent_usage (
+  device       TEXT NOT NULL,
+  slot         INTEGER NOT NULL,
+  conversation TEXT NOT NULL DEFAULT '',
+  project      TEXT NOT NULL DEFAULT '',
+  model        TEXT NOT NULL DEFAULT '',
+  tokens       INTEGER NOT NULL DEFAULT 0,
+  input        INTEGER NOT NULL DEFAULT 0,
+  output       INTEGER NOT NULL DEFAULT 0,
+  cache_read   INTEGER NOT NULL DEFAULT 0,
+  cache_write  INTEGER NOT NULL DEFAULT 0,
+  prompts      INTEGER NOT NULL DEFAULT 0,
+  cost         REAL NOT NULL DEFAULT 0,
+  estimated    INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (device, slot, conversation, model)
+);
+CREATE INDEX IF NOT EXISTS idx_agent_slot ON agent_usage(slot);
+-- How far each transcript was read, and the replies already counted.
+CREATE TABLE IF NOT EXISTS agent_files (path TEXT PRIMARY KEY, offset INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS agent_messages (id TEXT PRIMARY KEY) WITHOUT ROWID;
 
 -- Quests: goals that span days. Only one is active at a time. Deleting one
 -- only hides it, so the XP it earned stays in the profile.
