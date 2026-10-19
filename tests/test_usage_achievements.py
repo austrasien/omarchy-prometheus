@@ -21,14 +21,25 @@ class UsageAchievementTest(unittest.TestCase):
         self.core.check_achievements(at)
         return set(self.store.unlocked_achievements())
 
+    def test_every_family_has_five_tiers(self):
+        self.assertEqual([f.id for f in A.FAMILIES if len(f.thresholds) < 5], [])
+
+    def test_single_tier_unlocks_migrate(self):
+        self.store.unlock("chatterbox", 1, 40)
+        self.store.unlock("poweruser", 1, 80)
+        A.migrate_legacy_ids(self.store)
+        got = set(self.store.unlocked_achievements())
+        self.assertTrue({"chatterbox:100", "poweruser:8"} <= got)
+        self.assertFalse({"chatterbox", "poweruser"} & got)
+
     def test_family_ids_are_unique(self):
         ids = [f.id for f in A.FAMILIES]
         self.assertEqual(len(ids), len(set(ids)), [i for i in ids if ids.count(i) > 1])
 
     def test_rarity_is_set_by_hand_and_xp_follows(self):
         fam = {f.id: f for f in A.FAMILIES}
-        self.assertEqual(fam["poweruser"].rarity(0), "epic")
-        self.assertEqual(fam["poweruser"].xp(0), 80)
+        self.assertEqual(fam["poweruser"].rarity(4), "epic")   # every setting
+        self.assertEqual(fam["poweruser"].xp(4), 80)
         self.assertEqual([fam["presskit"].rarity(i) for i in range(3)], ["common", "rare", "epic"])
 
     def test_share_settings_tabs_and_board(self):
@@ -52,8 +63,8 @@ class UsageAchievementTest(unittest.TestCase):
         c.quest_complete(q, at)
         c.leaderboard_remove_quest(q, at)
         got = self.unlocked(at + MIN)
-        for aid in ("presskit:1", "callsign", "timezone", "pacemaker", "goalsetter", "invisible",
-                    "redacted", "rebrand", "formatwar", "poweruser", "grandtour", "revisionist"):
+        for aid in ("presskit:1", "callsign:1", "timezone:1", "pacemaker:1", "goalsetter:1", "invisible:1",
+                    "redacted:1", "rebrand:1", "formatwar:1", "poweruser:8", "grandtour:9", "revisionist:1"):
             self.assertIn(aid, got)
 
     def test_hall_of_fame_waits_thirty_days(self):

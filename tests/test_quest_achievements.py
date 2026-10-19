@@ -34,7 +34,7 @@ class QuestAchievementTest(unittest.TestCase):
         self.core.end(self.day(0, 30))
         self.core.quest_complete(q, self.day(0, 40))
         got = self.unlocked(self.day(0, 41))
-        for aid in ("questfirst", "closer:1", "redthread:1", "speedrunner"):
+        for aid in ("questfirst:1", "closer:1", "redthread:1", "speedrunner:1"):
             self.assertIn(aid, got)
         self.assertNotIn("longgame:1", got)
 
@@ -48,18 +48,18 @@ class QuestAchievementTest(unittest.TestCase):
 
     def test_full_spectrum_and_clean_sweep(self):
         ids = [self.add("short", f"Q{i}") for i in range(10)]
-        self.assertIn("fullspectrum", self.unlocked(self.day(0, 1)))
+        self.assertIn("fullspectrum:1", self.unlocked(self.day(0, 1)))
         for qid in ids[:7]:
             self.core.quest_delete(qid, self.day(0, 2))
         for qid in ids[7:]:
             self.core.quest_complete(qid, self.day(0, 3))
-        self.assertIn("cleansweep", self.unlocked(self.day(0, 4)))
+        self.assertIn("cleansweep:1", self.unlocked(self.day(0, 4)))
 
     def test_no_sweep_with_two(self):
         a, b = self.add("short", "A"), self.add("long", "B")
         self.core.quest_complete(a, self.day(0, 1))
         self.core.quest_complete(b, self.day(0, 2))
-        self.assertNotIn("cleansweep", self.unlocked(self.day(0, 3)))
+        self.assertNotIn("cleansweep:1", self.unlocked(self.day(0, 3)))
 
     def test_deep_quest_attrition_and_pivot(self):
         q = self.add("long")
@@ -71,14 +71,14 @@ class QuestAchievementTest(unittest.TestCase):
         got = self.unlocked(self.day(5, 1))
         self.assertIn("deepquest:18000", got)
         self.assertIn("attrition:5", got)
-        self.assertIn("pivot", got)
+        self.assertIn("pivot:1", got)
 
     def test_marathoner(self):
         q = self.add("long")
         self.core.quest_activate(q, self.day(0))
         self.core.quest_complete(q, self.day(31))
         got = self.unlocked(self.day(31, 1))
-        self.assertIn("marathoner", got)
+        self.assertIn("marathoner:1", got)
         self.assertIn("longgame:1", got)
 
     def test_unstarted_families_and_far_tiers_are_dots(self):
@@ -100,7 +100,7 @@ class QuestAchievementTest(unittest.TestCase):
     def test_weights(self):
         fam = {f.id: f for f in A.FAMILIES}
         self.assertEqual(fam["longgame"].xp(0), 15)
-        self.assertEqual(fam["marathoner"].xp(0), 30)
+        self.assertEqual(fam["marathoner"].xp(0), 40)
         self.assertEqual(fam["pivot"].xp(0), 25)
 
 

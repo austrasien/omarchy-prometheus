@@ -53,7 +53,7 @@ class AchievementsTest(unittest.TestCase):
         self.assertIn("endurance:7200", self.unlocked())
         self.core.end(self.t0 + 4 * H + MIN)
         self.check(self.t0 + 5 * H)
-        self.assertIn("monk", self.unlocked())            # 4 h, no pause
+        self.assertIn("monk:14400", self.unlocked())      # 4 h, no pause
 
     def test_streaks_and_night_and_morning(self):
         for d in range(5):
@@ -162,7 +162,7 @@ class AchievementsTest(unittest.TestCase):
         self.check(noon(2030, 8, 1))
         got = self.unlocked()
         self.assertIn("cal:maythe4th", got)
-        self.assertIn("newyear", got)
+        self.assertIn("newyear:1", got)
         self.assertIn("cal:poddoors", got)            # Jul 26 has a fixed event, which wins
         self.assertNotIn("cal:sysadmin", got)
         self.assertEqual(self.store.unlocked_achievements()["cal:maythe4th"]["xp"], 10)

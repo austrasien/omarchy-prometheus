@@ -456,13 +456,24 @@ TABS = ("session", "tasks", "quests", "leagues", "seasons", "achievements", "sta
 
 
 def _power_user(c: Context) -> int | None:
-    touched = all(c.events.get(k) for k in SETTING_KINDS)
+    """Settings changed at least once, out of 8 (the export format counts as one)."""
+    touched = sum(1 for k in SETTING_KINDS if c.events.get(k))
     export = any(k.startswith("setting:export:") for k in c.events)
-    return 1 if touched and export else None
+    return (touched + export) or None
 
 
 def _grand_tour(c: Context) -> int | None:
-    return 1 if all(c.events.get(f"tab:{t}") for t in TABS) else None
+    """Tabs of the panel opened, out of 9."""
+    return sum(1 for t in TABS if c.events.get(f"tab:{t}")) or None
+
+
+def _meteorologist(c: Context) -> int | None:
+    """Conditions sessions were finished in: rain, snow, storm, clear, above
+    30 °C, below 0 °C."""
+    kinds = {s["weather"] for s in c.closed} & {"rain", "snow", "storm", "clear"}
+    hot = any(s["temp"] is not None and s["temp"] > 30 for s in c.closed)
+    cold = any(s["temp"] is not None and s["temp"] < 0 for s in c.closed)
+    return (len(kinds) + hot + cold) or None
 
 
 def _new_top10(values: list[tuple], after) -> int:
@@ -574,27 +585,25 @@ def _night(c: Context) -> float | None:
 
 
 def _weekend(c: Context) -> float | None:
+    """Weekends with sessions on both Saturday and Sunday."""
     dates = set(c.day_sessions)
-    for d in dates:
-        day = _date(d)
-        if day.weekday() == 5 and (day + dt.timedelta(days=1)).isoformat() in dates:
-            return 1
-    return None
+    return _count([d for d in dates if _date(d).weekday() == 5
+                   and (_date(d) + dt.timedelta(days=1)).isoformat() in dates])
 
 
 def _friday_night(c: Context) -> float | None:
-    for s in c.sessions:
-        if _date(s["date"]).weekday() == 4 and _night_hour(s) > 19:
-            return 1
-    return None
+    """Fridays with a session after 19:00."""
+    return _count({s["date"] for s in c.sessions if _date(s["date"]).weekday() == 4 and _night_hour(s) > 19})
 
 
 def _new_year(c: Context) -> float | None:
+    """Years with a session on January 1st."""
+    years = set()
     for s in c.sessions:
         t = _local(s["start"])
         if (t.month, t.day) == (1, 1) or s["date"].endswith("-01-01"):
-            return 1
-    return None
+            years.add(t.year)
+    return _count(years)
 
 
 def moon_age(ms: int) -> float:
@@ -604,14 +613,21 @@ def moon_age(ms: int) -> float:
 
 
 def _full_moon(c: Context) -> float | None:
-    return 1 if any(abs(moon_age(s["start"]) - 14.77) <= 1 for s in c.sessions) else None
+    """Full moons with a session (a day either side counts as the same moon)."""
+    nights = sorted({s["date"] for s in c.sessions if abs(moon_age(s["start"]) - 14.77) <= 1})
+    moons, last = 0, None
+    for d in nights:
+        if last is None or (_date(d) - last).days > 3:
+            moons += 1
+        last = _date(d)
+    return moons or None
 
 
 def _anniversary(c: Context) -> float | None:
+    """Whole years between the first session and the latest one."""
     if not c.sessions:
         return None
-    first = c.sessions[0]["start"]
-    return 1 if any(s["start"] - first >= 365 * DAY * 1000 for s in c.sessions) else None
+    return (c.sessions[-1]["start"] - c.sessions[0]["start"]) // (365 * DAY * 1000) or None
 
 
 def _weather(kind: str):
@@ -661,11 +677,9 @@ def _midnight_crossings(c: Context) -> float | None:
 
 def _on_dates(dates: set[tuple[int, int]]):
     def measure(c: Context) -> float | None:
-        for s in c.sessions:
-            t = _local(s["start"])
-            if (t.month, t.day) in dates:
-                return 1
-        return None
+        """Years with a session on one of the dates."""
+        return _count({_local(s["start"]).year for s in c.sessions
+                       if (_local(s["start"]).month, _local(s["start"]).day) in dates})
     return measure
 
 
@@ -741,7 +755,8 @@ def _years_on(month: int, day: int):
 
 def _on_exact(year: int, month: int, day: int):
     def measure(c: Context) -> float | None:
-        return 1 if any(_local(s["start"]).date() == dt.date(year, month, day) for s in c.sessions) else None
+        """Sessions held that day."""
+        return _count([s for s in c.sessions if _local(s["start"]).date() == dt.date(year, month, day)])
     return measure
 
 
@@ -886,10 +901,10 @@ FAMILIES: list[Family] = [
             "Six hours. Biology filed a support ticket. Closed: won't fix."], unit="h", scale=H),
     Family("monk", "Full stack monk",
            lambda c: max((s["focus"] for s in c.closed if s["pause_ms"] == 0), default=None),
-           [4 * H], lambda t: "Full Stack Monk", lambda t: "Hold 4 h in one session without a single pause.",
+           [1 * H, 2 * H, 3 * H, 4 * H, 5 * H], lambda t: f"Full Stack Monk {t / H:g} h", lambda t: f"Hold {t / H:g} h in one session without a single pause.",
            ["Four hours, zero pauses. Your bladder signed an NDA."], secret=True, unit="h", scale=H),
     Family("intensity", "Time dilation",
-           lambda c: max(c.day_focus.values()) / DAY * 100 if c.day_focus else None, [40, 50, 60, 70],
+           lambda c: max(c.day_focus.values()) / DAY * 100 if c.day_focus else None, [30, 40, 50, 60, 70],
            lambda t: f"Time Dilation {t:g}%", lambda t: f"Spend {t:g}% of a day in session.",
            ["40% of your day, voluntarily. The state calls it exploitation; you call it Tuesday.",
             "Half the day in flow. The other half is loading screens.",
@@ -1006,14 +1021,14 @@ FAMILIES: list[Family] = [
             "{n} tasks. You're not a worker, you're a deflationary force."]),
     Family("archaeologist", "Archaeologist",
            lambda c: max(((t["done"] - t["created"]) / (DAY * 1000) for t in c.tasks_done), default=None),
-           [7, 30, 100],
+           [3, 7, 30, 100, 365],
            lambda t: f"Archaeologist {t:g} Days", lambda t: f"Finish a task that waited {t:g} days.",
            ["Seven days old and finally done. Delayed, not denied.",
             "A month-old task, executed. Bureaucracy could never.",
             "100 days. That task predates your current personality."]),
 
     # ---- clock
-    Family("morning", "Pre-market", _morning, [8, 7, 6, 5],
+    Family("morning", "Pre-market", _morning, [9, 8, 7, 6, 5],
            lambda t: f"Pre-Market {t:g}:00", lambda t: f"Start a session before {t:g}:00.",
            ["Before 8. Markets aren't open, but you are.",
             "Before 7. The early founder eats the whole TAM.",
@@ -1031,48 +1046,48 @@ FAMILIES: list[Family] = [
             "2:00. Sleep is a subscription you keep forgetting to renew.",
             "3:00. The bug isn't going anywhere, and neither are you.",
             "4:00. You've seen things. Mostly stack traces."], compare="gt"),
-    Family("friday", "Friday night founder", _friday_night, [1],
-           lambda t: "Friday Night Founder", lambda t: "Be in session after 19:00 on a Friday.",
+    Family("friday", "Friday night founder", _friday_night, [1, 3, 5, 10, 25],
+           lambda t: f"Friday Night Founder ×{t:g}", lambda t: f"Be in session after 19:00 on {t:g} Fridays.",
            ["Friday night, in session. Everyone else is at happy hour, subsidizing your future."],
            secret=True),
-    Family("weekend", "No weekends", _weekend, [1],
-           lambda t: "No Weekends", lambda t: "Hold sessions on both Saturday and Sunday of a weekend.",
+    Family("weekend", "No weekends", _weekend, [1, 3, 5, 10, 25],
+           lambda t: f"No Weekends ×{t:g}", lambda t: f"Hold sessions on both Saturday and Sunday, {t:g} weekends.",
            ["Saturday and Sunday. The weekend was a 20th-century labor regulation anyway."], secret=True),
 
     # ---- challenges and presence
-    Family("challenges", "Moonshot taker", lambda c: c.challenges_won or None, [10, 25, 50, 100],
+    Family("challenges", "Moonshot taker", lambda c: c.challenges_won or None, [5, 10, 25, 50, 100],
            lambda t: f"Moonshot Taker {t:g}", lambda t: f"Win {t:g} extension challenges.",
            ["{n} challenges won. Risk tolerance: venture-grade.",
             "{n} extensions. You keep moving the goalposts, forward.",
             "{n} challenges. Comfort zones are for incumbents.",
             "{n}. At this point the challenge should be afraid of you."]),
-    Family("triple", "Hat trick", lambda c: c.triples or None, [5, 10, 25],
+    Family("triple", "Hat trick", lambda c: c.triples or None, [1, 5, 10, 25, 50],
            lambda t: f"Hat Trick ×{t:g}", lambda t: f"Win all 3 challenges of a session, {t:g} times.",
            ["Three for three, {n} times. Diminishing returns are a myth.",
             "{n} hat tricks. Your session lengths are now a geopolitical concern."]),
     Family("procrastinator", "Strategic ambiguity",
-           lambda c: max(c.procrastinations.values(), default=None), [3],
-           lambda t: "Strategic Ambiguity", lambda t: "Procrastinate the same task 3 times.",
+           lambda c: max(c.procrastinations.values(), default=None), [3, 5, 7, 10, 15],
+           lambda t: f"Strategic Ambiguity ×{t:g}", lambda t: f"Procrastinate the same task {t:g} times.",
            ["Three postponements. You're not procrastinating, you're optimizing for optionality."],
            secret=True),
-    Family("ghost", "Proof of absence", lambda c: c.absences or None, [10],
-           lambda t: "Proof of Absence", lambda t: "Get paused 10 times for not answering \"Still there?\".",
+    Family("ghost", "Proof of absence", lambda c: c.absences or None, [10, 25, 50, 100, 250],
+           lambda t: f"Proof of Absence ×{t:g}", lambda t: f"Get paused {t:g} times for not answering \"Still there?\".",
            ["Ten no-shows. Even your AFK has an AFK."], secret=True),
-    Family("monotask", "Single thread", lambda c: c.monotask or None, [1 * H, 2 * H],
+    Family("monotask", "Single thread", lambda c: c.monotask or None, [1 * H, 2 * H, 3 * H, 4 * H, 6 * H],
            lambda t: f"Single Thread {t / H:g} h", lambda t: f"Stay {t / H:g} h in one app during a session.",
            ["One hour, one app. Multitasking is a tax on the weak.",
             "Two hours, one thread. Your attention is now a sovereign state."], unit="h", scale=H),
 
     # ---- calendar
-    Family("newyear", "Day one", _new_year, [1],
-           lambda t: "Day One", lambda t: "Hold a session on January 1st.",
+    Family("newyear", "Day one", _new_year, [1, 2, 3, 5, 10],
+           lambda t: f"Day One ×{t:g}", lambda t: f"Hold a session on January 1st, {t:g} years.",
            ["New year, same mission. Resolutions are for people without roadmaps."], secret=True),
-    Family("christmas", "Ghost of Christmas future", _on_dates({(12, 25)}), [1],
-           lambda t: "Ghost of Christmas Future", lambda t: "Hold a session on December 25th.",
+    Family("christmas", "Ghost of Christmas future", _on_dates({(12, 25)}), [1, 2, 3, 5, 10],
+           lambda t: f"Ghost of Christmas Future ×{t:g}", lambda t: f"Hold a session on December 25th, {t:g} years.",
            ["A session on Christmas. Santa runs a logistics monopoly; you run a one-person moonshot."],
            secret=True),
-    Family("orthodox", "Julian calendar", _on_dates({(1, 6), (1, 7)}), [1],
-           lambda t: "Julian Calendar", lambda t: "Hold a session on Orthodox Christmas (January 6th or 7th).",
+    Family("orthodox", "Julian calendar", _on_dates({(1, 6), (1, 7)}), [1, 2, 3, 5, 10],
+           lambda t: f"Julian Calendar ×{t:g}", lambda t: f"Hold a session on Orthodox Christmas (January 6th or 7th), {t:g} years.",
            ["Two Christmases, zero days off. Calendar arbitrage."], secret=True),
     Family("bookends", "Bookends", _bookends, [1, 5, 10, 25, 50],
            lambda t: f"Bookends ×{t:g}", lambda t: f"Start before 7:00 and still be in session after 22:00, the same day, {t:g} times.",
@@ -1106,16 +1121,16 @@ FAMILIES: list[Family] = [
            lambda t: f"Longest Night ×{t:g}", lambda t: f"Hold a session on December 21st, {t:g} different years.",
            ["Longest night of the year, and the night SpaceX first landed an orbital booster (2015). Prometheus brought fire for exactly this.",
             "{n} winter solstices. The darkness is just more screen contrast."], secret=True),
-    Family("y2k38", "Y2K38 warm-up", _on_exact(2033, 5, 18), [1],
-           lambda t: "Y2K38 Warm-Up", lambda t: "Hold a session on May 18th, 2033, when Unix time passes 2 billion seconds.",
+    Family("y2k38", "Y2K38 warm-up", _on_exact(2033, 5, 18), [1, 2, 3, 5, 8],
+           lambda t: f"Y2K38 Warm-Up ×{t:g}", lambda t: f"Hold {t:g} sessions on May 18th, 2033, when Unix time passes 2 billion seconds.",
            ["Two billion seconds since 1970. You were there, shipping. Veteran status: unlocked."],
            secret=True),
-    Family("fullmoon", "Lunar shift", _full_moon, [1],
-           lambda t: "Lunar Shift", lambda t: "Hold a session under a full moon.",
-           ["Full moon session. Next one from Mars."]),
-    Family("anniversary", "Year one", _anniversary, [1],
-           lambda t: "Year One", lambda t: "Still lighting fires 365 days after your first session.",
-           ["One year of stolen fire. Zeus is suing; a billionaire is funding your defense."]),
+    Family("fullmoon", "Lunar shift", _full_moon, [1, 3, 6, 12, 24],
+           lambda t: f"Lunar Shift ×{t:g}", lambda t: f"Hold sessions under {t:g} full moons.",
+           ["Full moon session. Next one from Mars."], rarities=["common", "common", "rare", "epic", "legendary"]),
+    Family("anniversary", "Year one", _anniversary, [1, 2, 3, 5, 10],
+           lambda t: f"Year {t:g}", lambda t: f"Still lighting fires {t:g} years after your first session.",
+           ["One year of stolen fire. Zeus is suing; a billionaire is funding your defense."], rarities=["rare", "epic", "epic", "legendary", "legendary"]),
 
     # ---- more tasks
     Family("sameday", "Same-day delivery", _same_day_tasks, [5, 10, 25, 50, 100, 200],
@@ -1140,11 +1155,11 @@ FAMILIES: list[Family] = [
            ["{n} days in orbit. Gravity is optional.",
             "{n} active days. You don't show up; you persist.",
             "{n} days. Lindy effect: the longer you last, the longer you'll last."], unit="days"),
-    Family("fullmonth", "Full month", lambda c: max(_months(c).values(), default=None), [20, 25, 30],
+    Family("fullmonth", "Full month", lambda c: max(_months(c).values(), default=None), [15, 20, 25, 28, 30],
            lambda t: f"Full Month {t:g}", lambda t: f"{t:g} active days in the same month.",
            ["{n} days this month. Holidays are a rounding error.",
             "{n} days. You've annexed the calendar."], unit="days"),
-    Family("dailymax", "Session spree", lambda c: max(c.day_sessions.values(), default=None), [5, 8, 12],
+    Family("dailymax", "Session spree", lambda c: max(c.day_sessions.values(), default=None), [3, 5, 8, 12, 16],
            lambda t: f"Session Spree {t:g}", lambda t: f"Hold {t:g} sessions in one day.",
            ["{n} sessions in a day. Context switches are cheap when you own the context.",
             "{n} in one day. Ship, reset, ship again."]),
@@ -1228,15 +1243,13 @@ FAMILIES: list[Family] = [
            ["{n} yeses in a row. Risk-on.",
             "{n} challenges accepted straight. You never met an extension you didn't like."]),
     Family("aroundtheclock", "Around the clock",
-           lambda c: len({_local(s["start"]).hour for s in c.sessions}) or None, [12, 18, 24],
+           lambda c: len({_local(s["start"]).hour for s in c.sessions}) or None, [6, 12, 18, 21, 24],
            lambda t: f"Around the Clock {t:g}", lambda t: f"Start sessions at {t:g} different hours of the day.",
            ["{n} different start hours. Circadian rhythm is a suggestion.",
             "All 24 hours covered. You are the always-on economy."]),
     Family("meteorologist", "Meteorologist",
-           lambda c: 1 if ({"rain", "snow", "storm", "clear"} <= {s["weather"] for s in c.closed}
-                           and any(s["temp"] is not None and s["temp"] > 30 for s in c.closed)
-                           and any(s["temp"] is not None and s["temp"] < 0 for s in c.closed)) else None,
-           [1], lambda t: "Meteorologist", lambda t: "Finish sessions in rain, snow, storm, sun, heat and frost.",
+           _meteorologist,
+           [2, 3, 4, 5, 6], lambda t: f"Meteorologist {t:g}", lambda t: f"Finish sessions in {t:g} kinds of weather: rain, snow, storm, clear, above 30 °C, below 0 °C.",
            ["Every weather, same output. Climate is not a productivity variable."], secret=True),
 
     # ---- the world outside
@@ -1264,9 +1277,9 @@ FAMILIES: list[Family] = [
            lambda t: f"Overclocked {t:g}", lambda t: f"Finish {t:g} sessions above 30 °C.",
            ["Above 30 °C and still shipping. Thermal throttling is for CPUs."]),
     # ---- quests
-    Family("questfirst", "Mission statement", lambda c: _count(c.quests), [1],
-           lambda t: "Mission Statement", lambda t: "Create your first quest.",
-           ["Every empire starts as a to-do with delusions of grandeur."]),
+    Family("questfirst", "Mission statement", lambda c: _count(c.quests), [1, 5, 10, 25, 50],
+           lambda t: f"Mission Statement ×{t:g}", lambda t: f"Create {t:g} quests.",
+           ["Every empire starts as a to-do with delusions of grandeur."], rarities=["normal", "normal", "common", "rare", "epic"]),
     Family("closer", "Closer", lambda c: _count(_quests_done(c)), [1, 3, 5, 10, 25, 50, 100],
            lambda t: f"Closer ×{t:g}", lambda t: f"Finish {t:g} short or long quests.",
            ["Ideas are cheap. Shipping is the whole game.",
@@ -1285,17 +1298,17 @@ FAMILIES: list[Family] = [
            lambda t: f"Unbroken {t:g} days", lambda t: f"Complete the same daily quest {t:g} days in a row.",
            ["Consistency is the only moat that can't be forked.",
             "{n} days unbroken. Your streak has better uptime than most clouds."], unit="days"),
-    Family("fullspectrum", "Full spectrum", lambda c: c.quests_full or None, [1],
-           lambda t: "Full Spectrum", lambda t: "Have ten quests open at once, all ten colors.",
-           ["A portfolio, not a bet."]),
+    Family("fullspectrum", "Full spectrum", lambda c: c.quests_full or None, [1, 3, 5, 10, 25],
+           lambda t: f"Full Spectrum ×{t:g}", lambda t: f"Have ten quests open at once, all ten colors, {t:g} times.",
+           ["A portfolio, not a bet."], rarities=["rare", "rare", "epic", "epic", "legendary"]),
     Family("redthread", "Red thread",
-           lambda c: _count([q for q in _quests_done(c) if q["color"].lower() == "#f22424"]), [1, 5, 10, 25],
+           lambda c: _count([q for q in _quests_done(c) if q["color"].lower() == "#f22424"]), [1, 5, 10, 25, 50],
            lambda t: f"Red Thread ×{t:g}", lambda t: f"Finish {t:g} red quests.",
            ["First principles, first color.",
             "{n} red quests down. Seeing red is a growth strategy."]),
-    Family("cleansweep", "Clean sweep", lambda c: c.quest_sweeps or None, [1],
-           lambda t: "Clean Sweep",
-           lambda t: "Finish every open short and long quest, at least three of them, without deleting any.",
+    Family("cleansweep", "Clean sweep", lambda c: c.quest_sweeps or None, [1, 3, 5, 10, 25],
+           lambda t: f"Clean Sweep ×{t:g}",
+           lambda t: f"Finish every open short and long quest (three at least, none deleted), {t:g} times.",
            ["Zero open loops. Pure throughput."]),
     Family("deepquest", "Deep quest", lambda c: _best(c, "seconds"), [5 * H, 10 * H, 25 * H, 50 * H, 100 * H, 250 * H],
            lambda t: f"Deep Quest {t / H:g} h", lambda t: f"Focus {t / H:g} h on a single quest.",
@@ -1313,22 +1326,22 @@ FAMILIES: list[Family] = [
            lambda t: f"Payload {t:g} XP", lambda t: f"Earn {t:g} XP on a single quest.",
            ["Value capture, quest edition.",
             "{n} XP from one quest. Margins a SaaS would kill for."], unit="XP"),
-    Family("nightshift", "Night shift", _timed_quests(NIGHT_HOURS), [1],
-           lambda t: "Night Shift",
-           lambda t: "Finish a quest with more than half of its focus (1 h at least) between 22 h and 4 h.",
-           ["The market never sleeps, neither does this quest."]),
-    Family("dawnraid", "Dawn raid", _timed_quests(DAWN_HOURS), [1],
-           lambda t: "Dawn Raid",
-           lambda t: "Finish a quest with more than half of its focus (1 h at least) between 4 h and 8 h.",
-           ["Shipped before the market opened. Pre-market alpha."]),
-    Family("speedrunner", "Speedrunner", _speedruns, [1],
-           lambda t: "Speedrunner", lambda t: "Finish a short quest in one or two days worked.",
-           ["Move fast. Ship faster."]),
-    Family("marathoner", "Marathoner", _marathons, [1],
-           lambda t: "Marathoner", lambda t: "Finish a long quest 30 days or more after first activating it.",
-           ["Patience is a strategy, not a virtue."]),
-    Family("pivot", "Pivot", _pivots, [1],
-           lambda t: "Pivot", lambda t: "Delete a quest you had already put more than 5 h into.",
+    Family("nightshift", "Night shift", _timed_quests(NIGHT_HOURS), [1, 3, 5, 10, 25],
+           lambda t: f"Night Shift ×{t:g}",
+           lambda t: f"Finish {t:g} quests with more than half of their focus (1 h at least) between 22 h and 4 h.",
+           ["The market never sleeps, neither does this quest."], rarities=["common", "common", "rare", "epic", "legendary"]),
+    Family("dawnraid", "Dawn raid", _timed_quests(DAWN_HOURS), [1, 3, 5, 10, 25],
+           lambda t: f"Dawn Raid ×{t:g}",
+           lambda t: f"Finish {t:g} quests with more than half of their focus (1 h at least) between 4 h and 8 h.",
+           ["Shipped before the market opened. Pre-market alpha."], rarities=["common", "common", "rare", "epic", "legendary"]),
+    Family("speedrunner", "Speedrunner", _speedruns, [1, 3, 5, 10, 25],
+           lambda t: f"Speedrunner ×{t:g}", lambda t: f"Finish {t:g} short quests in one or two days worked.",
+           ["Move fast. Ship faster."], rarities=["common", "common", "rare", "epic", "legendary"]),
+    Family("marathoner", "Marathoner", _marathons, [1, 2, 3, 5, 10],
+           lambda t: f"Marathoner ×{t:g}", lambda t: f"Finish {t:g} long quests 30 days or more after first activating them.",
+           ["Patience is a strategy, not a virtue."], rarities=["rare", "rare", "epic", "epic", "legendary"]),
+    Family("pivot", "Pivot", _pivots, [1, 2, 3, 5, 10],
+           lambda t: f"Pivot ×{t:g}", lambda t: f"Delete {t:g} quests you had already put more than 5 h into.",
            ["Sunk cost is a tax on the weak."], secret=True),
 
     # ---- leagues
@@ -1347,11 +1360,11 @@ FAMILIES: list[Family] = [
            lambda t: f"Diamond Hands {t:g}", lambda t: f"Play {t:g} weeks in the Diamond league.",
            ["Diamond league. Pressure makes diamonds; you make pressure.",
             "{n} weeks in Diamond. Holding the top like a long-term position."], unit="weeks"),
-    Family("bounceback", "Bounce back", _bounce_backs, [1, 3, 5, 10],
+    Family("bounceback", "Bounce back", _bounce_backs, [1, 3, 5, 10, 20],
            lambda t: f"Bounce Back ×{t:g}", lambda t: f"Get promoted right after a relegation, {t:g} times.",
            ["Relegated, then promoted. Drawdowns are buying opportunities.",
             "{n} bounces. Antifragile, by the book."]),
-    Family("promostreak", "Promotion streak", _promotion_run, [2, 3, 5, 9],
+    Family("promostreak", "Promotion streak", _promotion_run, [2, 3, 5, 7, 9],
            lambda t: f"Promotion Streak {t:g}", lambda t: f"Get promoted {t:g} league rounds in a row (two weeks each).",
            ["{n} promotions in a row. Exponential, not linear.",
             "{n} straight. Hockey stick, achieved."], unit="rounds"),
@@ -1361,24 +1374,24 @@ FAMILIES: list[Family] = [
            lambda t: f"Season Pass ×{t:g}", lambda t: f"Reach the season goal in {t:g} seasons.",
            ["Season goal, cleared. Quarterly guidance: exceeded.",
             "{n} seasons on target. Wall Street would love your consistency."]),
-    Family("hardmode", "Hard mode", lambda c: _seasons_with(c, 2), [1, 2, 4, 8],
+    Family("hardmode", "Hard mode", lambda c: _seasons_with(c, 2), [1, 2, 4, 8, 12],
            lambda t: f"Hard Mode ×{t:g}", lambda t: f"Reach the hard season goal in {t:g} seasons.",
            ["Two bars. The hard goal is the only goal.",
             "{n} hard seasons. Difficulty setting: founder."]),
-    Family("straighta", "Straight A", lambda c: _count([s for s in _graded(c) if s["grade"] in ("A", "S")]), [1, 2, 4, 8],
+    Family("straighta", "Straight A", lambda c: _count([s for s in _graded(c) if s["grade"] in ("A", "S")]), [1, 2, 4, 8, 12],
            lambda t: f"Straight A ×{t:g}", lambda t: f"Finish {t:g} seasons with an A or better.",
            ["An A. Grade inflation, except you earned it.",
             "{n} A seasons. The curve is you."]),
-    Family("stier", "S-tier", lambda c: _count([s for s in _graded(c) if s["grade"] == "S"]), [1, 2, 4, 8],
+    Family("stier", "S-tier", lambda c: _count([s for s in _graded(c) if s["grade"] == "S"]), [1, 2, 4, 8, 12],
            lambda t: f"S-Tier ×{t:g}", lambda t: f"Finish {t:g} seasons with an S: 20 % beyond the hard goal.",
            ["An S. The grading scale needed a new letter for you.",
             "{n} S seasons. Off the charts is now your baseline."]),
-    Family("honorroll", "Honor roll", _honor_run, [2, 4, 8],
+    Family("honorroll", "Honor roll", _honor_run, [2, 4, 8, 12, 16],
            lambda t: f"Honor Roll {t:g}", lambda t: f"Finish {t:g} seasons in a row with a B or better.",
            ["{n} good seasons in a row. Consistency compounds.",
             "{n} straight. Your track record is now a moat."], unit="seasons"),
-    Family("phoenix", "Phoenix", _phoenix, [1],
-           lambda t: "Phoenix", lambda t: "Follow an F season with an A season.",
+    Family("phoenix", "Phoenix", _phoenix, [1, 2, 3, 4, 5],
+           lambda t: f"Phoenix ×{t:g}", lambda t: f"Follow an F season with an A season, {t:g} times.",
            ["From F to A. Every great company has a near-death chapter."], secret=True),
 
     # ---- leaderboards
@@ -1386,7 +1399,7 @@ FAMILIES: list[Family] = [
            lambda t: f"Record Day ×{t:g}", lambda t: f"Beat your best day ever in XP, {t:g} times.",
            ["New best day. The leaderboard has one name and it's yours.",
             "{n} record days. Your ceiling keeps becoming your floor."]),
-    Family("sessionrecord", "Record session", _session_records, [1, 5, 10, 25],
+    Family("sessionrecord", "Record session", _session_records, [1, 5, 10, 25, 50],
            lambda t: f"Record Session ×{t:g}", lambda t: f"Beat your longest session ever, {t:g} times.",
            ["Longest session ever. Endurance is a competitive advantage.",
             "{n} session records. Your attention span is an outlier."]),
@@ -1396,49 +1409,49 @@ FAMILIES: list[Family] = [
             "{n} top-3 days. Your best is a moving target."]),
 
     # ---- exploring the tool (rarity set by hand)
-    Family("presskit", "Press kit", _event("share_card"), [1, 5, 20],
+    Family("presskit", "Press kit", _event("share_card"), [1, 5, 20, 50, 100],
            lambda t: f"Press Kit ×{t:g}", lambda t: f"Generate your ID card {t:g} times.",
            ["Your service record, minted. Personal brand: shipped.",
             "{n} cards. Your PR team is just you, and it's enough."],
-           unit="M", scale=1e6, rarities=["common", "rare", "epic"]),
-    Family("revisionist", "Revisionist history", _event("board_remove_done"), [1],
-           lambda t: "Revisionist History", lambda t: "Take a finished quest off the leaderboard.",
-           ["History is written by the ones who ship. And edited by them too."], rarities="rare"),
-    Family("callsign", "Call sign", _event("setting:handle"), [1],
-           lambda t: "Call Sign", lambda t: "Set your @handle.",
-           ["Every founder needs a handle. Now the internet knows who to blame."], rarities="normal"),
-    Family("timezone", "Own your clock", _event("setting:daystart"), [1],
-           lambda t: "Own Your Clock", lambda t: "Change the hour your day starts.",
-           ["Midnight is a convention. You set your own."], rarities="common"),
-    Family("pacemaker", "Pacemaker", _event("setting:presence"), [1],
-           lambda t: "Pacemaker", lambda t: "Change how often \"Still there?\" asks.",
-           ["You tuned the heartbeat monitor. Trust, but verify."], rarities="common"),
-    Family("rebrand", "Rebrand", _event("setting:aliases"), [1],
-           lambda t: "Rebrand", lambda t: "Rename or merge an app.",
-           ["A rebrand. Cheaper than a pivot, almost as satisfying."], rarities="normal"),
-    Family("redacted", "Redacted", _event("setting:words"), [1],
-           lambda t: "Redacted", lambda t: "Add a forbidden word for window titles.",
-           ["Some things the logs should never see. Operational security."], rarities="rare"),
-    Family("invisible", "Invisible ink", _event("setting:apps"), [1],
-           lambda t: "Invisible Ink", lambda t: "Hide an app from the records.",
-           ["Off the books. Every empire has a back office."], rarities="common"),
-    Family("goalsetter", "Goal setter", _event("setting:goal"), [1],
-           lambda t: "Goal Setter", lambda t: "Set an hours goal.",
-           ["A number on the wall. Now the work has a scoreboard."], rarities="normal"),
-    Family("formatwar", "Format war", lambda c: sum(v for k, v in c.events.items() if k == "setting:export:apng") or None, [1],
-           lambda t: "Format War", lambda t: "Switch the share export to animated PNG.",
-           ["APNG over GIF. Taste is a competitive advantage."], rarities="rare"),
-    Family("poweruser", "Power user", _power_user, [1],
-           lambda t: "Power User", lambda t: "Change every setting at least once.",
-           ["Every knob turned. You don't use tools, you configure them."], rarities="epic"),
-    Family("grandtour", "Grand tour", _grand_tour, [1],
-           lambda t: "Grand Tour", lambda t: "Open every tab of the panel.",
-           ["Full reconnaissance. Now you know the terrain."], rarities="common"),
-    Family("historian", "Historian", _event("bio"), [1, 10, 50],
+           rarities=["common", "rare", "epic", "legendary", "legendary"]),
+    Family("revisionist", "Revisionist history", _event("board_remove_done"), [1, 3, 5, 10, 25],
+           lambda t: f"Revisionist History ×{t:g}", lambda t: f"Take {t:g} finished quests off the leaderboard.",
+           ["History is written by the ones who ship. And edited by them too."], rarities=["rare", "rare", "epic", "epic", "legendary"]),
+    Family("callsign", "Call sign", _event("setting:handle"), [1, 3, 5, 10, 25],
+           lambda t: f"Call Sign ×{t:g}", lambda t: f"Set your @handle {t:g} times.",
+           ["Every founder needs a handle. Now the internet knows who to blame."], rarities=["normal", "normal", "common", "common", "rare"]),
+    Family("timezone", "Own your clock", _event("setting:daystart"), [1, 3, 5, 10, 25],
+           lambda t: f"Own Your Clock ×{t:g}", lambda t: f"Change the hour your day starts {t:g} times.",
+           ["Midnight is a convention. You set your own."], rarities=["common", "common", "rare", "rare", "epic"]),
+    Family("pacemaker", "Pacemaker", _event("setting:presence"), [1, 3, 5, 10, 25],
+           lambda t: f"Pacemaker ×{t:g}", lambda t: f"Change how often \"Still there?\" asks, {t:g} times.",
+           ["You tuned the heartbeat monitor. Trust, but verify."], rarities=["common", "common", "rare", "rare", "epic"]),
+    Family("rebrand", "Rebrand", _event("setting:aliases"), [1, 3, 5, 10, 25],
+           lambda t: f"Rebrand ×{t:g}", lambda t: f"Rename or merge apps {t:g} times.",
+           ["A rebrand. Cheaper than a pivot, almost as satisfying."], rarities=["normal", "normal", "common", "common", "rare"]),
+    Family("redacted", "Redacted", _event("setting:words"), [1, 3, 5, 10, 25],
+           lambda t: f"Redacted ×{t:g}", lambda t: f"Change the forbidden words for window titles {t:g} times.",
+           ["Some things the logs should never see. Operational security."], rarities=["rare", "rare", "epic", "epic", "legendary"]),
+    Family("invisible", "Invisible ink", _event("setting:apps"), [1, 3, 5, 10, 25],
+           lambda t: f"Invisible Ink ×{t:g}", lambda t: f"Change the apps hidden from the records {t:g} times.",
+           ["Off the books. Every empire has a back office."], rarities=["common", "common", "rare", "rare", "epic"]),
+    Family("goalsetter", "Goal setter", _event("setting:goal"), [1, 3, 5, 10, 25],
+           lambda t: f"Goal Setter ×{t:g}", lambda t: f"Set an hours goal {t:g} times.",
+           ["A number on the wall. Now the work has a scoreboard."], rarities=["normal", "normal", "common", "common", "rare"]),
+    Family("formatwar", "Format war", lambda c: sum(v for k, v in c.events.items() if k == "setting:export:apng") or None, [1, 3, 5, 10, 25],
+           lambda t: f"Format War ×{t:g}", lambda t: f"Switch the share export to animated PNG {t:g} times.",
+           ["APNG over GIF. Taste is a competitive advantage."], rarities=["rare", "rare", "epic", "epic", "legendary"]),
+    Family("poweruser", "Power user", _power_user, [2, 4, 6, 7, 8],
+           lambda t: f"Power User {t:g}/8", lambda t: f"Change {t:g} of the 8 settings at least once.",
+           ["Every knob turned. You don't use tools, you configure them."], rarities=["normal", "common", "rare", "rare", "epic"]),
+    Family("grandtour", "Grand tour", _grand_tour, [3, 5, 7, 8, 9],
+           lambda t: f"Grand Tour {t:g}/9", lambda t: f"Open {t:g} of the 9 tabs of the panel.",
+           ["Full reconnaissance. Now you know the terrain."], rarities=["normal", "normal", "common", "common", "common"]),
+    Family("historian", "Historian", _event("bio"), [1, 10, 25, 50, 104],
            lambda t: f"Historian ×{t:g}", lambda t: f"Read {t:g} rival bios in the leagues.",
            ["Know your rivals. They built the world you're optimizing.",
             "{n} bios read. Standing on the shoulders of giants, and taking notes."],
-           rarities=["normal", "rare", "epic"]),
+           rarities=["normal", "rare", "epic", "epic", "legendary"]),
 
     # ---- coding agents: tokens burned (rarity set by hand)
     Family("burner", "Token burner", lambda c: max(c.day_tokens.values(), default=0) or None,
@@ -1452,179 +1465,179 @@ FAMILIES: list[Family] = [
            ["A hundred million tokens. Compute is the new payroll.",
             "{n} tokens. You don't write code anymore, you allocate intelligence."],
            unit="M", scale=1e6, rarities=["common", "rare", "epic", "legendary", "legendary"]),
-    Family("orchestrator", "Orchestrator", lambda c: c.agent.get("maxParallel") or None, [3, 5, 10],
+    Family("orchestrator", "Orchestrator", lambda c: c.agent.get("maxParallel") or None, [2, 3, 5, 8, 10],
            lambda t: f"Orchestrator ×{t:g}", lambda t: f"Have {t:g} agent conversations working in the same minute.",
            ["Three agents at once. You're not a developer, you're a conductor.",
             "{n} in parallel. Span of control: unreasonable."],
-           rarities=["common", "rare", "epic"]),
-    Family("polyglot", "Polyglot", lambda c: c.agent.get("maxModels") or None, [3, 4],
+           rarities=["common", "common", "rare", "epic", "epic"]),
+    Family("polyglot", "Polyglot", lambda c: c.agent.get("maxModels") or None, [1, 2, 3, 4, 5],
            lambda t: f"Polyglot ×{t:g}", lambda t: f"Use {t:g} model families in one day.",
            ["Right model, right job. Portfolio thinking.", "Every model in the stable. A true multi-model shop."],
-           rarities=["rare", "epic"]),
-    Family("fleet", "Remote fleet", lambda c: c.agent.get("remoteDays") or None, [1, 7, 30],
+           rarities=["rare", "epic", "rare", "epic", "legendary"]),
+    Family("fleet", "Remote fleet", lambda c: c.agent.get("remoteDays") or None, [1, 7, 30, 60, 100],
            lambda t: f"Remote Fleet ×{t:g}", lambda t: f"Burn more on other machines than here, {t:g} days.",
            ["The real work happens on the server. You just steer.", "{n} days run from afar. Distributed company."],
-           rarities=["common", "rare", "epic"]),
-    Family("cachewhisperer", "Cache whisperer", lambda c: c.agent.get("cacheDays") or None, [1, 10],
+           rarities=["common", "rare", "epic", "legendary", "legendary"]),
+    Family("cachewhisperer", "Cache whisperer", lambda c: c.agent.get("cacheDays") or None, [1, 5, 10, 25, 50],
            lambda t: f"Cache Whisperer ×{t:g}", lambda t: f"Keep 97 % of a day's tokens (1M at least) in the cache, {t:g} days.",
            ["Unit economics: excellent. Investors love a cache hit.", "{n} lean days. Margins like a SaaS."],
-           rarities=["rare", "epic"]),
-    Family("agentnight", "Night shift", lambda c: c.agent.get("bestNight") or None, [10e6, 100e6],
+           rarities=["rare", "epic", "epic", "legendary", "legendary"]),
+    Family("agentnight", "Night shift", lambda c: c.agent.get("bestNight") or None, [10e6, 50e6, 100e6, 250e6, 500e6],
            lambda t: f"Night Shift {agents.short(t)}", lambda t: f"Have agents burn {agents.short(t)} tokens between midnight and 6 am.",
            ["You slept. They didn't. Leverage.", "A whole night of agents. The company never sleeps."],
-           rarities=["rare", "epic"]),
-    Family("deeppair", "Deep pair", lambda c: c.agent.get("deepPairs") or None, [1, 10],
+           unit="M", scale=1e6, rarities=["rare", "epic", "epic", "legendary", "legendary"]),
+    Family("deeppair", "Deep pair", lambda c: c.agent.get("deepPairs") or None, [1, 3, 10, 25, 50],
            lambda t: f"Deep Pair ×{t:g}", lambda t: f"Focus 2 hours while agents burn 10M tokens, {t:g} times.",
            ["Human and machine in lockstep. That's the future of work.", "{n} deep pairings. Cyborg mode."],
-           rarities=["epic", "legendary"]),
-    Family("agentstreak", "Agent streak", lambda c: c.agent.get("streak") or None, [7, 30, 100],
+           rarities=["epic", "legendary", "legendary", "legendary", "legendary"]),
+    Family("agentstreak", "Agent streak", lambda c: c.agent.get("streak") or None, [7, 14, 30, 60, 100],
            lambda t: f"Agent Streak {t:g}", lambda t: f"Have agents at work {t:g} days in a row.",
            ["A week of agents every day. Habit formed.", "{n} days running. The machine is part of the team."],
-           rarities=["common", "epic", "legendary"]),
-    Family("delegator", "Delegator", lambda c: c.agent.get("bestOutside") or None, [50e6, 200e6],
+           rarities=["common", "rare", "epic", "legendary", "legendary"]),
+    Family("delegator", "Delegator", lambda c: c.agent.get("bestOutside") or None, [50e6, 100e6, 200e6, 350e6, 500e6],
            lambda t: f"Delegator {agents.short(t)}", lambda t: f"Have agents burn {agents.short(t)} tokens in a day outside your focus sessions.",
            ["Work happened without you. That's what managers call leverage.", "{n} while you were elsewhere. Pure delegation."],
-           unit="M", scale=1e6, rarities=["rare", "epic"]),
-    Family("bigspender", "Big spender", lambda c: c.agent.get("bestCost") or None, [50, 100, 250],
+           unit="M", scale=1e6, rarities=["rare", "epic", "epic", "legendary", "legendary"]),
+    Family("bigspender", "Big spender", lambda c: c.agent.get("bestCost") or None, [50, 100, 250, 500, 1000],
            lambda t: f"Big Spender ${t:g}", lambda t: f"Burn ${t:g} of agent compute in a day (API prices).",
            ["Burn rate: healthy. The board would ask questions.", "${n} in a day. Compute is cheaper than hires."],
-           rarities=["common", "rare", "epic"]),
-    Family("tokenfame", "Token hall of fame", lambda c: _token_fame(c), [1, 5, 10],
+           rarities=["common", "rare", "epic", "legendary", "legendary"]),
+    Family("tokenfame", "Token hall of fame", lambda c: _token_fame(c), [1, 5, 10, 25, 50],
            lambda t: f"Token Hall of Fame ×{t:g}",
            lambda t: f"Put a day in your top 10 token days, {t:g} times (from your 30th day on).",
            ["A top-10 burn day. The leaderboard noticed.", "{n} record days of compute."]),
 
     # ---- coding agents, second wave: rhythm, records, how, and the rest of the app
-    Family("weekendwarriors", "Weekend warriors", lambda c: c.agent.get("weekendWarriors") or None, [1, 4, 12],
+    Family("weekendwarriors", "Weekend warriors", lambda c: c.agent.get("weekendWarriors") or None, [1, 4, 12, 26, 52],
            lambda t: f"Weekend Warriors ×{t:g}", lambda t: f"Have agents at work on the Sunday and the Saturday of a week, {t:g} times.",
            ["No days off for the fleet. Founders don't do weekends.", "{n} weekends. The agents never asked for overtime."],
-           rarities=["common", "rare", "epic"]),
-    Family("alwayson", "Always on", lambda c: c.agent.get("alwaysOn") or None, [1, 5],
+           rarities=["common", "rare", "epic", "legendary", "legendary"]),
+    Family("alwayson", "Always on", lambda c: c.agent.get("alwaysOn") or None, [1, 3, 5, 10, 25],
            lambda t: f"Always On ×{t:g}", lambda t: f"Have agents burn tokens in every 4-hour block of a day, {t:g} times.",
            ["Twenty-four hours of compute. The sun never sets on your empire.", "{n} round-the-clock days. A global company of one."],
-           rarities=["epic", "legendary"]),
-    Family("earlybird", "Early bird", lambda c: c.agent.get("earlyBird") or None, [5, 20],
+           rarities=["epic", "legendary", "legendary", "legendary", "legendary"]),
+    Family("earlybird", "Early bird", lambda c: c.agent.get("earlyBird") or None, [5, 10, 20, 50, 100],
            lambda t: f"Early Bird ×{t:g}", lambda t: f"Start agents before 7 am, {t:g} days.",
            ["The agents were up before the market opened.", "{n} early starts. First mover advantage."],
-           rarities=["common", "rare"]),
-    Family("steadyburn", "Steady burn", lambda c: c.agent.get("steadyBurn") or None, [7],
-           lambda t: "Steady Burn", lambda t: "Burn 50M tokens a day, 7 days in a row.",
+           rarities=["common", "rare", "rare", "epic", "legendary"]),
+    Family("steadyburn", "Steady burn", lambda c: c.agent.get("steadyBurn") or None, [3, 7, 14, 30, 60],
+           lambda t: f"Steady Burn {t:g}", lambda t: f"Burn 50M tokens a day, {t:g} days in a row.",
            ["Consistent burn. Predictable compute is a business model."],
-           rarities="epic"),
-    Family("spike", "Spike", lambda c: c.agent.get("spike") or None, [10e6, 50e6, 100e6],
+           rarities=["rare", "epic", "epic", "legendary", "legendary"]),
+    Family("spike", "Spike", lambda c: c.agent.get("spike") or None, [10e6, 25e6, 50e6, 100e6, 200e6],
            lambda t: f"Spike {agents.short(t)}", lambda t: f"Burn {agents.short(t)} tokens in a quarter hour.",
            ["A quarter hour of pure throughput. The graph went vertical.", "{n} in fifteen minutes. Hockey stick, achieved."],
-           unit="M", scale=1e6, rarities=["common", "rare", "epic"]),
-    Family("tokenrecord", "Personal best", lambda c: c.agent.get("personalBest") or None, [1, 5, 10],
+           unit="M", scale=1e6, rarities=["common", "rare", "rare", "epic", "legendary"]),
+    Family("tokenrecord", "Personal best", lambda c: c.agent.get("personalBest") or None, [1, 3, 5, 10, 20],
            lambda t: f"Personal Best ×{t:g}", lambda t: f"Beat your record of tokens in a day, {t:g} times.",
            ["New record. Growth is the only metric that matters.", "{n} records. Up and to the right."],
-           rarities=["common", "rare", "epic"]),
-    Family("monstersession", "Monster session", lambda c: c.agent.get("monsterSession") or None, [100e6, 250e6, 500e6],
+           rarities=["common", "rare", "rare", "epic", "legendary"]),
+    Family("monstersession", "Monster session", lambda c: c.agent.get("monsterSession") or None, [50e6, 100e6, 250e6, 500e6, 1e9],
            lambda t: f"Monster Session {agents.short(t)}", lambda t: f"Burn {agents.short(t)} tokens during one focus session.",
            ["One session, a hundred million tokens. That was a sprint.", "{n} in a single session. Ship it."],
-           unit="M", scale=1e6, rarities=["rare", "epic", "legendary"]),
-    Family("burnrate", "Million dollar month", lambda c: c.agent.get("bestMonthCost") or None, [1000, 5000, 10000],
+           unit="M", scale=1e6, rarities=["rare", "rare", "epic", "legendary", "legendary"]),
+    Family("burnrate", "Million dollar month", lambda c: c.agent.get("bestMonthCost") or None, [500, 1000, 2500, 5000, 10000],
            lambda t: f"Burn Rate ${t:,.0f}", lambda t: f"Burn ${t:,.0f} of agent compute in 30 days (API prices).",
            ["A thousand dollars of compute a month. Cheaper than an intern, faster too.", "${n} in a month. The CFO would like a word."],
-           rarities=["rare", "epic", "legendary"]),
-    Family("promptengineer", "Prompt engineer", lambda c: c.agent.get("prompts") or None, [100, 500, 2000],
+           rarities=["rare", "rare", "epic", "epic", "legendary"]),
+    Family("promptengineer", "Prompt engineer", lambda c: c.agent.get("prompts") or None, [100, 500, 1000, 2000, 5000],
            lambda t: f"Prompt Engineer ×{t:g}", lambda t: f"Type {t:g} prompts to your agents.",
            ["A hundred prompts. You're managing now.", "{n} prompts. Your management style is written down."],
-           rarities=["normal", "common", "rare"]),
-    Family("laconic", "Laconic", lambda c: c.agent.get("laconic") or None, [1],
-           lambda t: "Laconic", lambda t: "10M tokens in a day here from fewer than 10 prompts.",
+           rarities=["normal", "common", "rare", "rare", "epic"]),
+    Family("laconic", "Laconic", lambda c: c.agent.get("laconic") or None, [1, 3, 5, 10, 25],
+           lambda t: f"Laconic ×{t:g}", lambda t: f"{t:g} days with 10M tokens here from fewer than 10 prompts.",
            ["Few words, big results. That's delegation."],
-           rarities="rare"),
-    Family("chatterbox", "Chatterbox", lambda c: c.agent.get("chatterbox") or None, [100],
-           lambda t: "Chatterbox", lambda t: "Type 100 prompts in a day.",
+           rarities=["rare", "rare", "epic", "epic", "legendary"]),
+    Family("chatterbox", "Chatterbox", lambda c: c.agent.get("chatterbox") or None, [50, 100, 150, 200, 300],
+           lambda t: f"Chatterbox {t:g}", lambda t: f"Type {t:g} prompts in a day.",
            ["A hundred prompts in a day. Micromanagement, but make it AI."],
-           rarities="rare"),
-    Family("sprawl", "Sprawl", lambda c: c.agent.get("sprawl") or None, [5, 10, 20],
+           rarities=["common", "rare", "rare", "epic", "epic"]),
+    Family("sprawl", "Sprawl", lambda c: c.agent.get("sprawl") or None, [3, 5, 10, 15, 20],
            lambda t: f"Sprawl ×{t:g}", lambda t: f"Have agents work in {t:g} projects in one week.",
            ["Five fronts at once. Portfolio company.", "{n} projects in a week. Conglomerate energy."],
-           rarities=["common", "rare", "epic"]),
-    Family("monogamous", "Monogamous", lambda c: c.agent.get("monogamous") or None, [30],
-           lambda t: "Monogamous", lambda t: "Keep your agents on a single project 30 days in a row.",
+           rarities=["common", "common", "rare", "epic", "epic"]),
+    Family("monogamous", "Monogamous", lambda c: c.agent.get("monogamous") or None, [7, 14, 30, 60, 90],
+           lambda t: f"Monogamous {t:g}", lambda t: f"Keep your agents on a single project {t:g} days in a row.",
            ["Thirty days, one project. Focus is a strategy."],
-           rarities="epic"),
-    Family("loyalist", "Model loyalist", lambda c: c.agent.get("loyalist") or None, [30],
-           lambda t: "Model Loyalist", lambda t: "Use a single model family 30 days in a row.",
+           rarities=["rare", "rare", "epic", "epic", "legendary"]),
+    Family("loyalist", "Model loyalist", lambda c: c.agent.get("loyalist") or None, [7, 14, 30, 60, 90],
+           lambda t: f"Model Loyalist {t:g}", lambda t: f"Use a single model family {t:g} days in a row.",
            ["Brand loyalty. The vendor thanks you."],
-           rarities="rare"),
-    Family("questfuel", "Quest fuel", lambda c: c.agent.get("questFuel") or None, [1, 10],
+           rarities=["common", "common", "rare", "rare", "epic"]),
+    Family("questfuel", "Quest fuel", lambda c: c.agent.get("questFuel") or None, [1, 3, 10, 25, 50],
            lambda t: f"Quest Fuel ×{t:g}", lambda t: f"Finish a quest on a day agents burned 100M tokens, {t:g} times.",
            ["Quest done, fuel burned. Execution.", "{n} quests on full throttle."],
-           rarities=["common", "rare"]),
-    Family("synergy", "Synergy", lambda c: c.agent.get("synergy") or None, [1, 10],
+           rarities=["common", "rare", "rare", "epic", "legendary"]),
+    Family("synergy", "Synergy", lambda c: c.agent.get("synergy") or None, [1, 3, 10, 25, 50],
            lambda t: f"Synergy ×{t:g}", lambda t: f"Earn a day medal on a day agents burned 250M tokens, {t:g} times.",
            ["Human focus and machine scale on the same day. Synergy, unironically.", "{n} days of full synergy."],
-           rarities=["rare", "epic"]),
-    Family("silentpartner", "Silent partner", lambda c: c.agent.get("silentPartner") or None, [1, 5],
+           rarities=["rare", "epic", "epic", "legendary", "legendary"]),
+    Family("silentpartner", "Silent partner", lambda c: c.agent.get("silentPartner") or None, [1, 3, 5, 10, 25],
            lambda t: f"Silent Partner ×{t:g}", lambda t: f"Win a challenge while agents burn 20M tokens during it, {t:g} times.",
            ["You held the line, they did the heavy lifting.", "{n} challenges won with a silent partner."],
-           rarities=["rare", "epic"]),
+           rarities=["rare", "epic", "epic", "legendary", "legendary"]),
 
     # ---- coding agents, third wave: peaks, periods, day and night, conditions
-    Family("powerhour", "Power hour", lambda c: c.agent.get("bestHour") or None, [25e6, 100e6, 250e6],
+    Family("powerhour", "Power hour", lambda c: c.agent.get("bestHour") or None, [25e6, 50e6, 100e6, 150e6, 250e6],
            lambda t: f"Power Hour {agents.short(t)}", lambda t: f"Burn {agents.short(t)} tokens within an hour.",
            ["One hour, full throttle. That's a power hour.", "{n} in sixty minutes. The meter was spinning."],
-           unit="M", scale=1e6, rarities=["common", "rare", "epic"]),
-    Family("doubleshift", "Double shift", lambda c: c.agent.get("bestTwoHours") or None, [50e6, 200e6, 500e6],
+           unit="M", scale=1e6, rarities=["common", "rare", "rare", "epic", "epic"]),
+    Family("doubleshift", "Double shift", lambda c: c.agent.get("bestTwoHours") or None, [50e6, 100e6, 200e6, 350e6, 500e6],
            lambda t: f"Double Shift {agents.short(t)}", lambda t: f"Burn {agents.short(t)} tokens within two hours.",
            ["Two hours of sustained burn. Endurance compute.", "{n} in two hours. A whole sprint, compressed."],
-           unit="M", scale=1e6, rarities=["common", "rare", "epic"]),
-    Family("questburner", "Quest burner", lambda c: c.agent.get("bestQuest") or None, [10e6, 100e6, 500e6],
+           unit="M", scale=1e6, rarities=["common", "rare", "rare", "epic", "epic"]),
+    Family("questburner", "Quest burner", lambda c: c.agent.get("bestQuest") or None, [10e6, 50e6, 100e6, 250e6, 500e6],
            lambda t: f"Quest Burner {agents.short(t)}", lambda t: f"Have agents burn {agents.short(t)} tokens while a single quest is active.",
            ["The quest had a compute budget. You used it.", "{n} on one quest. Ambition, funded."],
-           unit="M", scale=1e6, rarities=["common", "rare", "epic"]),
-    Family("burnweek", "Burn week", lambda c: c.agent.get("bestWeek") or None, [500e6, 1e9, 2.5e9, 5e9],
+           unit="M", scale=1e6, rarities=["common", "rare", "rare", "epic", "epic"]),
+    Family("burnweek", "Burn week", lambda c: c.agent.get("bestWeek") or None, [500e6, 1e9, 2.5e9, 5e9, 10e9],
            lambda t: f"Burn Week {agents.short(t)}", lambda t: f"Burn {agents.short(t)} tokens in a week (Sunday to Saturday).",
            ["Half a billion in a week. That's a launch week.", "{n} in seven days. Blitzscaling."],
-           unit="M", scale=1e6, rarities=["common", "rare", "epic", "legendary"]),
-    Family("burnmonth", "Burn month", lambda c: c.agent.get("bestMonth") or None, [1e9, 5e9, 10e9, 25e9],
+           unit="M", scale=1e6, rarities=["common", "rare", "epic", "legendary", "legendary"]),
+    Family("burnmonth", "Burn month", lambda c: c.agent.get("bestMonth") or None, [1e9, 5e9, 10e9, 25e9, 50e9],
            lambda t: f"Burn Month {agents.short(t)}", lambda t: f"Burn {agents.short(t)} tokens in a calendar month.",
            ["A billion tokens in a month. The quarterly report writes itself.", "{n} in a month. Hypergrowth."],
-           unit="M", scale=1e6, rarities=["common", "rare", "epic", "legendary"]),
-    Family("burnseason", "Burn season", lambda c: c.agent.get("bestSeason") or None, [5e9, 15e9, 50e9],
+           unit="M", scale=1e6, rarities=["common", "rare", "epic", "legendary", "legendary"]),
+    Family("burnseason", "Burn season", lambda c: c.agent.get("bestSeason") or None, [5e9, 10e9, 15e9, 30e9, 50e9],
            lambda t: f"Burn Season {agents.short(t)}", lambda t: f"Burn {agents.short(t)} tokens in a season.",
            ["Five billion in a season. A whole era of compute.", "{n} in one season. Legendary throughput."],
-           unit="M", scale=1e6, rarities=["rare", "epic", "legendary"]),
-    Family("sunburn", "Sunburn", lambda c: c.agent.get("bestDaylight") or None, [100e6, 300e6],
+           unit="M", scale=1e6, rarities=["rare", "epic", "epic", "legendary", "legendary"]),
+    Family("sunburn", "Sunburn", lambda c: c.agent.get("bestDaylight") or None, [50e6, 100e6, 200e6, 300e6, 500e6],
            lambda t: f"Sunburn {agents.short(t)}", lambda t: f"Burn {agents.short(t)} tokens between 8 am and 8 pm in a day.",
            ["Business hours, maximum burn. Nine to five, times a hundred.", "{n} in daylight. The office never had this output."],
-           unit="M", scale=1e6, rarities=["common", "rare"]),
-    Family("dayandnight", "Day and night", lambda c: c.agent.get("dayAndNight") or None, [1, 10],
+           unit="M", scale=1e6, rarities=["common", "common", "rare", "rare", "epic"]),
+    Family("dayandnight", "Day and night", lambda c: c.agent.get("dayAndNight") or None, [1, 3, 10, 25, 50],
            lambda t: f"Day and Night ×{t:g}", lambda t: f"Burn 10M tokens by day (8 am to 8 pm) and 10M by night (midnight to 6 am) the same day, {t:g} times.",
            ["The work doesn't care what time it is.", "{n} days with no off switch."],
-           rarities=["rare", "epic"]),
-    Family("rainmaker", "Rainmaker", lambda c: c.agent.get("rainTokens") or None, [50e6, 500e6],
+           rarities=["rare", "epic", "epic", "legendary", "legendary"]),
+    Family("rainmaker", "Rainmaker", lambda c: c.agent.get("rainTokens") or None, [50e6, 100e6, 250e6, 500e6, 1e9],
            lambda t: f"Rainmaker {agents.short(t)}", lambda t: f"Burn {agents.short(t)} tokens during focus sessions under the rain.",
            ["Rainy day, heavy compute. Perfect pairing.", "{n} under the rain. You make it rain, literally."],
-           unit="M", scale=1e6, rarities=["common", "rare"]),
-    Family("offgrid", "Off the grid", lambda c: c.agent.get("batteryTokens") or None, [10e6, 100e6],
+           unit="M", scale=1e6, rarities=["common", "rare", "epic", "rare", "epic"]),
+    Family("offgrid", "Off the grid", lambda c: c.agent.get("batteryTokens") or None, [10e6, 50e6, 100e6, 250e6, 500e6],
            lambda t: f"Off the Grid {agents.short(t)}", lambda t: f"Burn {agents.short(t)} tokens during focus sessions on battery.",
            ["Unplugged laptop, plugged-in agents.", "{n} on battery. The datacenter does the heavy lifting."],
-           unit="M", scale=1e6, rarities=["common", "rare"]),
-    Family("stormchaser", "Storm chaser", lambda c: c.agent.get("storms") or None, [1],
-           lambda t: "Storm Chaser", lambda t: "Burn 10M tokens during a focus session in a storm.",
+           unit="M", scale=1e6, rarities=["common", "rare", "rare", "epic", "legendary"]),
+    Family("stormchaser", "Storm chaser", lambda c: c.agent.get("storms") or None, [1, 2, 3, 5, 10],
+           lambda t: f"Storm Chaser ×{t:g}", lambda t: f"Burn 10M tokens during a focus session in a storm, {t:g} times.",
            ["Thunder outside, throughput inside."],
-           rarities="epic"),
-    Family("snowday", "Snow day", lambda c: c.agent.get("snowDays") or None, [1],
-           lambda t: "Snow Day", lambda t: "Burn 10M tokens during a focus session while it snows.",
+           rarities=["epic", "epic", "legendary", "legendary", "legendary"]),
+    Family("snowday", "Snow day", lambda c: c.agent.get("snowDays") or None, [1, 2, 3, 5, 10],
+           lambda t: f"Snow Day ×{t:g}", lambda t: f"Burn 10M tokens during a focus session while it snows, {t:g} times.",
            ["School's out, compute's on."],
-           rarities="rare"),
-    Family("heatwave", "Heatwave", lambda c: c.agent.get("heat") or None, [1],
-           lambda t: "Heatwave", lambda t: "Burn 10M tokens during a focus session at 30 °C or more.",
+           rarities=["rare", "rare", "epic", "epic", "legendary"]),
+    Family("heatwave", "Heatwave", lambda c: c.agent.get("heat") or None, [1, 2, 3, 5, 10],
+           lambda t: f"Heatwave ×{t:g}", lambda t: f"Burn 10M tokens during a focus session at 30 °C or more, {t:g} times.",
            ["Hot outside, the GPUs are hotter."],
-           rarities="rare"),
-    Family("coldfront", "Cold front", lambda c: c.agent.get("cold") or None, [1],
-           lambda t: "Cold Front", lambda t: "Burn 10M tokens during a focus session at 0 °C or less.",
+           rarities=["rare", "rare", "epic", "epic", "legendary"]),
+    Family("coldfront", "Cold front", lambda c: c.agent.get("cold") or None, [1, 2, 3, 5, 10],
+           lambda t: f"Cold Front ×{t:g}", lambda t: f"Burn 10M tokens during a focus session at 0 °C or less, {t:g} times.",
            ["Freezing outside. The datacenter kept you warm."],
-           rarities="rare"),
-    Family("indoorkid", "Indoor kid", lambda c: c.agent.get("sunny") or None, [1, 10],
+           rarities=["rare", "rare", "epic", "epic", "legendary"]),
+    Family("indoorkid", "Indoor kid", lambda c: c.agent.get("sunny") or None, [1, 3, 10, 25, 50],
            lambda t: f"Indoor Kid ×{t:g}", lambda t: f"Burn 10M tokens during a focus session on a clear day at 20 °C or more, {t:g} times.",
            ["Perfect weather outside. You chose compute.", "{n} sunny days indoors. Touch grass later."],
-           rarities=["common", "rare"]),
+           rarities=["common", "rare", "rare", "epic", "legendary"]),
 
     # ---- leaderboards: new top-10 entries, from 30 days in
     Family("halloffame", "Hall of fame", _hall_of_fame, [1, 5, 10, 25, 50],
@@ -1632,7 +1645,7 @@ FAMILIES: list[Family] = [
            lambda t: f"Put a day in your top 10 days, {t:g} times (from your 30th day on).",
            ["Into the top 10. The leaderboard just got harder to read without you.",
             "{n} hall-of-fame days. Your history is now mostly highlights."]),
-    Family("sessionlegend", "Session legend", _session_legend, [1, 5, 10, 25],
+    Family("sessionlegend", "Session legend", _session_legend, [1, 5, 10, 25, 50],
            lambda t: f"Session Legend ×{t:g}",
            lambda t: f"Put a session in your top 10 sessions, {t:g} times (from your 30th day on).",
            ["A top-10 session. Deep work, certified.",
@@ -1666,12 +1679,36 @@ for _f in FAMILIES:
 # ------------------------------------------------------------- evaluation
 
 
+# Families that once had a single tier, unlocked under their bare id: the
+# threshold that tier stood for. Every family has five tiers or more now, so
+# such an unlock becomes the matching tier (for Meteorologist, Power User and
+# Grand Tour, the old tier meant all of it: the top one).
+LEGACY_SINGLE = {
+    "monk": 4 * H, "friday": 1, "weekend": 1, "procrastinator": 3, "ghost": 10, "newyear": 1, "christmas": 1,
+    "orthodox": 1, "y2k38": 1, "fullmoon": 1, "anniversary": 1, "meteorologist": 6, "questfirst": 1,
+    "fullspectrum": 1, "cleansweep": 1, "nightshift": 1, "dawnraid": 1, "speedrunner": 1, "marathoner": 1,
+    "pivot": 1, "phoenix": 1, "revisionist": 1, "callsign": 1, "timezone": 1, "pacemaker": 1, "rebrand": 1,
+    "redacted": 1, "invisible": 1, "goalsetter": 1, "formatwar": 1, "poweruser": 8, "grandtour": 9,
+    "steadyburn": 7, "laconic": 1, "chatterbox": 100, "monogamous": 30, "loyalist": 30, "stormchaser": 1,
+    "snowday": 1, "heatwave": 1, "coldfront": 1,
+}
+
+
+def migrate_legacy_ids(store) -> None:
+    unlocked = store.unlocked_achievements()
+    for fid, threshold in LEGACY_SINGLE.items():
+        new = f"{fid}:{threshold:g}"
+        if fid in unlocked and new not in unlocked:
+            store.db.execute("UPDATE achievements SET id = ? WHERE id = ?", (new, fid))
+
+
 def evaluate(store, now: int, level_for_xp: Callable[[int], int], base_xp: int) -> list[dict]:
     """Unlock what the records now justify; returns the new unlocks.
 
     Level achievements grant XP that can raise the level, so this runs until
     nothing new unlocks."""
     fresh: list[dict] = []
+    migrate_legacy_ids(store)
     # Rewards follow the current rules, also for what was unlocked before.
     unlocked = store.unlocked_achievements()
     for f in FAMILIES:
