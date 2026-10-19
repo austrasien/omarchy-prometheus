@@ -136,10 +136,10 @@ only what was actually used.
   legendary achievements, a stamp per shining league with at least one
   round finished in it, rarest first, with the count, with a holographic seal. It asks where to save it
   (zenity) and needs ffmpeg.
-- **Achievements** (a family not started yet shows only dots; tiers after the next one too; each tier has a rarity by the XP it is worth: normal under 30, common green, rare blue from 60, epic purple from 140, legendary gold and shining from 360; secrets are epic): 183 families with 1193 tiers, five at least each (agent tokens, quests, leagues, seasons, leaderboards, and exploring the tool: settings changed, cards generated, tabs opened, bios read, rarity set by hand), plus a calendar of 126
+- **Achievements** (a family not started yet shows only dots; tiers after the next one too; each tier has a rarity by the XP it is worth: normal under 30, common green, rare blue from 60, epic purple from 140, legendary gold and shining from 360; secrets are epic): 224 families with 1398 tiers, five at least each (forty tie two features together, crossings.py; agent tokens, quests, leagues, seasons, leaderboards, and exploring the tool: settings changed, cards generated, tabs opened, bios read, rarity set by hand), plus a calendar of 126
   dated achievements (one per date: Roman festivals, geek days, scientists
   and writers, SpaceX and Tesla milestones, each unlocked by finishing a
-  session that day, 10 XP), so 1319 in all, computed from Prometheus' own
+  session that day, 10 XP), so 1524 in all, computed from Prometheus' own
   records: sessions, tasks (same-day, inbox zero, redemptions), cumulative
   hours (100 h to 10,000 h), levels, endurance, intensity, 3-day and weekly
   hours, streaks, active days and months, early and late sessions, midnight
