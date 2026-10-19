@@ -191,48 +191,72 @@ Item {
     }
   }
 
-  // Legend: a dot per series, click to hide or show it.
-  Flow {
+  // Legend: a dot per series, click to hide or show it; split into
+  // centered lines that fit the width.
+  FontMetrics { id: legendMetrics; font.family: root.w.fontFamily; font.pixelSize: Style.font.caption - 1 }
+  function legendText(e) { return (e.glyph ? e.glyph + " " : "") + e.label }
+  readonly property var legendLines: {
+    var lines = [], line = [], used = 0, gap = Style.space(10)
+    for (var i = 0; i < series.length; i++) {
+      var wd = Style.space(13) + legendMetrics.advanceWidth(legendText(series[i]))
+      var need = line.length ? used + gap + wd : wd
+      if (line.length && need > width) { lines.push(line); line = []; need = wd }
+      line.push(series[i])
+      used = need
+    }
+    if (line.length) lines.push(line)
+    return lines
+  }
+
+  Column {
     id: legend
     y: root.chartTop + root.chartH + Style.space(18)
     width: root.width
-    spacing: Style.space(10)
+    spacing: Style.space(4)
     Repeater {
-      model: root.series
-      Item {
-        id: item
-        required property var modelData
-        readonly property bool on: root.shown(modelData.key)
-        width: entry.implicitWidth
-        height: entry.implicitHeight
-        opacity: on ? 1 : 0.4
+      model: root.legendLines
       Row {
-        id: entry
-        spacing: Style.space(4)
-        Rectangle {
-          anchors.verticalCenter: parent.verticalCenter
-          width: Style.space(9)
-          height: width
-          radius: width / 2
-          color: item.on ? item.modelData.color : "transparent"
-          border.width: 1.5
-          border.color: item.modelData.color
-        }
-        Text {
-          anchors.verticalCenter: parent.verticalCenter
-          textFormat: Text.PlainText
-          text: (item.modelData.glyph ? item.modelData.glyph + " " : "") + item.modelData.label
-          color: Util.alpha(root.w.fg, 0.8)
-          font.family: root.w.fontFamily
-          font.pixelSize: Style.font.caption - 1
-          font.strikeout: !item.on
-        }
-      }
-        MouseArea {
-          anchors.fill: parent
-          anchors.margins: -Style.space(3)
-          cursorShape: Qt.PointingHandCursor
-          onClicked: root.toggle(item.modelData.key)
+        required property var modelData
+        anchors.horizontalCenter: parent.horizontalCenter
+        spacing: Style.space(10)
+        Repeater {
+          model: modelData
+          Item {
+            id: item
+            required property var modelData
+            readonly property bool on: root.shown(modelData.key)
+            width: entry.implicitWidth
+            height: entry.implicitHeight
+            opacity: on ? 1 : 0.4
+            Row {
+              id: entry
+              spacing: Style.space(4)
+              Rectangle {
+                anchors.verticalCenter: parent.verticalCenter
+                width: Style.space(9)
+                height: width
+                radius: width / 2
+                color: item.on ? item.modelData.color : "transparent"
+                border.width: 1.5
+                border.color: item.modelData.color
+              }
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
+                text: root.legendText(item.modelData)
+                color: Util.alpha(root.w.fg, 0.8)
+                font.family: root.w.fontFamily
+                font.pixelSize: Style.font.caption - 1
+                font.strikeout: !item.on
+              }
+            }
+            MouseArea {
+              anchors.fill: parent
+              anchors.margins: -Style.space(3)
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.toggle(item.modelData.key)
+            }
+          }
         }
       }
     }
