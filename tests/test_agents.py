@@ -130,5 +130,21 @@ class AgentUsageTest(unittest.TestCase):
         self.assertEqual(m["sprawl"], 1)
 
 
+    def test_third_measures(self):
+        from prometheus import agents as AG
+        t = int(dt.datetime(2026, 10, 19, 10, 0).timestamp() * 1000)
+        self.write("e.jsonl", [self.reply(t, "a", read=10**7), self.reply(t + 50 * 60_000, "b", read=10**7),
+                               self.reply(t + 100 * 60_000, "c", read=10**7)])
+        self.agents.ingest_local()
+        one = 10**7 + 101
+        sessions = [{"start": t - 1, "end": t + 60_000, "weather": "storm", "temp": 31, "battery": 1}]
+        m = AG.third_measures(self.store, sessions, [("q", t, t + 60 * 60_000)])
+        self.assertEqual(m["bestHour"], 2 * one)            # 10:00 and 10:50, not 11:40
+        self.assertEqual(m["bestTwoHours"], 3 * one)
+        self.assertEqual(m["bestQuest"], 2 * one)
+        self.assertEqual((m["storms"], m["heat"], m["batteryTokens"]), (1, 1, one))
+        self.assertEqual(m["bestWeek"], 3 * one)
+
+
 if __name__ == "__main__":
     unittest.main()

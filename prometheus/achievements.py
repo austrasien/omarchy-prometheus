@@ -236,6 +236,9 @@ def build_context(store, now: int, level: int) -> Context:
         "SELECT done_at FROM quests WHERE done_at IS NOT NULL UNION ALL SELECT done_at FROM quest_done")}
     medal_days = {r[0] for r in store.db.execute("SELECT period_key FROM medals WHERE length(period_key) = 10")}
     ctx.agent.update(agents.more_measures(store, ctx.closed, quest_days, medal_days))
+    quest_periods = [(r[0], r[1], r[2] if r[2] is not None else now) for r in store.db.execute(
+        "SELECT quest_id, started_at, ended_at FROM quest_active")]
+    ctx.agent.update(agents.third_measures(store, ctx.closed, quest_periods))
     return ctx
 
 
@@ -1560,6 +1563,68 @@ FAMILIES: list[Family] = [
            lambda t: f"Silent Partner ×{t:g}", lambda t: f"Win a challenge while agents burn 20M tokens during it, {t:g} times.",
            ["You held the line, they did the heavy lifting.", "{n} challenges won with a silent partner."],
            rarities=["rare", "epic"]),
+
+    # ---- coding agents, third wave: peaks, periods, day and night, conditions
+    Family("powerhour", "Power hour", lambda c: c.agent.get("bestHour") or None, [25e6, 100e6, 250e6],
+           lambda t: f"Power Hour {agents.short(t)}", lambda t: f"Burn {agents.short(t)} tokens within an hour.",
+           ["One hour, full throttle. That's a power hour.", "{n} in sixty minutes. The meter was spinning."],
+           unit="M", scale=1e6, rarities=["common", "rare", "epic"]),
+    Family("doubleshift", "Double shift", lambda c: c.agent.get("bestTwoHours") or None, [50e6, 200e6, 500e6],
+           lambda t: f"Double Shift {agents.short(t)}", lambda t: f"Burn {agents.short(t)} tokens within two hours.",
+           ["Two hours of sustained burn. Endurance compute.", "{n} in two hours. A whole sprint, compressed."],
+           unit="M", scale=1e6, rarities=["common", "rare", "epic"]),
+    Family("questburner", "Quest burner", lambda c: c.agent.get("bestQuest") or None, [10e6, 100e6, 500e6],
+           lambda t: f"Quest Burner {agents.short(t)}", lambda t: f"Have agents burn {agents.short(t)} tokens while a single quest is active.",
+           ["The quest had a compute budget. You used it.", "{n} on one quest. Ambition, funded."],
+           unit="M", scale=1e6, rarities=["common", "rare", "epic"]),
+    Family("burnweek", "Burn week", lambda c: c.agent.get("bestWeek") or None, [500e6, 1e9, 2.5e9, 5e9],
+           lambda t: f"Burn Week {agents.short(t)}", lambda t: f"Burn {agents.short(t)} tokens in a week (Sunday to Saturday).",
+           ["Half a billion in a week. That's a launch week.", "{n} in seven days. Blitzscaling."],
+           unit="M", scale=1e6, rarities=["common", "rare", "epic", "legendary"]),
+    Family("burnmonth", "Burn month", lambda c: c.agent.get("bestMonth") or None, [1e9, 5e9, 10e9, 25e9],
+           lambda t: f"Burn Month {agents.short(t)}", lambda t: f"Burn {agents.short(t)} tokens in a calendar month.",
+           ["A billion tokens in a month. The quarterly report writes itself.", "{n} in a month. Hypergrowth."],
+           unit="M", scale=1e6, rarities=["common", "rare", "epic", "legendary"]),
+    Family("burnseason", "Burn season", lambda c: c.agent.get("bestSeason") or None, [5e9, 15e9, 50e9],
+           lambda t: f"Burn Season {agents.short(t)}", lambda t: f"Burn {agents.short(t)} tokens in a season.",
+           ["Five billion in a season. A whole era of compute.", "{n} in one season. Legendary throughput."],
+           unit="M", scale=1e6, rarities=["rare", "epic", "legendary"]),
+    Family("sunburn", "Sunburn", lambda c: c.agent.get("bestDaylight") or None, [100e6, 300e6],
+           lambda t: f"Sunburn {agents.short(t)}", lambda t: f"Burn {agents.short(t)} tokens between 8 am and 8 pm in a day.",
+           ["Business hours, maximum burn. Nine to five, times a hundred.", "{n} in daylight. The office never had this output."],
+           unit="M", scale=1e6, rarities=["common", "rare"]),
+    Family("dayandnight", "Day and night", lambda c: c.agent.get("dayAndNight") or None, [1, 10],
+           lambda t: f"Day and Night ×{t:g}", lambda t: f"Burn 10M tokens by day (8 am to 8 pm) and 10M by night (midnight to 6 am) the same day, {t:g} times.",
+           ["The work doesn't care what time it is.", "{n} days with no off switch."],
+           rarities=["rare", "epic"]),
+    Family("rainmaker", "Rainmaker", lambda c: c.agent.get("rainTokens") or None, [50e6, 500e6],
+           lambda t: f"Rainmaker {agents.short(t)}", lambda t: f"Burn {agents.short(t)} tokens during focus sessions under the rain.",
+           ["Rainy day, heavy compute. Perfect pairing.", "{n} under the rain. You make it rain, literally."],
+           unit="M", scale=1e6, rarities=["common", "rare"]),
+    Family("offgrid", "Off the grid", lambda c: c.agent.get("batteryTokens") or None, [10e6, 100e6],
+           lambda t: f"Off the Grid {agents.short(t)}", lambda t: f"Burn {agents.short(t)} tokens during focus sessions on battery.",
+           ["Unplugged laptop, plugged-in agents.", "{n} on battery. The datacenter does the heavy lifting."],
+           unit="M", scale=1e6, rarities=["common", "rare"]),
+    Family("stormchaser", "Storm chaser", lambda c: c.agent.get("storms") or None, [1],
+           lambda t: "Storm Chaser", lambda t: "Burn 10M tokens during a focus session in a storm.",
+           ["Thunder outside, throughput inside."],
+           rarities="epic"),
+    Family("snowday", "Snow day", lambda c: c.agent.get("snowDays") or None, [1],
+           lambda t: "Snow Day", lambda t: "Burn 10M tokens during a focus session while it snows.",
+           ["School's out, compute's on."],
+           rarities="rare"),
+    Family("heatwave", "Heatwave", lambda c: c.agent.get("heat") or None, [1],
+           lambda t: "Heatwave", lambda t: "Burn 10M tokens during a focus session at 30 °C or more.",
+           ["Hot outside, the GPUs are hotter."],
+           rarities="rare"),
+    Family("coldfront", "Cold front", lambda c: c.agent.get("cold") or None, [1],
+           lambda t: "Cold Front", lambda t: "Burn 10M tokens during a focus session at 0 °C or less.",
+           ["Freezing outside. The datacenter kept you warm."],
+           rarities="rare"),
+    Family("indoorkid", "Indoor kid", lambda c: c.agent.get("sunny") or None, [1, 10],
+           lambda t: f"Indoor Kid ×{t:g}", lambda t: f"Burn 10M tokens during a focus session on a clear day at 20 °C or more, {t:g} times.",
+           ["Perfect weather outside. You chose compute.", "{n} sunny days indoors. Touch grass later."],
+           rarities=["common", "rare"]),
 
     # ---- leaderboards: new top-10 entries, from 30 days in
     Family("halloffame", "Hall of fame", _hall_of_fame, [1, 5, 10, 25, 50],

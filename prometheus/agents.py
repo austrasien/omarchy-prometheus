@@ -685,3 +685,78 @@ def more_measures(store, sessions: list[dict], quest_days: set[str], medal_days:
         "synergy": sum(1 for d in medal_days if by_day.get(d, 0) >= 250_000_000),
         "silentPartner": silent,
     }
+
+
+def _best_window(points: list[tuple[int, int]], width: int) -> int:
+    """Most tokens in any `width` ms window; `points` (slot, tokens) sorted."""
+    best = total = lo = 0
+    for hi in range(len(points)):
+        total += points[hi][1]
+        while points[hi][0] - points[lo][0] >= width:
+            total -= points[lo][1]
+            lo += 1
+        best = max(best, total)
+    return best
+
+
+def third_measures(store, sessions: list[dict], quest_periods: list[tuple[str, int, int]]) -> dict:
+    """Third wave: peaks over an hour or two, the biggest quest, week, month
+    and season, day and night, and the conditions of each session (weather,
+    temperature, battery)."""
+    from .competition import _season, _season_key
+    db = store.db
+    measured = [(r[0], r[1]) for r in db.execute(
+        "SELECT slot, SUM(tokens) FROM agent_usage WHERE estimated = 0 GROUP BY slot ORDER BY slot")]
+    by_day = tokens_by_day(store)
+
+    weeks, months, seasons = {}, {}, {}
+    for d, t in by_day.items():
+        day = dt.date.fromisoformat(d)
+        sunday = day - dt.timedelta(days=(day.weekday() + 1) % 7)
+        weeks[sunday] = weeks.get(sunday, 0) + t
+        months[d[:7]] = months.get(d[:7], 0) + t
+        key = _season_key(*_season(day))
+        seasons[key] = seasons.get(key, 0) + t
+
+    daylight, night = {}, {}
+    for slot, t in measured:
+        hour = dt.datetime.fromtimestamp(slot / 1000).hour
+        d = T.date_str(slot)
+        if 8 <= hour < 20:
+            daylight[d] = daylight.get(d, 0) + t
+        elif hour < 6:
+            night[d] = night.get(d, 0) + t
+
+    slots, sums = _prefix(store)
+    quests: dict[str, int] = {}
+    for qid, start, end in quest_periods:
+        quests[qid] = quests.get(qid, 0) + _sum(slots, sums, start, end)
+
+    burnt = session_tokens(store, [(s["start"], s["end"]) for s in sessions])
+    rain = battery = 0
+    storm = snow = heat = cold = sunny = 0
+    for s, t in zip(sessions, burnt):
+        w, temp = s.get("weather"), s.get("temp")
+        if w == "rain":
+            rain += t
+        if s.get("battery") == 1:
+            battery += t
+        if t >= 10_000_000:
+            storm += w == "storm"
+            snow += w == "snow"
+            heat += temp is not None and temp >= 30
+            cold += temp is not None and temp <= 0
+            sunny += w == "clear" and temp is not None and temp >= 20
+    return {
+        "bestHour": _best_window(measured, 3_600_000),
+        "bestTwoHours": _best_window(measured, 7_200_000),
+        "bestQuest": max(quests.values(), default=0),
+        "bestWeek": max(weeks.values(), default=0),
+        "bestMonth": max(months.values(), default=0),
+        "bestSeason": max(seasons.values(), default=0),
+        "bestDaylight": max(daylight.values(), default=0),
+        "dayAndNight": sum(1 for d in daylight if daylight[d] >= 10_000_000 and night.get(d, 0) >= 10_000_000),
+        "rainTokens": rain,
+        "batteryTokens": battery,
+        "storms": storm, "snowDays": snow, "heat": heat, "cold": cold, "sunny": sunny,
+    }
