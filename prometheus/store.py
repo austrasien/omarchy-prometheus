@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS focus_spans (
 );
 CREATE INDEX IF NOT EXISTS idx_spans_started ON focus_spans(started_at);
 CREATE INDEX IF NOT EXISTS idx_spans_session ON focus_spans(session_id);
+CREATE INDEX IF NOT EXISTS idx_spans_ended ON focus_spans(ended_at);
 
 CREATE TABLE IF NOT EXISTS tasks (
   id                   TEXT PRIMARY KEY,

@@ -12,6 +12,7 @@ it is. Secret achievements are worth 25 XP, flat.
 from __future__ import annotations
 
 import datetime as dt
+import functools
 import heapq
 import math
 from collections import defaultdict
@@ -151,7 +152,9 @@ def _date(s: str) -> dt.date:
     return dt.date.fromisoformat(s)
 
 
+@functools.lru_cache(maxsize=65_536)
 def _local(ms: int) -> dt.datetime:
+    # The same session starts and ends are asked for by many families.
     return dt.datetime.fromtimestamp(ms / 1000).astimezone()
 
 
@@ -225,33 +228,34 @@ def build_context(store, now: int, level: int) -> Context:
     return ctx
 
 
-def _read_spans(store, ctx: Context, gap_ms: int = 60_000) -> None:
-    """One pass over the focus spans, the biggest table: tracked time per day,
-    the main app's share of each session, app switches per session (a pause
-    or an idle cut in one app is not a switch), and the longest stretch in one
-    app inside a session (short gaps bridged)."""
+def _span_totals(rows, gap_ms: int = 60_000) -> dict:
+    """Over spans ordered by session then start: tracked time per day, the
+    main app's share of each session, app switches per session (a pause or an
+    idle cut in one app is not a switch), and the longest stretch in one app
+    inside a session (short gaps bridged), in ms."""
+    out = {"day_tracked": {}, "top_share": {}, "switches": {}, "best": 0}
+    day_tracked, switches = out["day_tracked"], out["switches"]
     apps, sid, app, run_start, run_end, best = {}, None, None, 0, 0, 0
 
     def close_session():
         total = sum(apps.values())
         if sid is not None and total > 0:
-            ctx.session_top_share[sid] = max(apps.values()) / total
+            out["top_share"][sid] = max(apps.values()) / total
 
-    for r in store.db.execute("SELECT session_id, app, started_at, ended_at FROM focus_spans "
-                              "ORDER BY session_id, started_at"):
+    for r in rows:
         start, end = r["started_at"], r["ended_at"]
         d = T.date_str(start)
-        ctx.day_tracked[d] = ctx.day_tracked.get(d, 0) + (end - start) / 1000
+        day_tracked[d] = day_tracked.get(d, 0) + (end - start) / 1000
         if r["session_id"] is None:
             continue
         if r["session_id"] != sid:
             close_session()
             sid, app, apps = r["session_id"], r["app"], {}
-            ctx.switches[sid] = 0
+            switches[sid] = 0
             run_start, run_end = start, end
         else:
             if r["app"] != app:
-                ctx.switches[sid] += 1
+                switches[sid] += 1
             if r["app"] == app and start - run_end <= gap_ms:
                 run_end = max(run_end, end)
             else:
@@ -260,7 +264,47 @@ def _read_spans(store, ctx: Context, gap_ms: int = 60_000) -> None:
         apps[app] = apps.get(app, 0) + end - start
         best = max(best, run_end - run_start)
     close_session()
-    ctx.monotask = best / 1000
+    out["best"] = best
+    return out
+
+
+# Spans settled before today (ended, in a session ended too, or in none) never
+# change: their totals are kept on the store and computed again only when the
+# day turns, the day start moves, or their number changes (an import).
+_LIVE = ("(ended_at >= :cut OR session_id IS NOT NULL AND session_id IN "
+         "(SELECT id FROM sessions WHERE ended_at IS NULL OR ended_at >= :cut))")
+
+
+def _read_spans(store, ctx: Context) -> None:
+    cut = T.day_start(ctx.now)
+    # Index lookups, merged here: SQLite scans the whole table for an OR over
+    # a subquery, or a UNION.
+    cols = "id, session_id, app, started_at, ended_at"
+    rows = {r["id"]: r for r in store.db.execute(
+        f"SELECT {cols} FROM focus_spans INDEXED BY idx_spans_ended WHERE ended_at >= ?", (cut,))}
+    sids = [r[0] for r in store.db.execute(
+        "SELECT id FROM sessions WHERE ended_at IS NULL OR ended_at >= ?", (cut,))]
+    if sids:
+        marks = ",".join("?" * len(sids))
+        for r in store.db.execute(f"SELECT {cols} FROM focus_spans WHERE session_id IN ({marks})", sids):
+            rows[r["id"]] = r
+    live = sorted(rows.values(), key=lambda r: (r["session_id"] is not None, r["session_id"] or "", r["started_at"]))
+    settled_n = store.db.execute("SELECT COUNT(*) FROM focus_spans").fetchone()[0] - len(live)
+    key = (cut, T.day_start_hour(), settled_n)
+    cache = getattr(store, "_span_cache", None)
+    if cache is None or cache[0] != key:
+        rows = store.db.execute(
+            f"SELECT session_id, app, started_at, ended_at FROM focus_spans WHERE NOT {_LIVE} "
+            "ORDER BY session_id, started_at", {"cut": cut})
+        cache = (key, _span_totals(rows))
+        store._span_cache = cache
+    old, new = cache[1], _span_totals(live)
+    ctx.day_tracked = dict(old["day_tracked"])
+    for d, sec in new["day_tracked"].items():
+        ctx.day_tracked[d] = ctx.day_tracked.get(d, 0) + sec
+    ctx.session_top_share = {**old["top_share"], **new["top_share"]}
+    ctx.switches = {**old["switches"], **new["switches"]}
+    ctx.monotask = max(old["best"], new["best"]) / 1000
 
 
 def _app_switches(store, since: int = 0) -> dict:

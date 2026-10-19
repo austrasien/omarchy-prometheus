@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import colorsys
 import datetime as dt
+import heapq
 import math
 import random
 from collections import defaultdict
@@ -184,7 +185,9 @@ class Ledger:
         return min(days) if days else None
 
     def between(self, table: dict, start: dt.date, end: dt.date) -> int:
-        return sum(v for d, v in table.items() if start <= _date(d) < end)
+        # ISO dates sort as strings: no parsing.
+        lo, hi = start.isoformat(), end.isoformat()
+        return sum(v for d, v in table.items() if lo <= d < hi)
 
     def week_xp(self) -> dict[dt.date, int]:
         weeks = defaultdict(int)
@@ -549,9 +552,13 @@ def records(values: list[tuple]) -> int:
 def podiums(values: list[tuple], warmup: int = 5) -> int:
     """Entries that made the top 3 of everything so far, once `warmup`
     entries came before them."""
-    seen, n = [], 0
+    best, seen, n = [], 0, 0             # the 3 best so far, a min-heap
     for _, v in sorted(values):
-        if len(seen) >= warmup and sum(1 for s in seen if s > v) < 3:
+        if seen >= warmup and (len(best) < 3 or v >= best[0]):
             n += 1
-        seen.append(v)
+        seen += 1
+        if len(best) < 3:
+            heapq.heappush(best, v)
+        elif v > best[0]:
+            heapq.heapreplace(best, v)
     return n

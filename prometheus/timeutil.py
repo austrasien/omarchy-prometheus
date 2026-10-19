@@ -9,6 +9,7 @@ through these functions, so changing the hour moves them all.
 from __future__ import annotations
 
 import datetime as dt
+import functools
 import time
 
 DEFAULT_DAY_START_HOUR = 5
@@ -16,9 +17,9 @@ _day_start_hour = DEFAULT_DAY_START_HOUR
 
 
 def set_day_start_hour(hour: int) -> None:
-    global _day_start_hour, _last_day
+    global _day_start_hour
     _day_start_hour = max(0, min(12, int(hour)))
-    _last_day = (0, 0, "")
+    _quarter_date.cache_clear()
 
 
 def day_start_hour() -> int:
@@ -55,21 +56,19 @@ def add_days(day_start_ms: int, days: int) -> int:
     return _start_of(_logical_date(day_start_ms) + dt.timedelta(days=days))
 
 
-# The last day asked for, as (start ms, next start ms, date): history is read
-# in time order, so most calls fall in the same day as the one before and skip
-# the time zone arithmetic.
-_last_day = (0, 0, "")
+# Every time zone offset and day start falls on a quarter hour, so the date is
+# the same across a quarter hour: cached per quarter hour (history is read
+# again and again, and the time zone arithmetic is the slow part).
+QUARTER_MS = 900_000
+
+
+@functools.lru_cache(maxsize=262_144)
+def _quarter_date(quarter: int) -> str:
+    return _logical_date(quarter * QUARTER_MS).strftime("%Y-%m-%d")
 
 
 def date_str(ms: int) -> str:
-    global _last_day
-    lo, hi, s = _last_day
-    if lo <= ms < hi:
-        return s
-    date = _logical_date(ms)
-    s = date.strftime("%Y-%m-%d")
-    _last_day = (_start_of(date), _start_of(date + dt.timedelta(days=1)), s)
-    return s
+    return _quarter_date(ms // QUARTER_MS)
 
 
 def days_between(earlier_ms: int, later_ms: int) -> int:
