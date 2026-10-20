@@ -1026,6 +1026,10 @@ class Core:
     def _breaks(self) -> dict:
         return self.store.get_setting("breaks") or {}
 
+    def update_coffee(self, at: int) -> list[tuple[str, dict]]:
+        self.coffee.update(at, self._working())
+        return []
+
     def update_breaks(self, at: int) -> list[tuple[str, dict]]:
         s = self._session()
         st = self._breaks()

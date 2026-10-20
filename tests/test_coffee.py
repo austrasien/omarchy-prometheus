@@ -87,6 +87,14 @@ class CoffeeTest(unittest.TestCase):
         self.assertEqual(k.now(self.t9 + 62 * MIN)["cupsToday"], 1)
         self.assertIsNone(k.nudge(self.t9 + 70 * MIN, working=True))   # just had one
 
+    def test_nudge_goes_away_after_15_minutes(self):
+        k = self.core.coffee
+        k.update(self.t9, working=True)
+        self.assertIsNotNone(k.nudge(self.t9 + 14 * MIN, working=True))
+        k.update(self.t9 + 15 * MIN, working=True)
+        self.assertIsNone(k.nudge(self.t9 + 16 * MIN, working=True))      # put away, as a no
+        self.assertIsNotNone(k.nudge(self.t9 + 76 * MIN, working=True))   # an hour later
+
     def test_break_next_at(self):
         c = self.core
         c.start("Work", self.t9)

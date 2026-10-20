@@ -31,8 +31,8 @@ only what was actually used.
   "Break?" pill unrolls in the bar: OK pauses the session, No asks again
   in 20 min. The Session tab shows when it is due ("Next break in 35 min")
   and marks it on the hour by hour view. During a session, when the best
-  time for a coffee has come, "Coffee?": OK logs a cup, No stays quiet for
-  an hour. Questions show one at a time, the most urgent first: "Still
+  time for a coffee has come, "Coffee?": OK logs a cup, No (or no answer in 15 min)
+  stays quiet for an hour. Questions show one at a time, the most urgent first: "Still
   there?", the challenge offer, "Break?", "Coffee?".
 - **Privacy**: apps that are never recorded, and words that keep a window
   out of the records when its title contains them (a bank, say).

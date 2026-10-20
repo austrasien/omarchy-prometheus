@@ -340,7 +340,7 @@ class Daemon:
             try:
                 now = self.clock()
                 for kind, info in (self.core.update_challenge(now) + self.core.update_presence(now)
-                                   + self.core.update_breaks(now)):
+                                   + self.core.update_breaks(now) + self.core.update_coffee(now)):
                     self.announce(kind, info)
             except Exception:
                 log.exception("challenge update failed")

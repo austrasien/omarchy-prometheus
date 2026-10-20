@@ -25,6 +25,7 @@ BEDTIME_HOUR = 23                    # the default; the bedtime setting
 SLEEP_GAP_H = 8                      # no coffee in the 8 hours before bed
 UNDO_MS = 3 * 60_000                 # a cup can be taken back for 3 minutes
 NUDGE_SNOOZE_MS = 60 * 60_000        # "Coffee?" answered no: quiet for an hour
+NUDGE_SHOWN_MS = 15 * 60_000         # unanswered this long: put away, as a no
 HOUR_MS = 3_600_000
 
 
@@ -131,8 +132,24 @@ class Coffee:
             return None
         return {"reason": "caffeine is low", "inBody": round(in_body(self.cups(at - 86_400_000), at))}
 
+    def update(self, at: int, working: bool) -> None:
+        """Every tick: an unanswered "Coffee?" goes away after 15 minutes, as a no."""
+        shown = self.nudge(at, working) is not None
+        since = self.store.get_setting("coffeeNudgeSince")
+        if not shown:
+            if since is not None:
+                self.store.set_setting("coffeeNudgeSince", None)
+            return
+        if since is None:
+            self.store.set_setting("coffeeNudgeSince", at)
+        elif at - since >= NUDGE_SHOWN_MS:
+            self.store.set_setting("coffeeNudgeSince", None)
+            self.store.set_setting("coffeeNudgeQuietUntil", at + NUDGE_SNOOZE_MS)
+            self.store.add_event("coffee_ignored", at, None)
+
     def nudge_no(self, at: int) -> dict:
         self.store.set_setting("coffeeNudgeQuietUntil", at + NUDGE_SNOOZE_MS)
+        self.store.set_setting("coffeeNudgeSince", None)
         self.store.add_event("coffee_declined", at, None)
         return {"success": True}
 
