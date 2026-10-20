@@ -544,6 +544,7 @@ Column {
   }
 
   DayHours {
+    id: dayChart
     width: parent.width
     w: tab.w
     info: tab.dayHours
@@ -694,6 +695,12 @@ Column {
     triggeredOnStart: true
     onTriggered: tab.loadDay()
   }
-  function coffee() { p.act("coffee:add", [], "Coffee", tab.loadDay) }
-  function uncoffee() { p.act("coffee:undo", [], "Undo coffee", tab.loadDay) }
+  function coffee() {
+    dayChart.launch(coffeeButton)
+    p.act("coffee:add", [], "Coffee", tab.loadDay)
+  }
+  function uncoffee() {
+    dayChart.takeBack()
+    p.act("coffee:undo", [], "Undo coffee", tab.loadDay)
+  }
 }

@@ -48,7 +48,67 @@ Item {
     return m * 1.1
   }
   function xOf(ms) { return info ? (ms - info.fromMs) / (info.toMs - info.fromMs) * width : 0 }
-  function yOfMg(mg) { return chartTop + chartH - mg / maxMg * chartH }
+  function yOfMg(mg) { return chartTop + chartH - mg / scaleMg * chartH }
+
+  // A cup logged (or taken back): the curve goes from its old shape to the
+  // new one once the next coffee:day lands, instead of jumping. For a cup,
+  // a bean first flies from the button to the curve, and the curve only
+  // moves when it lands.
+  property var fromPts: null           // the curve before the cup
+  property real fromMax: 0
+  property real morph: 1               // 0 = old shape, 1 = new shape
+  property bool flying: false
+  property bool fresh: false           // coffee:day came back since the cup
+  readonly property real scaleMg: fromPts ? fromMax + (maxMg - fromMax) * morph : maxMg
+  function mgAt(pts, at) {
+    if (!pts || !pts.length) return 0
+    if (at <= pts[0].at) return pts[0].mg
+    for (var i = 1; i < pts.length; i++) {
+      if (at <= pts[i].at) {
+        var a = pts[i - 1], b = pts[i]
+        return a.mg + (b.mg - a.mg) * (at - a.at) / Math.max(1, b.at - a.at)
+      }
+    }
+    return pts[pts.length - 1].mg
+  }
+  function shownMg(p) { return fromPts ? mgAt(fromPts, p.at) + (p.mg - mgAt(fromPts, p.at)) * morph : p.mg }
+  function expectChange() {
+    if (!info) return
+    morphAnim.stop()
+    fromPts = info.caffeine
+    fromMax = maxMg
+    morph = 0
+    fresh = false
+  }
+  function startMorph() {
+    if (!flying && fresh && fromPts && !morphAnim.running) morphAnim.start()
+  }
+  // Fly a bean from `source` (the Coffee button) to the curve, now.
+  function launch(source) {
+    if (!info) return
+    expectChange()
+    var from = source.mapToItem(root, source.width / 2, source.height / 2)
+    var now = Date.now()
+    bean.x0 = from.x; bean.y0 = from.y
+    bean.x1 = xOf(Math.min(info.toMs, Math.max(info.fromMs, now)))
+    bean.y1 = yOfMg(mgAt(info.caffeine, now))
+    flying = true
+    flight.restart()
+  }
+  // Taken back: no flight, the curve just eases down.
+  function takeBack() { expectChange() }
+  NumberAnimation {
+    id: morphAnim
+    target: root
+    property: "morph"
+    from: 0
+    to: 1
+    duration: 900
+    easing.type: Easing.OutBack
+    easing.overshoot: 1.2
+    onFinished: { root.fromPts = null; curve.requestPaint() }
+  }
+  onMorphChanged: curve.requestPaint()
   function clock(ms) { return Qt.formatTime(new Date(ms), "HH:mm") }
 
   height: chartTop + chartH + Style.space(16) + legend.implicitHeight + Style.space(6)
@@ -148,14 +208,14 @@ Item {
       if (past.length > 1 && root.shown("caffeine")) {
         ctx.beginPath()
         ctx.moveTo(root.xOf(past[0].at), root.yOfMg(0))
-        for (var i = 0; i < past.length; i++) ctx.lineTo(root.xOf(past[i].at), root.yOfMg(past[i].mg))
+        for (var i = 0; i < past.length; i++) ctx.lineTo(root.xOf(past[i].at), root.yOfMg(root.shownMg(past[i])))
         ctx.lineTo(root.xOf(past[past.length - 1].at), root.yOfMg(0))
         ctx.closePath()
         ctx.fillStyle = Qt.rgba(root.coffeeColor.r, root.coffeeColor.g, root.coffeeColor.b, 0.18)
         ctx.fill()
         ctx.beginPath()
         for (var j = 0; j < past.length; j++) {
-          var x = root.xOf(past[j].at), y = root.yOfMg(past[j].mg)
+          var x = root.xOf(past[j].at), y = root.yOfMg(root.shownMg(past[j]))
           if (j === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
         }
         ctx.strokeStyle = root.coffeeColor
@@ -165,7 +225,7 @@ Item {
       if (next.length > 1 && root.shown("caffeine")) {
         ctx.beginPath()
         for (var k = 0; k < next.length; k++) {
-          var nx = root.xOf(next[k].at), ny = root.yOfMg(next[k].mg)
+          var nx = root.xOf(next[k].at), ny = root.yOfMg(root.shownMg(next[k]))
           if (k === 0) ctx.moveTo(nx, ny); else ctx.lineTo(nx, ny)
         }
         ctx.setLineDash([4, 3])
@@ -201,9 +261,66 @@ Item {
       }
     }
   }
-  onInfoChanged: curve.requestPaint()
+  onInfoChanged: {
+    if (fromPts && !fresh) { fresh = true; startMorph() }
+    curve.requestPaint()
+  }
   onBreakAtChanged: curve.requestPaint()
   onWidthChanged: curve.requestPaint()
+
+  // The bean in flight: an arc from the button down to the curve, then a
+  // ring where it lands.
+  Text {
+    id: bean
+    property real x0: 0
+    property real y0: 0
+    property real x1: 0
+    property real y1: 0
+    property real t: 0
+    visible: root.flying
+    z: 10
+    x: x0 + (x1 - x0) * t - width / 2
+    y: y0 + (y1 - y0) * t - Style.space(40) * 4 * t * (1 - t) - height / 2
+    rotation: 360 * t
+    scale: 1.3 - 0.6 * t
+    textFormat: Text.PlainText
+    text: String.fromCodePoint(0xF0176)
+    color: root.coffeeColor
+    font.family: Style.font.family
+    font.pixelSize: Style.font.icon
+  }
+  NumberAnimation {
+    id: flight
+    target: bean
+    property: "t"
+    from: 0
+    to: 1
+    duration: 650
+    easing.type: Easing.InQuad
+    onFinished: {
+      root.flying = false
+      ring.x = bean.x1 - ring.width / 2
+      ring.y = bean.y1 - ring.height / 2
+      splash.restart()
+      root.startMorph()
+    }
+  }
+  Rectangle {
+    id: ring
+    z: 10
+    width: Style.space(18)
+    height: width
+    radius: width / 2
+    color: "transparent"
+    border.width: 2
+    border.color: root.coffeeColor
+    opacity: 0
+  }
+  ParallelAnimation {
+    id: splash
+    NumberAnimation { target: ring; property: "scale"; from: 0.3; to: 1.8; duration: 500; easing.type: Easing.OutCubic }
+    NumberAnimation { target: ring; property: "opacity"; from: 1; to: 0; duration: 500 }
+  }
 
   // Hours along the bottom.
   Repeater {
