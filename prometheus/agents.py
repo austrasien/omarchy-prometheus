@@ -615,6 +615,7 @@ def more_measures(store, sessions: list[dict], quest_days: set[str], medal_days:
     db = store.db
     by_day = tokens_by_day(store)
     hour0 = T.day_start_hour()
+    today = T.date_str(T.now_ms())
 
     # Measured slots only for anything about the time of day.
     quarter, blocks, early = {}, {}, set()
@@ -676,7 +677,9 @@ def more_measures(store, sessions: list[dict], quest_days: set[str], medal_days:
         "monsterSession": max(per_session, default=0),
         "bestMonthCost": round(best_month, 2),
         "prompts": sum(prompts_day.values()),
-        "laconic": sum(1 for d, t in here_day.items() if t >= 10_000_000 and prompts_day.get(d, 0) < 10),
+        # Finished days only: a morning with few prompts so far proves nothing.
+        "laconic": sum(1 for d, t in here_day.items()
+                       if d < today and t >= 10_000_000 and prompts_day.get(d, 0) < 10),
         "chatterbox": max(prompts_day.values(), default=0),
         "sprawl": max((len(v) for v in projects_week.values()), default=0),
         "monogamous": _longest_same(project_day),
