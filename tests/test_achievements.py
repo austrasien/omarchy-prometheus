@@ -1,3 +1,4 @@
+import datetime as dt
 import unittest
 
 from prometheus import achievements as A
@@ -20,10 +21,9 @@ class AchievementsTest(unittest.TestCase):
         self.core.on_battery = lambda: self.battery
         self.core.battery_percent = lambda: self.pct
         self.core.weather_now = lambda at: self.weather
-        # A Wednesday at 10:00 local, so weekdays and clocks are predictable.
-        base = T.day_start(T.now_ms())
-        while T._logical_date(base).weekday() != 2:
-            base = T.add_days(base, -1)
+        # A Wednesday at 10:00 local, so weekdays and clocks are predictable,
+        # far from a clock change (a week across one shifts every hour).
+        base = T.day_start(int(dt.datetime(2026, 6, 17, 12).timestamp() * 1000))
         self.t0 = base + 5 * H            # day start is 5:00, so this is 10:00
 
     def tearDown(self):
