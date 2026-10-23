@@ -28,6 +28,16 @@ class CoffeeTest(unittest.TestCase):
         self.assertAlmostEqual(K.in_body(cup, 5 * H + 45 * MIN) / K.in_body(cup, 45 * MIN), 0.5, delta=0.06)
         self.assertEqual(K.in_body(cup, -MIN), 0)
 
+    def test_add_past(self):
+        c = self.core.coffee
+        now = c.add_past(self.t9 - 2 * H, self.t9)
+        self.assertEqual((now["cupsToday"], now["canUndo"]), (1, False))
+        self.assertGreater(now["inBody"], 0)
+        self.assertFalse(c.add_past(self.t9 + MIN, self.t9)["success"])       # the future
+        self.assertFalse(c.add_past(self.t9 - 25 * H, self.t9)["success"])    # too far back
+        self.assertFalse(c.add_past("9:30", self.t9)["success"])
+        self.assertEqual(c.cups(), [self.t9 - 2 * H])
+
     def test_add_undo_and_ideal(self):
         c = self.core.coffee
         now = c.add(self.t9)

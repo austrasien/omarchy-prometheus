@@ -97,6 +97,7 @@ class Daemon:
             "coffee:nudgeOk": lambda a: self.core.coffee.nudge_ok(self.clock()),
             "coffee:nudgeNo": lambda a: self.core.coffee.nudge_no(self.clock()),
             "coffee:add": lambda a: self.core.coffee.add(self.clock()),
+            "coffee:addAt": lambda a: self.core.coffee.add_past(a[0] if a else None, self.clock()),
             "coffee:undo": lambda a: self.core.coffee.undo(self.clock()),
             "coffee:day": lambda a: self.core.coffee.day(a[0] if a else None, self.clock()),
             "stats:coffee": lambda a: self.core.coffee.stats(self.clock()),

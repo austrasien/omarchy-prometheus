@@ -10,7 +10,7 @@ Column {
   property var w: null   // the bar widget: colors, fonts, glyphs, recent tasks
   property var p: null   // the Prometheus client
 
-  readonly property bool editing: taskField.activeFocus
+  readonly property bool editing: taskField.activeFocus || pastField.activeFocus
 
   // Every session name from the daemon's history (sessions:names): the 3
   // last used, the 4 with the most focus time, and all of them for typing.
@@ -495,6 +495,35 @@ Column {
       anchors.verticalCenter: parent.verticalCenter
       spacing: Style.space(6)
 
+      // A cup forgotten earlier: type the time it was drunk, Enter logs it.
+      TextField {
+        id: pastField
+        visible: tab.pastOpen
+        width: Style.space(70)
+        anchors.verticalCenter: parent.verticalCenter
+        placeholderText: "HH:mm"
+        foreground: w.fg
+        accent: "#c08552"
+        font.family: w.fontFamily
+        onAccepted: tab.pastCoffee()
+        Keys.onEscapePressed: tab.pastOpen = false
+      }
+      Button {
+        anchors.verticalCenter: parent.verticalCenter
+        iconText: w.historyGlyph
+        foreground: "#c08552"
+        accent: "#c08552"
+        bordered: true
+        selected: tab.pastOpen
+        tooltipText: "Log a coffee drunk earlier (type the time)"
+        onClicked: {
+          tab.pastOpen = !tab.pastOpen
+          if (tab.pastOpen) {
+            pastField.text = ""
+            pastField.forceActiveFocus()
+          }
+        }
+      }
       Button {
         visible: !!p.coffee && p.coffee.canUndo
         anchors.verticalCenter: parent.verticalCenter
@@ -698,6 +727,21 @@ Column {
   function coffee() {
     dayChart.launch(coffeeButton)
     p.act("coffee:add", [], "Coffee", tab.loadDay)
+  }
+  // "9:30", "930" or "9h30": today at that time, or yesterday when it's
+  // still to come (a cup before midnight, logged after). No bean flight.
+  property bool pastOpen: false
+  function pastCoffee() {
+    var m = pastField.text.trim().match(/^(\d{1,2})(?:[:h.]?(\d{2}))?$/)
+    if (!m || +m[1] > 23 || +(m[2] || 0) > 59) {
+      p.failed("Coffee : time not understood (HH:mm)")
+      return
+    }
+    var at = new Date()
+    at.setHours(+m[1], +(m[2] || 0), 0, 0)
+    if (at.getTime() > Date.now()) at.setDate(at.getDate() - 1)
+    pastOpen = false
+    p.act("coffee:addAt", [at.getTime()], "Coffee", tab.loadDay)
   }
   function uncoffee() {
     dayChart.takeBack()

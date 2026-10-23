@@ -60,6 +60,18 @@ class Coffee:
             self.store.add_event("coffee_timed", at, None)
         return {"success": True, **self.now(at)}
 
+    def add_past(self, at, now: int) -> dict:
+        """A cup forgotten earlier: logged at `at` (within the last 24 hours),
+        never counted as right on time."""
+        try:
+            at = int(at)
+        except (TypeError, ValueError):
+            return {"success": False, "error": "Invalid time"}
+        if at > now or now - at > 86_400_000:
+            return {"success": False, "error": "Only within the last 24 hours"}
+        self.store.db.execute("INSERT INTO coffees(at, mg) VALUES (?, ?)", (at, MG_PER_CUP))
+        return {"success": True, **self.now(now)}
+
     def undo(self, at: int) -> dict:
         row = self.store.db.execute("SELECT rowid, at FROM coffees ORDER BY at DESC LIMIT 1").fetchone()
         if row is None or at - row["at"] > UNDO_MS:
