@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "austraz.prometheus",
   "name": "Prometheus",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "author": "austrasien",
   "license": "MIT",
   "description": "Local focus sessions in the Omarchy bar: live timer next to the icon, start with a task name, pause, end with a recap notification, today's apps and the week. Talks to prometheusd (~/src/prometheus); tasks are the Obsidian daily note's todos.",
