@@ -43,6 +43,9 @@ Item {
   property var breakNudge: null   // { askedAt, reason, workedMinutes }: time for a break?
   property var breakNextAt: null  // ms when "Break?" is due in the running session
   property var coffeeNudge: null  // { reason, inBody }: the best time for a coffee has come
+  // Ended league rounds and seasons not shown yet: [{ id, kind: league |
+  // season, … }]; whoever shows one sends announce:seen.
+  property var announcements: []
   property var apps: []           // today's top five { app, seconds }
   property int trackedSeconds: 0
   // The daemon's day: it starts at dayStartHour (5 h by default), so
@@ -74,7 +77,8 @@ Item {
   signal failed(string reason)
   signal ended(var recap)
   // A short message from the daemon, for the bar (no desktop notifications).
-  signal toast(string kind, string title, string text, string rarity)
+  // `extra`: what else the toast carries, e.g. { recap } for a session end.
+  signal toast(string kind, string title, string text, string rarity, var extra)
 
   // ------------------------------------------------------------- formatting
 
@@ -138,7 +142,7 @@ Item {
     if (!wasLive) sendIdle()
 
     if (payload.event === "state") { apply(payload.state); return }
-    if (payload.event === "toast") { toast(payload.kind || "", payload.title || "", payload.text || "", payload.rarity || ""); return }
+    if (payload.event === "toast") { toast(payload.kind || "", payload.title || "", payload.text || "", payload.rarity || "", payload); return }
 
     var callback = pending[payload.id]
     if (callback) {
@@ -181,6 +185,7 @@ Item {
     assign("breakNudge", state.breakNudge || null)
     assign("breakNextAt", state.breakNextAt || null)
     assign("coffeeNudge", state.coffeeNudge || null)
+    assign("announcements", state.announcements || [])
     if (state.todayDate) assign("todayDate", state.todayDate)
     if (state.dayStartHour !== undefined) assign("dayStartHour", state.dayStartHour)
     recomputeElapsed()

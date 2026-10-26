@@ -697,6 +697,7 @@ BarWidget {
   // installed and shown, toasts and questions only show there; the bar
   // keeps the timer. Without it, the bar shows them as always.
   property bool minimapMap: false
+  property bool minimapChecked: false   // until then, nothing is announced here
   property var minimapConfig: ({})
   readonly property bool minimapShows: minimapMap && minimapConfig.visible !== false
   readonly property string minimapDir: Quickshell.env("HOME") + "/.config/omarchy/plugins/austraz.minimap"
@@ -705,8 +706,8 @@ BarWidget {
     watchChanges: true
     printErrors: false
     onFileChanged: reload()
-    onLoaded: root.minimapMap = true
-    onLoadFailed: root.minimapMap = false
+    onLoaded: { root.minimapMap = true; root.minimapChecked = true }
+    onLoadFailed: { root.minimapMap = false; root.minimapChecked = true; root.announceEnds() }
   }
   FileView {
     path: Quickshell.env("HOME") + "/.config/omarchy/minimap.json"
@@ -715,6 +716,36 @@ BarWidget {
     onFileChanged: reload()
     onLoaded: { try { root.minimapConfig = JSON.parse(text() || "{}") || ({}) } catch (e) {} }
     onLoadFailed: root.minimapConfig = ({})
+  }
+
+  // League rounds and seasons that ended: a toast here, unless the
+  // minimap shows them (it then marks them seen itself).
+  property var announced: ({})
+  Connections {
+    target: p
+    function onAnnouncementsChanged() { root.announceEnds() }
+  }
+  onMinimapShowsChanged: announceEnds()
+  function announceEnds() {
+    if (!root.minimapChecked || root.minimapShows || !p.announcements) return
+    for (var i = 0; i < p.announcements.length; i++) {
+      var a = p.announcements[i]
+      if (root.announced[a.id]) continue
+      var seen = ({})
+      for (var k in root.announced) seen[k] = true
+      seen[a.id] = true
+      root.announced = seen
+      if (a.kind === "league") {
+        var move = a.outcome === "up" ? "promoted to " + a.after.name
+          : a.outcome === "down" ? "relegated to " + a.after.name : "staying in " + a.after.name
+        showToast(a.outcome === "up" ? "ended" : a.outcome === "down" ? "absent" : "quest",
+                  "League round over", move + " · rank " + a.rank, "")
+      } else {
+        showToast(a.bars > 0 ? "won" : "quest", a.label + " is over",
+                  "grade " + (a.grade || "–") + (a.bars === 2 ? " · two-bar medal" : a.bars === 1 ? " · season medal" : ""), "")
+      }
+      p.call("announce:seen", [a.id])
+    }
   }
 
   // A toast made here (hours goal, share card, a failed action): sent

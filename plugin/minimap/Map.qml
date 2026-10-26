@@ -22,8 +22,11 @@ Item {
   Prometheus {
     id: p
     idleTimeout: 0
-    onToast: function(kind, title, text, rarity) {
-      view.enqueue({ type: "toast", kind: kind, title: title, text: text, rarity: rarity })
+    onToast: function(kind, title, text, rarity, extra) {
+      view.enqueue({ type: "toast", kind: kind, title: title, text: text, rarity: rarity,
+                     recap: extra && extra.recap ? extra.recap : null,
+                     // The pause after an unanswered "Still there?" waits for a resume.
+                     persistent: kind === "absent" && title === "Session paused" && p.paused })
     }
   }
 
@@ -73,20 +76,32 @@ Item {
 
   // ---------------------------------------------------- notifications
   //
-  // Toasts and questions wait their turn; each asks the minimap to show
-  // this map for as long as it lasts. A question still unanswered comes
-  // back every two minutes.
+  // Toasts, questions and announcements wait their turn; each asks the
+  // minimap to show this map for as long as its text takes to go round.
+  // What waits for the user stays until it is settled (the minimap's
+  // persistent notifications): a question until answered, "Session
+  // paused" until the session resumes, a league or season end until
+  // clicked. Something new passes in front, then it comes back.
 
-  readonly property int toastMs: 5000
   readonly property int questionMs: 10000
   property var queue: []
   property var current: null
 
+  function sameItem(a, b) {
+    if (!a || !b || a.type !== b.type) return false
+    if (a.type === "question") return a.question === b.question && !!a.demo === !!b.demo
+    if (a.type === "announcement") return a.data.id === b.data.id
+    return false
+  }
+
   function enqueue(item) {
-    if (item.type === "question") {
-      if (current && current.type === "question" && current.question === item.question) return
-      for (var i = 0; i < queue.length; i++)
-        if (queue[i].type === "question" && queue[i].question === item.question) return
+    if (sameItem(current, item)) return
+    for (var i = 0; i < queue.length; i++) if (sameItem(queue[i], item)) return
+    // A waiting item yields to anything new.
+    if (current && current.persistent) {
+      queue = [item].concat(queue).concat([current])
+      showNext()
+      return
     }
     queue = queue.concat([item])
     if (!current) showNext()
@@ -94,18 +109,26 @@ Item {
 
   function showNext() {
     ringText.stop()
-    if (!queue.length) { current = null; return }
+    if (!queue.length) {
+      if (current) minimap.release(view)
+      current = null
+      return
+    }
     current = queue[0]
     queue = queue.slice(1)
     ringText.text = itemText(current)
-    // As long as its text takes to go round (a question at least 10 s, to
-    // leave time to answer).
     var ms = ringText.runMs + 700
     if (current.type === "question") ms = Math.max(questionMs, ms)
     shownFor.interval = ms
     shownFor.restart()
-    minimap.notify(view, ms)
+    minimap.notify(view, ms, !!current.persistent)
     if (onScreen) ringText.start()
+  }
+
+  // Settled elsewhere (answered in the bar, resumed, seen): drop it.
+  function settle(test) {
+    queue = queue.filter(function(it) { return !test(it) })
+    if (current && test(current)) { minimap.release(view); showNext() }
   }
 
   readonly property bool onScreen: minimap.shownMap === "prometheus"
@@ -113,28 +136,23 @@ Item {
 
   function itemText(item) {
     if (item.type === "question") return questionText(item.question)
+    if (item.type === "announcement") return announcementText(item.data)
+    if (item.recap) return recapText(item)
     return item.title + (item.text ? "  ·  " + item.text : "")
   }
 
   Timer {
     id: shownFor
     onTriggered: {
-      if (!view.sticky) { view.showNext(); return }
-      // Paused: the notification stays, its text going round again, until
-      // the session resumes; others waiting pass first, then it comes back.
+      if (!view.current || !view.current.persistent) { view.showNext(); return }
+      // Waiting for the user: others first, then its text goes round again.
       if (view.queue.length) { view.queue = view.queue.concat([view.current]); view.showNext(); return }
       shownFor.restart()
-      view.minimap.notify(view, shownFor.interval)
       if (view.onScreen) ringText.start()
     }
   }
 
-  // "Session paused" stays up while the session is paused: a click resumes.
-  readonly property bool sticky: !!current && current.type === "toast" && current.kind === "absent"
-    && !current.demo && p.paused
-  onStickyChanged: if (!sticky && current && current.kind === "absent" && !current.demo && !p.paused) showNext()
-
-  // The questions, most urgent first, as the bar orders them.
+  // ---- questions, most urgent first, as the bar orders them
   readonly property var pendingQuestions: {
     var out = []
     if (p.presence) out.push("presence")
@@ -144,31 +162,67 @@ Item {
     return out
   }
   onPendingQuestionsChanged: {
-    for (var i = 0; i < pendingQuestions.length; i++) ask(pendingQuestions[i])
-    // Answered elsewhere (or expired): stop showing it.
-    if (current && current.type === "question" && !current.demo
-        && pendingQuestions.indexOf(current.question) === -1) showNext()
-  }
-  function ask(q) { enqueue({ type: "question", question: q }) }
-
-  Timer {
-    interval: 120000
-    repeat: true
-    running: view.pendingQuestions.length > 0
-    onTriggered: { for (var i = 0; i < view.pendingQuestions.length; i++) view.ask(view.pendingQuestions[i]) }
+    for (var i = 0; i < pendingQuestions.length; i++)
+      enqueue({ type: "question", question: pendingQuestions[i], persistent: true })
+    settle(function(it) {
+      return it.type === "question" && !it.demo && view.pendingQuestions.indexOf(it.question) === -1
+    })
   }
 
   function answer(ok) {
     var q = current ? current.question : ""
-    var demo = current && current.demo
-    if (!demo) {
+    if (!current.demo) {
       if (q === "presence") p.confirmPresence()
       else if (q === "challenge") { if (ok) p.acceptChallenge(); else p.declineChallenge() }
       else if (q === "break") { if (ok) p.takeBreak(); else p.breakLater() }
       else if (q === "coffee") { if (ok) p.coffeeOk(); else p.coffeeNo() }
     }
-    shownFor.stop()
-    showNext()
+    var answered = current
+    settle(function(it) { return it === answered })
+  }
+
+  // ---- "Session paused" (no answer to "Still there?") stays until resumed
+  readonly property bool paused: p.paused
+  onPausedChanged: if (!paused) settle(function(it) { return it.type === "toast" && it.kind === "absent" && it.persistent })
+
+  // ---- league and season ends, until clicked
+  onAnnouncementsChanged: {
+    for (var i = 0; i < announcements.length; i++)
+      enqueue({ type: "announcement", data: announcements[i], persistent: true })
+    settle(function(it) {
+      if (it.type !== "announcement") return false
+      for (var j = 0; j < view.announcements.length; j++) if (view.announcements[j].id === it.data.id) return false
+      return true
+    })
+  }
+  readonly property var announcements: p.announcements
+  function acknowledge() {
+    var seen = current
+    p.call("announce:seen", [seen.data.id])
+    settle(function(it) { return it === seen })
+  }
+
+  function minutes(sec) { return p.formatShort(sec) }
+  function recapText(item) {
+    var r = item.recap
+    var parts = [item.title, r.task || "Session", "+" + (r.xp || 0) + " XP"]
+    for (var i = 0; i < (r.apps || []).length; i++) parts.push(r.apps[i].app + " " + minutes(r.apps[i].seconds))
+    if (r.agents && r.agents.tokens) {
+      var k = r.agents.tokens >= 1000 ? Math.round(r.agents.tokens / 1000) + "k" : String(r.agents.tokens)
+      parts.push(k + " tokens  ·  $" + Number(r.agents.cost || 0).toFixed(2))
+    }
+    return parts.join("  ·  ")
+  }
+
+  function announcementText(a) {
+    if (a.kind === "league") {
+      var move = a.outcome === "up" ? "promoted to " + a.after.name
+        : a.outcome === "down" ? "relegated to " + a.after.name : "staying in " + a.after.name
+      return "League round over  ·  " + move + "  ·  rank " + a.rank + "  ·  " + a.xp + " XP"
+    }
+    var medal = a.bars === 2 ? "two-bar medal: the hard goal, cleared"
+      : a.bars === 1 ? "season medal: goal reached" : "no medal this time"
+    return a.label + " is over  ·  grade " + (a.grade || "–") + "  ·  " + a.xp + " XP  ·  " + medal
   }
 
   function questionText(q) {
@@ -199,6 +253,13 @@ Item {
     if (["presence", "challenge", "break", "coffee"].indexOf(a) !== -1)
       enqueue({ type: "question", question: a, demo: true })
     else if (a === "level") announceLevel(Math.max(2, level + 1))
+    else if (["promoted", "relegated", "stayed"].indexOf(a) !== -1)
+      p.call("announce:preview", ["league", a === "promoted" ? "up" : a === "relegated" ? "down" : "stay"])
+    else if (["season0", "season1", "season2"].indexOf(a) !== -1) p.call("announce:preview", ["season", a.slice(6)])
+    else if (a === "ended") enqueue({ type: "toast", kind: "ended", title: "Session ended", text: "",
+      recap: { task: "Writing the report", durationSeconds: 5100, xp: 8,
+               apps: [{ app: "Firefox", seconds: 2400 }, { app: "Code", seconds: 1800 }, { app: "Foot", seconds: 900 }],
+               agents: { tokens: 12400, cost: 0.4 } } })
     else if (a === "medal" && p.medals && p.medals.length) {
       var m = p.medals[Math.floor(Math.random() * p.medals.length)]
       p.call("toast:echo", ["medal", m.name, "+20 XP · " + (m.desc || "")])
@@ -313,7 +374,7 @@ Item {
   Item {
     id: toastFace
     anchors.fill: parent
-    readonly property var t: view.current && view.current.type === "toast" ? view.current : null
+    readonly property var t: view.current && view.current.type === "toast" && !view.current.recap ? view.current : null
     readonly property bool achievement: !!t && t.kind === "achievement"
     readonly property string rarity: achievement ? (t.rarity || "normal") : ""
     readonly property color tint: !t ? view.gold
@@ -417,7 +478,7 @@ Item {
 
     MouseArea {
       anchors.fill: parent
-      enabled: view.sticky
+      enabled: !!toastFace.t && toastFace.t.persistent
       cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
       onClicked: p.resume()
     }
@@ -474,6 +535,166 @@ Item {
         font.bold: true
         font.letterSpacing: 2
       }
+    }
+  }
+
+  // ---- a session end: the duration and the task in the middle, the apps
+  // as arcs of the edge in proportion to their time, drawn one after the
+  // other; grey when the session was put off.
+  Item {
+    id: recapFace
+    anchors.fill: parent
+    readonly property var t: view.current && view.current.recap ? view.current : null
+    readonly property var r: t ? t.recap : null
+    readonly property bool putOff: !!t && t.title === "Session put off"
+    readonly property color tint: putOff ? Qt.alpha(Color.foreground, 0.5) : view.green
+    readonly property var palette: ["#7aa2f7", "#e0af68", "#bb9af7", "#9ece6a", "#f7768e"]
+    readonly property real total: {
+      var n = 0
+      if (r && r.apps) for (var i = 0; i < r.apps.length; i++) n += r.apps[i].seconds
+      return Math.max(1, r ? Math.max(n, r.durationSeconds || 0) : 1)
+    }
+    property real drawn: 0
+    visible: t !== null
+    onTChanged: if (t) { drawn = 0; draw.restart() }
+    NumberAnimation { id: draw; target: recapFace; property: "drawn"; from: 0; to: 1; duration: 1400; easing.type: Easing.OutCubic }
+
+    Rectangle {
+      anchors.fill: parent
+      radius: width / 2
+      color: Qt.alpha(recapFace.tint, 0.12)
+    }
+
+    // One arc per app, end to end from noon, revealed as `drawn` grows.
+    Repeater {
+      model: recapFace.r && recapFace.r.apps ? recapFace.r.apps : []
+      delegate: Shape {
+        required property var modelData
+        required property int index
+        readonly property real before: {
+          var n = 0
+          for (var i = 0; i < index; i++) n += recapFace.r.apps[i].seconds
+          return 360 * n / recapFace.total
+        }
+        readonly property real sweep: 360 * modelData.seconds / recapFace.total
+        anchors.fill: parent
+        preferredRendererType: Shape.CurveRenderer
+        ShapePath {
+          strokeColor: recapFace.putOff ? Qt.alpha(Color.foreground, 0.35) : recapFace.palette[index % recapFace.palette.length]
+          strokeWidth: 5
+          fillColor: "transparent"
+          capStyle: ShapePath.FlatCap
+          PathAngleArc {
+            centerX: view.w / 2; centerY: view.w / 2
+            radiusX: view.w / 2 - 3; radiusY: radiusX
+            startAngle: -90 + before
+            sweepAngle: Math.max(0, Math.min(sweep - 1.5, 360 * recapFace.drawn - before))
+          }
+        }
+      }
+    }
+
+    Column {
+      anchors.centerIn: parent
+      width: view.w * 0.62
+      spacing: 1
+      Text {
+        anchors.horizontalCenter: parent.horizontalCenter
+        text: recapFace.r ? p.formatShort(recapFace.r.durationSeconds || 0) : ""
+        color: recapFace.putOff ? Qt.alpha(Color.foreground, 0.6) : Color.foreground
+        font.family: Style.fontFamily
+        font.pixelSize: Math.round(view.w * 0.13)
+        font.bold: true
+      }
+      Text {
+        width: parent.width
+        horizontalAlignment: Text.AlignHCenter
+        elide: Text.ElideRight
+        text: recapFace.putOff ? "put off" : (recapFace.r ? (recapFace.r.task || "Session") : "")
+        color: recapFace.tint
+        font.family: Style.fontFamily
+        font.pixelSize: Math.round(view.w * 0.065)
+      }
+    }
+  }
+
+  // ---- a league round or a season over: chevrons for the league (green
+  // up, red down, grey crossing when staying), the season's medal (one or
+  // two bars, dull when not won). Clicked, it is marked as seen.
+  Item {
+    id: endFace
+    anchors.fill: parent
+    readonly property var a: view.current && view.current.type === "announcement" ? view.current.data : null
+    readonly property bool league: !!a && a.kind === "league"
+    readonly property color tint: !a ? view.gold
+      : league ? (a.outcome === "up" ? view.green : a.outcome === "down" ? view.red : Qt.alpha(Color.foreground, 0.6))
+      : (a.bars > 0 ? view.gold : Qt.alpha(Color.foreground, 0.6))
+    visible: a !== null
+
+    Rectangle {
+      anchors.fill: parent
+      radius: width / 2
+      color: Qt.alpha(endFace.league && endFace.a ? endFace.a.after.color : endFace.tint, 0.12)
+      border.width: 3
+      border.color: Qt.alpha(endFace.tint, 0.7)
+    }
+
+    Column {
+      anchors.centerIn: parent
+      spacing: 4
+
+      // League: promoted, relegated…
+      Chevrons {
+        anchors.horizontalCenter: parent.horizontalCenter
+        visible: endFace.league && endFace.a.outcome !== "stay"
+        up: !!endFace.a && endFace.a.outcome === "up"
+        color: endFace.tint
+        glyphSize: view.w * 0.2
+      }
+      // … or staying: grey chevrons crossing, one stream from each side.
+      Item {
+        anchors.horizontalCenter: parent.horizontalCenter
+        visible: endFace.league && endFace.a.outcome === "stay"
+        width: view.w * 0.5
+        height: view.w * 0.2
+        Chevrons {
+          anchors.centerIn: parent
+          rotation: 90
+          up: true
+          color: Qt.alpha(Color.foreground, 0.55)
+          glyphSize: view.w * 0.13
+        }
+        Chevrons {
+          anchors.centerIn: parent
+          rotation: -90
+          up: true
+          color: Qt.alpha(Color.foreground, 0.55)
+          glyphSize: view.w * 0.13
+        }
+      }
+      // Season: its medal.
+      SeasonMedal {
+        anchors.horizontalCenter: parent.horizontalCenter
+        visible: !!endFace.a && !endFace.league
+        bars: endFace.a && endFace.a.bars > 0 ? endFace.a.bars : 1
+        won: !!endFace.a && endFace.a.bars > 0
+        colors: endFace.a ? endFace.a.colors : null
+        size: view.w / 40
+      }
+      Text {
+        anchors.horizontalCenter: parent.horizontalCenter
+        text: !endFace.a ? "" : endFace.league ? endFace.a.after.name : (endFace.a.grade || "")
+        color: endFace.league && endFace.a ? endFace.a.after.color : endFace.tint
+        font.family: Style.fontFamily
+        font.pixelSize: Math.round(view.w * 0.09)
+        font.bold: true
+      }
+    }
+
+    MouseArea {
+      anchors.fill: parent
+      cursorShape: Qt.PointingHandCursor
+      onClicked: view.acknowledge()
     }
   }
 
@@ -573,6 +794,8 @@ Item {
     visible: view.current !== null
     color: !view.current ? Color.foreground
       : view.current.type === "question" ? view.questionColor(view.current.question)
+      : view.current.type === "announcement" ? endFace.tint
+      : view.current.recap ? recapFace.tint
       : toastFace.ink
   }
 }

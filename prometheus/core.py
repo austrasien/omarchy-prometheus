@@ -74,6 +74,9 @@ class Core:
         self.locked = False
         self.last_resume_at = 0       # a backdated auto-pause never reaches before this
         self.presence_since = None    # last proof of presence for the running session
+        self._announce_day = None     # announcements, recomputed once a day or when seen
+        self._announce = []
+        self._announce_demo = []      # announce:preview samples, never stored
         self.presence_asked_at = None
         self._load_presence()
         # The world around a session; replaced in tests.
@@ -340,6 +343,7 @@ class Core:
                 "durationSeconds": seconds,
                 "apps": apps[:3],
                 "agents": A_.window(self.store, s["started_at"], at + 1),
+                "xp": seconds // FOCUS_SECONDS_PER_XP + self.store.session_bonus_xp(s["id"]),
             },
         }
 
@@ -403,7 +407,99 @@ class Core:
             "breakNudge": self.break_state(at),
             "breakNextAt": self.break_next_at(at),
             "coffeeNudge": self.coffee.nudge(at, self._working()),
+            "announcements": self.announcements(at),
         }
+
+    # ------------------------------------------------------- announcements
+    # The end of a league round or of a season, kept in the state until a
+    # client has shown it (announce:seen): the minimap's Prometheus map when
+    # there is one, else the bar. Nothing is announced for what ended before
+    # this existed: the first look only records where things stand.
+
+    def announcements(self, at: int) -> list[dict]:
+        day = T.date_str(at)
+        if self._announce_day != day:
+            self._announce_day = day
+            self._announce = self._ended_periods(at)
+        return self._announce + self._announce_demo
+
+    @staticmethod
+    def _league_item(id_: str, before: int, after: int, rank: int, xp: int) -> dict:
+        return {"id": id_, "kind": "league", "outcome": "up" if after > before else "down" if after < before else "stay",
+                "before": {"name": C.LEAGUES[before], "color": C.LEAGUE_COLORS[before]},
+                "after": {"name": C.LEAGUES[after], "color": C.LEAGUE_COLORS[after]},
+                "rank": rank, "xp": xp}
+
+    @staticmethod
+    def _season_item(id_: str, season: dict, colors: dict) -> dict:
+        return {"id": id_, "kind": "season", "label": season["label"], "bars": season["bars"],
+                "grade": season["grade"], "xp": season["xp"], "goal": season["goal"],
+                "hardGoal": season["hardGoal"], "colors": colors}
+
+    def _ended_periods(self, at: int) -> list[dict]:
+        ledger = C.Ledger(self.store, at)
+        out = []
+        rounds = C.leagues(ledger)["history"]
+        if rounds:
+            last = rounds[-1]
+            seen = self.store.get_setting("announced:league")
+            if seen is None:
+                self.store.set_setting("announced:league", last["week"])
+            elif last["week"] > seen:
+                out.append(self._league_item("league:" + last["week"], last["before"], last["after"],
+                                             last["rank"], last["xp"]))
+        ended = [x for x in C.seasons(ledger) if not x["running"]]
+        if ended:
+            last = ended[-1]
+            seen = self.store.get_setting("announced:season")
+            if seen is None:
+                self.store.set_setting("announced:season", last["start"])
+            elif last["start"] > seen:
+                medal = next((m for m in C.season_medals(self.store) if m["season"] == last["key"]), None)
+                colors = ({"bg": medal["color"], "dot": medal["dot"], "edge": medal["edge"]} if medal
+                          else C.pending_colors(self.store, last["key"]))
+                out.append(self._season_item("season:" + last["start"], last, colors))
+        return out
+
+    def announce_seen(self, id_) -> dict:
+        id_ = str(id_ or "")
+        kind, _, value = id_.partition(":")
+        if kind == "demo":
+            self._announce_demo = [a for a in self._announce_demo if a["id"] != id_]
+        elif kind == "league" and value:
+            self.store.set_setting("announced:league", value)
+        elif kind == "season" and value:
+            self.store.set_setting("announced:season", value)
+        else:
+            raise Refused("Unknown announcement")
+        self._announce_day = None
+        return {"success": True}
+
+    def announce_preview(self, kind, variant, at: int) -> dict:
+        """A sample announcement (to see one): `league` up, down or stay;
+        `season` with 0, 1 or 2 bars."""
+        n = len(self._announce_demo) + 1
+        if kind == "league":
+            here = C.leagues(C.Ledger(self.store, at))["current"]["league"]
+            top = len(C.LEAGUES) - 1
+            if variant == "up":
+                before = min(here, top - 1)
+                after, rank = before + 1, 2
+            elif variant == "down":
+                before = max(here, 1)
+                after, rank = before - 1, 9
+            else:
+                before = after = here
+                rank = 5
+            self._announce_demo.append(self._league_item(f"demo:{n}", before, after, rank, 640))
+        elif kind == "season":
+            bars = int(variant) if str(variant) in ("0", "1", "2") else 2
+            season = {"label": "Summer 2026", "bars": bars, "grade": {0: "C", 1: "B", 2: "A"}[bars],
+                      "xp": {0: 2100, 1: 3300, 2: 4600}[bars], "goal": 3250, "hardGoal": 4550}
+            self._announce_demo.append(self._season_item(f"demo:{n}", season, C.pending_colors(self.store, "2026-summer")))
+        else:
+            raise Refused("league or season")
+        return {"success": True}
 
     # --------------------------------------------------------------- goals
 

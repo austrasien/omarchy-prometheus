@@ -231,6 +231,12 @@ an achievement rarity, `medal`, `quest`, `won`, `goal`, `ended`, `absent`,
 shows green chevrons; a medal shows its ribbon; "Session paused" stays up
 while the session is paused (a click resumes); with no session, a click on
 the map opens the bar's Prometheus menu to start one.
+Questions, the paused session and league or season ends stay up until
+settled (answered, resumed, clicked). A session end shows its duration
+with the apps as arcs of the edge. When a league round or a season ends,
+the next start announces it once: in the minimap when it is there, else as
+a bar toast. Demos: `ended`, `promoted`, `relegated`, `stayed`, `season0`,
+`season1`, `season2`.
 
 Obsidian suggestions need the widget's `vaultPath` setting and the
 `obsidian-daily-qs` helper (`journalBin`); without them, the tasks tab works
@@ -265,6 +271,8 @@ bar (session ended, challenge won).
 | `tasks:reopen` | `[id]` | Back to the list, during a session |
 | `tasks:delete` | `[id]` | Drop an open task without its XP |
 | `toast:preview` | `[rarity\|kind]` | Show a sample toast: an achievement of a rarity, or `ended`, `absent`, `quest`, `medal`, `won`, `goal`, `error` |
+| `announce:seen` | `[id]` | Mark a league or season end as shown (it stays in the state until then) |
+| `announce:preview` | `[league\|season, up\|down\|stay\|0\|1\|2]` | A sample league or season end |
 | `toast:echo` | `[kind, title, text?, rarity?]` | Send a toast made by a client (the bar's hours goal, a share card) back to every client |
 | `share:get` | | What the share card shows |
 | `sessions:names` | | Session names: the 3 last used, the 4 most worked on, and all with focus time |

@@ -117,6 +117,8 @@ class Daemon:
             "tasks:delete": lambda a: self.core.task_delete(a[0] if a else None),
             "toast:preview": self._toast_preview,
             "toast:echo": self._toast_echo,
+            "announce:seen": lambda a: self.core.announce_seen(a[0] if a else None),
+            "announce:preview": lambda a: self.core.announce_preview(a[0] if a else None, a[1] if len(a) > 1 else None, self.clock()),
             "leagues:get": lambda a: self.core.leagues(self.clock()),
             "seasons:get": lambda a: self.core.seasons(self.clock()),
             "leaderboard:get": lambda a: self.core.leaderboard(a[0] if a else "days", self.clock()),
@@ -144,7 +146,7 @@ class Daemon:
         burnt = (r.get("agents") or {}).get("tokens", 0)
         if burnt:                       # agents at work meanwhile
             text += f" · {agents.short(burnt)} tokens · ${r['agents']['cost']:.2f}"
-        self.toast("ended", self.END_REASONS[reason], text)
+        self.toast("ended", self.END_REASONS[reason], text, extra={"recap": r})
         return reply
 
     def _abandon(self, args) -> dict:
@@ -393,10 +395,13 @@ class Daemon:
     # desktop notifications. Lost if no bar is connected, which is fine:
     # they only echo what the state already holds.
 
-    def toast(self, kind: str, title: str, text: str = "", rarity: str | None = None) -> None:
+    def toast(self, kind: str, title: str, text: str = "", rarity: str | None = None,
+              extra: dict | None = None) -> None:
         payload = {"event": "toast", "kind": kind, "title": title, "text": text}
         if rarity:
             payload["rarity"] = rarity
+        if extra:
+            payload.update(extra)
         line = self._line(payload)
         for w in list(self.clients):
             try:
