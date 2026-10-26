@@ -1,0 +1,7 @@
+{
+  "id": "prometheus",
+  "name": "Prometheus",
+  "icon": "󰈸",
+  "entry": "Map.qml",
+  "order": 50
+}

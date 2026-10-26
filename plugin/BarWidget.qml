@@ -186,7 +186,7 @@ BarWidget {
       root.refreshGoal()
       if (panelLoader.item) Qt.callLater(panelLoader.item.focusContent)
     }
-    onFailed: function(reason) { root.showToast("error", reason, "") }
+    onFailed: function(reason) { root.localToast("error", reason, "") }
     onToast: function(kind, title, text, rarity) { root.showToast(kind, title, text, rarity) }
   }
 
@@ -212,7 +212,7 @@ BarWidget {
     if (goalProgress < 1 || goalKey === "" || settings.goalNotifiedFor === goalKey) return
     root.writeSetting("goalNotifiedFor", goalKey)
     var label = goal.goal.period === "day" ? "Daily" : goal.goal.period === "week" ? "Weekly" : "Monthly"
-    root.showToast("goal", label + " goal reached", goal.goal.hours + " h of focus")
+    root.localToast("goal", label + " goal reached", goal.goal.hours + " h of focus")
   }
 
   Connections {
@@ -348,7 +348,7 @@ BarWidget {
   // white and green; at 4 min the daemon pauses the session.
   readonly property color presenceAmber: "#ffb020"
 
-  readonly property bool presenceWanted: !!p.presence && !root.vertical
+  readonly property bool presenceWanted: !!p.presence && !root.vertical && !root.minimapShows
   property real presenceShown: presenceWanted ? 1 : 0
   Behavior on presenceShown { NumberAnimation { duration: 450; easing.type: Easing.OutCubic } }
 
@@ -556,7 +556,8 @@ BarWidget {
   // urgent first: "Still there?" (the session pauses without an answer),
   // the challenge offer (it expires), "Break?", then "Coffee?". The others
   // wait their turn.
-  readonly property string pillTurn: p.presence ? "presence"
+  readonly property string pillTurn: root.minimapShows ? ""
+    : p.presence ? "presence"
     : p.challengeOffered ? "challenge"
     : p.breakNudge ? "break"
     : p.coffeeNudge ? "coffee" : ""
@@ -692,7 +693,40 @@ BarWidget {
   property var toastQueue: []
   property var currentToast: null   // { kind, title, text }
 
+  // ---- the minimap (austraz.minimap) with its Prometheus map: when it is
+  // installed and shown, toasts and questions only show there; the bar
+  // keeps the timer. Without it, the bar shows them as always.
+  property bool minimapMap: false
+  property var minimapConfig: ({})
+  readonly property bool minimapShows: minimapMap && minimapConfig.visible !== false
+  readonly property string minimapDir: Quickshell.env("HOME") + "/.config/omarchy/plugins/austraz.minimap"
+  FileView {
+    path: root.minimapDir + "/maps/prometheus/map.json"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.minimapMap = true
+    onLoadFailed: root.minimapMap = false
+  }
+  FileView {
+    path: Quickshell.env("HOME") + "/.config/omarchy/minimap.json"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: { try { root.minimapConfig = JSON.parse(text() || "{}") || ({}) } catch (e) {} }
+    onLoadFailed: root.minimapConfig = ({})
+  }
+
+  // A toast made here (hours goal, share card, a failed action): sent
+  // through the daemon, which hands it back to every client, so the
+  // minimap's Prometheus map shows it too. Shown directly when offline.
+  function localToast(kind, title, text, rarity) {
+    if (p.live) p.call("toast:echo", [kind, title, text || "", rarity || ""])
+    else showToast(kind, title, text, rarity)
+  }
+
   function showToast(kind, title, text, rarity) {
+    if (root.minimapShows) return
     toastQueue = toastQueue.concat([{ kind: kind, title: title, text: text, rarity: rarity || "" }])
     if (!currentToast) nextToast()
   }
@@ -814,7 +848,7 @@ BarWidget {
     id: encodeProc
     onExited: function(code) {
       if (code === 0) root.askWhereToSave()
-      else root.showToast("error", "Could not make the animated card", "ffmpeg failed", "")
+      else root.localToast("error", "Could not make the animated card", "ffmpeg failed", "")
     }
   }
   property string shareTarget: ""
@@ -845,8 +879,8 @@ BarWidget {
   Process {
     id: copyShare
     onExited: function(code) {
-      if (code === 0) root.showToast("ended", "Card saved", root.shareTarget, "")
-      else root.showToast("error", "Could not save the card", root.shareTarget, "")
+      if (code === 0) root.localToast("ended", "Card saved", root.shareTarget, "")
+      else root.localToast("error", "Could not save the card", root.shareTarget, "")
     }
   }
 
@@ -1085,10 +1119,10 @@ BarWidget {
       // ffmpeg folds the frames into an animated PNG that loops.
       function share() {
         p.call("share:get", [], function(ok, d) {
-          if (!ok || !d || !d.success) { root.showToast("error", "Could not build the card", "", ""); return }
+          if (!ok || !d || !d.success) { root.localToast("error", "Could not build the card", "", ""); return }
           shareCard.info = d
           root.shareFormat = d.format === "apng" ? "apng" : "gif"
-          root.showToast("ended", "Building your card", "a few seconds", "")
+          root.localToast("ended", "Building your card", "a few seconds", "")
           Qt.callLater(function() { panel.grabFrame(0) })
         })
       }
@@ -1100,7 +1134,7 @@ BarWidget {
         Qt.callLater(function() {
           shareCard.grabToImage(function(result) {
             if (!result.saveToFile(root.shareFrame(k))) {
-              root.showToast("error", "Could not render the card", "", "")
+              root.localToast("error", "Could not render the card", "", "")
               return
             }
             panel.grabFrame(k + 1)

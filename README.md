@@ -205,6 +205,30 @@ The service file expects the checkout at `~/src/prometheus`; edit
 `PROMETHEUS_LOG` override the defaults. Starting a second daemon fails
 instead of taking the socket over.
 
+### With the minimap
+
+With [omarchy-minimap](https://github.com/austrasien/omarchy-minimap)
+installed, link the Prometheus map into it:
+
+```bash
+ln -s ~/.config/omarchy/plugins/austraz.prometheus/minimap \
+  ~/.config/omarchy/plugins/austraz.minimap/maps/prometheus
+omarchy-restart-shell
+```
+
+Chosen in the minimap's list, the map shows the session like the bar:
+timer, task, a ring to the next XP or the challenge's countdown; a click
+pauses or resumes. Whatever the minimap shows, toasts (achievements with
+their rarity shine, medals, quests, challenges, session ends, the hours
+goal, errors) and questions ("Still there?", the challenge offer,
+"Break?", "Coffee?", answered by clicking a half of the disc) come up
+there as minimap notifications, their text running round the edge. While
+the map is installed and the minimap shown, the bar leaves toasts and
+questions to it and keeps the timer; without the minimap it shows them as
+before. `omarchy-shell austraz.minimap demo prometheus <kind>` shows one:
+an achievement rarity, `medal`, `quest`, `won`, `goal`, `ended`, `absent`,
+`error`, `presence`, `challenge`, `break` or `coffee`.
+
 Obsidian suggestions need the widget's `vaultPath` setting and the
 `obsidian-daily-qs` helper (`journalBin`); without them, the tasks tab works
 without suggestions.
@@ -237,7 +261,8 @@ bar (session ended, challenge won).
 | `tasks:complete` | `[id]` | Only during a session |
 | `tasks:reopen` | `[id]` | Back to the list, during a session |
 | `tasks:delete` | `[id]` | Drop an open task without its XP |
-| `toast:preview` | `[rarity]` | Show a sample achievement unlock (to see the capsule) |
+| `toast:preview` | `[rarity\|kind]` | Show a sample toast: an achievement of a rarity, or `ended`, `absent`, `quest`, `medal`, `won`, `goal`, `error` |
+| `toast:echo` | `[kind, title, text?, rarity?]` | Send a toast made by a client (the bar's hours goal, a share card) back to every client |
 | `share:get` | | What the share card shows |
 | `sessions:names` | | Session names: the 3 last used, the 4 most worked on, and all with focus time |
 | `break:take` / `break:later` | | Answer "Break?": pause the session, or ask again in 20 min |

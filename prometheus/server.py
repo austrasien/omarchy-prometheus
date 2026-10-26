@@ -116,6 +116,7 @@ class Daemon:
             "tasks:reopen": lambda a: self.core.task_reopen(a[0] if a else None),
             "tasks:delete": lambda a: self.core.task_delete(a[0] if a else None),
             "toast:preview": self._toast_preview,
+            "toast:echo": self._toast_echo,
             "leagues:get": lambda a: self.core.leagues(self.clock()),
             "seasons:get": lambda a: self.core.seasons(self.clock()),
             "leaderboard:get": lambda a: self.core.leaderboard(a[0] if a else "days", self.clock()),
@@ -151,10 +152,40 @@ class Daemon:
         self.toast("absent", "Challenge abandoned", f"-{reply['penalty']} XP")
         return reply
 
+    RARITIES = ("normal", "common", "rare", "epic", "legendary")
+    PREVIEWS = {
+        "ended": ("Session ended", "Writing the report · 1 h 25"),
+        "absent": ("Session paused", 'no answer to "Still there?"'),
+        "quest": ("Quest complete", "Tidy the garage · +30 XP"),
+        "medal": ("Night Owl", "+20 XP · The moon is your desk lamp."),
+        "won": ("Challenge won", "+15 XP"),
+        "goal": ("Daily goal reached", "4 h of focus"),
+        "error": ("Could not save the card", ""),
+    }
+
     def _toast_preview(self, args) -> dict:
-        """Show a sample achievement toast of a rarity (to see what one looks like)."""
-        rarity = args[0] if args and args[0] in ("normal", "common", "rare", "epic", "legendary") else "legendary"
+        """Show a sample toast, to see what one looks like: an achievement of
+        a rarity (`toast:preview rare`, the default being legendary) or any
+        other kind (`toast:preview medal`)."""
+        kind = args[0] if args else "legendary"
+        if kind in self.PREVIEWS:
+            self.toast(kind, *self.PREVIEWS[kind])
+            return {"success": True}
+        rarity = args[1] if kind == "achievement" and len(args) > 1 else kind
+        rarity = rarity if rarity in self.RARITIES else "legendary"
         self.toast("achievement", "Preview Achievement", "+42 XP · This is what winning feels like.", rarity)
+        return {"success": True}
+
+    def _toast_echo(self, args) -> dict:
+        """A toast made by a client (the bar's hours goal, a share card),
+        sent back to every client so they all show it."""
+        fields = [str(a) for a in args[:4]]
+        if not fields or not fields[0] or len(fields) < 2:
+            return {"success": False, "error": "toast:echo needs a kind and a title"}
+        kind, title = fields[0], fields[1]
+        text = fields[2] if len(fields) > 2 else ""
+        rarity = fields[3] if len(fields) > 3 and fields[3] in self.RARITIES else None
+        self.toast(kind, title, text, rarity)
         return {"success": True}
 
     QUEST_DONE = {"daily": "Daily quest done", "short": "Quest complete", "long": "Long quest complete"}

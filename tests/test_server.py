@@ -85,6 +85,30 @@ class ServerTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(row["end_reason"], "procrastinated")
         writer.close()
 
+    async def test_toast_preview_and_echo(self):
+        reader, writer, _ = await self.connect()
+
+        async def next_toast():
+            while True:
+                msg = json.loads(await asyncio.wait_for(reader.readline(), 2))
+                if msg.get("event") == "toast":
+                    return msg
+
+        writer.write((json.dumps({"id": 1, "channel": "toast:preview", "args": ["medal"]}) + "\n").encode())
+        await writer.drain()
+        self.assertEqual((await next_toast())["kind"], "medal")
+        writer.write((json.dumps({"id": 2, "channel": "toast:preview", "args": ["rare"]}) + "\n").encode())
+        await writer.drain()
+        t = await next_toast()
+        self.assertEqual((t["kind"], t["rarity"]), ("achievement", "rare"))
+        writer.write((json.dumps({"id": 3, "channel": "toast:echo", "args": ["goal", "Daily goal reached", "4 h"]}) + "\n").encode())
+        await writer.drain()
+        t = await next_toast()
+        self.assertEqual((t["kind"], t["title"], t["text"]), ("goal", "Daily goal reached", "4 h"))
+        bad = await self.call(reader, writer, 4, "toast:echo", ["goal"])
+        self.assertFalse(bad["data"]["success"])
+        writer.close()
+
     async def test_errors(self):
         reader, writer, _ = await self.connect()
         bad = await self.call(reader, writer, 1, "nope")
