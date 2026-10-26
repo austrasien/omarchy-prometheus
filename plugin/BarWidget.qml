@@ -256,6 +256,19 @@ BarWidget {
   }
   function close() { panelOpen = false }
   function togglePanel() { panelOpen ? close() : open() }
+
+  // `omarchy-shell austraz.prometheus startSession` (the minimap's Start):
+  // the panel on the Session tab, its name field focused, so the session
+  // gets a name before it starts. With one already running, just the panel.
+  IpcHandler {
+    target: "austraz.prometheus"
+    function startSession(): string {
+      if (!p.live) return "offline"
+      if (!p.session) root.tab = "session"
+      root.open()
+      return "ok"
+    }
+  }
   function closeForPopoutSwitch() {
     popoutSwitchClosing = true
     close()

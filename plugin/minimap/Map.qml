@@ -376,7 +376,8 @@ Item {
 
     // Hovered with no session running (none yet, or paused), the disc
     // splits like a question: a coffee on the left, start or resume on the
-    // right. The halves slide in from their sides and light up under the
+    // right (a new session opens the bar's panel to be named first). The
+    // halves slide in from their sides and light up under the
     // pointer; a coffee taken bounces its cup with "+1".
     readonly property bool offering: p.live && (!p.session || p.paused)
     readonly property bool hovered: offering && (coffeeArea.containsMouse || goArea.containsMouse)
@@ -510,7 +511,12 @@ Item {
       enabled: status.offering
       hoverEnabled: true
       cursorShape: Qt.PointingHandCursor
-      onClicked: p.session ? p.resume() : p.start("")
+      // A new session is named first: the bar's panel opens on its name
+      // field. A paused one just resumes.
+      onClicked: {
+        if (p.session) p.resume()
+        else Quickshell.execDetached(["omarchy-shell", "austraz.prometheus", "startSession"])
+      }
     }
   }
 
