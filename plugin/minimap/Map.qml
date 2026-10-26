@@ -362,16 +362,155 @@ Item {
       }
     }
 
-    // Click: pause or resume the running session; with none, the bar's
-    // Prometheus menu, to name and start one.
+    // Click: pause the running session. With none running (none yet, or
+    // paused) the halves below take the clicks instead.
     MouseArea {
       anchors.fill: parent
-      enabled: p.live
+      enabled: p.live && !status.offering
       cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
       onClicked: {
         if (p.session) p.toggle()
         else Quickshell.execDetached(["omarchy-shell", "shell", "summon", "austraz.prometheus", "{}"])
       }
+    }
+
+    // Hovered with no session running (none yet, or paused), the disc
+    // splits like a question: a coffee on the left, start or resume on the
+    // right. The halves slide in from their sides and light up under the
+    // pointer; a coffee taken bounces its cup with "+1".
+    readonly property bool offering: p.live && (!p.session || p.paused)
+    readonly property bool hovered: offering && (coffeeArea.containsMouse || goArea.containsMouse)
+    property real reveal: hovered ? 1 : 0
+    Behavior on reveal { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+    property bool poured: false
+    Timer { id: pourTimer; interval: 1100; onTriggered: status.poured = false }
+
+    Item {
+      anchors.fill: parent
+      visible: status.reveal > 0
+
+      Rectangle {
+        anchors.fill: parent
+        radius: width / 2
+        color: Qt.darker(Color.background, 1.15)
+        opacity: status.reveal
+      }
+
+      // Left: coffee.
+      Item {
+        x: -view.w / 2 * (1 - status.reveal)
+        width: view.w / 2; height: view.w
+        opacity: status.reveal
+        Rectangle {
+          anchors.fill: parent
+          color: Qt.alpha(view.coffeeBrown, coffeeArea.containsMouse ? 0.3 : 0.1)
+          Behavior on color { ColorAnimation { duration: 120 } }
+        }
+        Column {
+          anchors.right: parent.right
+          anchors.rightMargin: view.w * 0.07
+          anchors.verticalCenter: parent.verticalCenter
+          spacing: view.w * 0.015
+          Text {
+            id: cup
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: view.glyph(0xF0176)
+            color: coffeeArea.containsMouse || status.poured ? view.coffeeBrown : Qt.alpha(Color.foreground, 0.75)
+            font.family: Style.fontFamily
+            font.pixelSize: view.w * 0.15
+            SequentialAnimation {
+              id: pourBounce
+              NumberAnimation { target: cup; property: "scale"; to: 1.35; duration: 90; easing.type: Easing.OutQuad }
+              NumberAnimation { target: cup; property: "scale"; to: 1; duration: 380; easing.type: Easing.OutBack; easing.overshoot: 3 }
+            }
+          }
+          Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: status.poured ? "+1" : "Coffee"
+            color: coffeeArea.containsMouse || status.poured ? view.coffeeBrown : Qt.alpha(Color.foreground, 0.75)
+            font.family: Style.fontFamily
+            font.pixelSize: Math.round(view.w * 0.075)
+            font.bold: true
+          }
+          Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            visible: !!p.coffee && p.coffee.cupsToday > 0
+            text: p.coffee ? p.coffee.cupsToday + " today" : ""
+            color: Qt.alpha(Color.foreground, 0.5)
+            font.family: Style.fontFamily
+            font.pixelSize: Math.round(view.w * 0.055)
+          }
+        }
+      }
+
+      // Right: start a session, or resume the paused one.
+      Item {
+        x: view.w / 2 + view.w / 2 * (1 - status.reveal)
+        width: view.w / 2; height: view.w
+        opacity: status.reveal
+        Rectangle {
+          anchors.fill: parent
+          color: Qt.alpha(view.green, goArea.containsMouse ? 0.3 : 0.1)
+          Behavior on color { ColorAnimation { duration: 120 } }
+        }
+        Column {
+          anchors.left: parent.left
+          anchors.leftMargin: view.w * 0.07
+          anchors.verticalCenter: parent.verticalCenter
+          spacing: view.w * 0.015
+          Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: view.glyph(0xF040A)
+            color: goArea.containsMouse ? view.green : Qt.alpha(Color.foreground, 0.75)
+            font.family: Style.fontFamily
+            font.pixelSize: view.w * 0.15
+          }
+          Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: p.session ? "Resume" : "Start"
+            color: goArea.containsMouse ? view.green : Qt.alpha(Color.foreground, 0.75)
+            font.family: Style.fontFamily
+            font.pixelSize: Math.round(view.w * 0.075)
+            font.bold: true
+          }
+          Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            visible: !!p.session
+            text: p.session ? p.formatShort(p.elapsed) : ""
+            color: Qt.alpha(Color.foreground, 0.5)
+            font.family: Style.fontFamily
+            font.pixelSize: Math.round(view.w * 0.055)
+          }
+        }
+      }
+
+      Rectangle {
+        x: view.w / 2 - 0.5; y: view.w * 0.3; width: 1; height: view.w * 0.4
+        color: Qt.alpha(Color.foreground, 0.25)
+        opacity: status.reveal
+      }
+    }
+
+    MouseArea {
+      id: coffeeArea
+      x: 0; width: view.w / 2; height: view.w
+      enabled: status.offering
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onClicked: {
+        p.addCoffee()
+        status.poured = true
+        pourTimer.restart()
+        pourBounce.restart()
+      }
+    }
+    MouseArea {
+      id: goArea
+      x: view.w / 2; width: view.w / 2; height: view.w
+      enabled: status.offering
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onClicked: p.session ? p.resume() : p.start("")
     }
   }
 

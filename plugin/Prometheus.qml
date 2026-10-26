@@ -263,6 +263,7 @@ Item {
   function breakLater() { act("break:later", [], "Break") }
   function coffeeOk() { act("coffee:nudgeOk", [], "Coffee") }
   function coffeeNo() { act("coffee:nudgeNo", [], "Coffee") }
+  function addCoffee(then) { act("coffee:add", [], "Coffee", then) }
 
   // ------------------------------------------------------------------ idle
 
