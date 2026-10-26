@@ -1117,7 +1117,7 @@ BarWidget {
       // Arm it one tick after creation instead.
       property bool armed: false
       open: armed && root.panelOpen
-      centerOnBar: true
+      centerOnBar: false  // under the icon, wherever it sits (centre, tray drawer)
       focusTarget: keyCatcher
       // At least as wide as the tab row, so no tab is clipped.
       contentWidth: panel.fittedContentWidth(Math.max(Style.space(380), Math.max(tabRow.implicitWidth, tabRow2.implicitWidth) + panel.padding * 2 + Style.space(16)))
