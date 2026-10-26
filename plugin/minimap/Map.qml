@@ -483,6 +483,17 @@ Item {
       onClicked: p.resume()
     }
 
+    // A medal: its own ribbon, as on the bar's placard, in the middle.
+    Ribbon {
+      anchors.centerIn: parent
+      visible: !!toastFace.medal
+      size: view.w / 60
+      color: toastFace.medal ? toastFace.medal.color : "#555"
+      dot: toastFace.medal ? toastFace.medal.dot : "white"
+      dots: toastFace.medal ? (toastFace.medal.dots || 1) : 1
+      edges: toastFace.medal ? (toastFace.medal.edges || "none") : "none"
+    }
+
     Column {
       anchors.centerIn: parent
       width: view.w * 0.8
@@ -495,16 +506,6 @@ Item {
         color: toastFace.ink
         font.family: Style.fontFamily
         font.pixelSize: view.w * 0.26
-      }
-      // A medal: its own ribbon, as on the bar's placard.
-      Ribbon {
-        anchors.horizontalCenter: parent.horizontalCenter
-        visible: !!toastFace.medal
-        size: view.w / 60
-        color: toastFace.medal ? toastFace.medal.color : "#555"
-        dot: toastFace.medal ? toastFace.medal.dot : "white"
-        dots: toastFace.medal ? (toastFace.medal.dots || 1) : 1
-        edges: toastFace.medal ? (toastFace.medal.edges || "none") : "none"
       }
       // Level up: green chevrons streaming up.
       Chevrons {
@@ -672,23 +673,37 @@ Item {
           glyphSize: view.w * 0.13
         }
       }
-      // Season: its medal.
-      SeasonMedal {
-        anchors.horizontalCenter: parent.horizontalCenter
-        visible: !!endFace.a && !endFace.league
-        bars: endFace.a && endFace.a.bars > 0 ? endFace.a.bars : 1
-        won: !!endFace.a && endFace.a.bars > 0
-        colors: endFace.a ? endFace.a.colors : null
-        size: view.w / 40
-      }
       Text {
         anchors.horizontalCenter: parent.horizontalCenter
-        text: !endFace.a ? "" : endFace.league ? endFace.a.after.name : (endFace.a.grade || "")
+        visible: endFace.league
+        text: !endFace.a ? "" : endFace.a.after.name
         color: endFace.league && endFace.a ? endFace.a.after.color : endFace.tint
         font.family: Style.fontFamily
         font.pixelSize: Math.round(view.w * 0.09)
         font.bold: true
       }
+    }
+
+    // Season: its medal in the middle, the grade large under it.
+    SeasonMedal {
+      id: seasonMedal
+      anchors.centerIn: parent
+      visible: !!endFace.a && !endFace.league
+      bars: endFace.a && endFace.a.bars > 0 ? endFace.a.bars : 1
+      won: !!endFace.a && endFace.a.bars > 0
+      colors: endFace.a ? endFace.a.colors : null
+      size: view.w / 40
+    }
+    Text {
+      anchors.horizontalCenter: parent.horizontalCenter
+      anchors.top: seasonMedal.bottom
+      anchors.topMargin: view.w * 0.02
+      visible: seasonMedal.visible
+      text: endFace.a ? (endFace.a.grade || "") : ""
+      color: endFace.tint
+      font.family: Style.fontFamily
+      font.pixelSize: Math.round(view.w * 0.2)
+      font.bold: true
     }
 
     MouseArea {
