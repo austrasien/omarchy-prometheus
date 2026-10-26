@@ -227,7 +227,10 @@ the map is installed and the minimap shown, the bar leaves toasts and
 questions to it and keeps the timer; without the minimap it shows them as
 before. `omarchy-shell austraz.minimap demo prometheus <kind>` shows one:
 an achievement rarity, `medal`, `quest`, `won`, `goal`, `ended`, `absent`,
-`error`, `presence`, `challenge`, `break` or `coffee`.
+`error`, `level`, `presence`, `challenge`, `break` or `coffee`. A level up
+shows green chevrons; a medal shows its ribbon; "Session paused" stays up
+while the session is paused (a click resumes); with no session, a click on
+the map opens the bar's Prometheus menu to start one.
 
 Obsidian suggestions need the widget's `vaultPath` setting and the
 `obsidian-daily-qs` helper (`journalBin`); without them, the tasks tab works

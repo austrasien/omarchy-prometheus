@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Shapes
+import Quickshell
 import qs.Commons
 import ".."
 
@@ -26,6 +27,18 @@ Item {
     }
   }
 
+  // Level up: the daemon does not announce it; the profile tells.
+  property int lastLevel: 0
+  readonly property int level: p.profile ? (p.profile.level || 0) : 0
+  onLevelChanged: {
+    if (lastLevel > 0 && level > lastLevel) announceLevel(level)
+    if (level > 0) lastLevel = level
+  }
+  function announceLevel(n) {
+    var left = p.profile ? Math.max(0, (p.profile.levelCost || 0) - (p.profile.levelXp || 0)) : 0
+    enqueue({ type: "toast", kind: "level", title: "Level " + n, text: left ? left + " XP to the next" : "" })
+  }
+
   // ----------------------------------------------------------- style
   // The bar's colours and glyphs, so a toast looks the same here.
 
@@ -41,7 +54,7 @@ Item {
   }
   function toastColor(kind, rarity) {
     if (kind === "achievement" && rarity) return rarityColor(rarity)
-    return kind === "error" || kind === "absent" ? red : kind === "ended" ? green : gold
+    return kind === "error" || kind === "absent" ? red : kind === "ended" || kind === "level" ? green : gold
   }
   function glyph(code) { return String.fromCodePoint(code) }
   function toastGlyph(kind) {
@@ -103,7 +116,23 @@ Item {
     return item.title + (item.text ? "  ·  " + item.text : "")
   }
 
-  Timer { id: shownFor; onTriggered: view.showNext() }
+  Timer {
+    id: shownFor
+    onTriggered: {
+      if (!view.sticky) { view.showNext(); return }
+      // Paused: the notification stays, its text going round again, until
+      // the session resumes; others waiting pass first, then it comes back.
+      if (view.queue.length) { view.queue = view.queue.concat([view.current]); view.showNext(); return }
+      shownFor.restart()
+      view.minimap.notify(view, shownFor.interval)
+      if (view.onScreen) ringText.start()
+    }
+  }
+
+  // "Session paused" stays up while the session is paused: a click resumes.
+  readonly property bool sticky: !!current && current.type === "toast" && current.kind === "absent"
+    && !current.demo && p.paused
+  onStickyChanged: if (!sticky && current && current.kind === "absent" && !current.demo && !p.paused) showNext()
 
   // The questions, most urgent first, as the bar orders them.
   readonly property var pendingQuestions: {
@@ -169,7 +198,11 @@ Item {
     var a = String(arg || "")
     if (["presence", "challenge", "break", "coffee"].indexOf(a) !== -1)
       enqueue({ type: "question", question: a, demo: true })
-    else p.call("toast:preview", [a || "legendary"])
+    else if (a === "level") announceLevel(Math.max(2, level + 1))
+    else if (a === "medal" && p.medals && p.medals.length) {
+      var m = p.medals[Math.floor(Math.random() * p.medals.length)]
+      p.call("toast:echo", ["medal", m.name, "+20 XP · " + (m.desc || "")])
+    } else p.call("toast:preview", [a || "legendary"])
   }
 
   // ------------------------------------------------------------- faces
@@ -260,12 +293,16 @@ Item {
       }
     }
 
-    // Click: pause or resume the running session.
+    // Click: pause or resume the running session; with none, the bar's
+    // Prometheus menu, to name and start one.
     MouseArea {
       anchors.fill: parent
-      enabled: p.live && p.session !== null
+      enabled: p.live
       cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-      onClicked: p.toggle()
+      onClicked: {
+        if (p.session) p.toggle()
+        else Quickshell.execDetached(["omarchy-shell", "shell", "summon", "austraz.prometheus", "{}"])
+      }
     }
   }
 
@@ -283,6 +320,13 @@ Item {
       : achievement ? (rarity === "normal" ? view.gold : view.rarityColor(rarity))
       : view.toastColor(t.kind, t.rarity)
     readonly property color ink: achievement ? (flashOn ? tint : "#14151f") : tint
+    readonly property bool levelUp: !!t && t.kind === "level"
+    // The medal's look, found by name in the placard.
+    readonly property var medal: {
+      if (!t || t.kind !== "medal" || !p.medals) return null
+      for (var i = 0; i < p.medals.length; i++) if (p.medals[i].name === t.title) return p.medals[i]
+      return null
+    }
     property bool flashOn: false
     visible: t !== null
 
@@ -371,6 +415,13 @@ Item {
       }
     }
 
+    MouseArea {
+      anchors.fill: parent
+      enabled: view.sticky
+      cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+      onClicked: p.resume()
+    }
+
     Column {
       anchors.centerIn: parent
       width: view.w * 0.8
@@ -378,10 +429,38 @@ Item {
 
       Text {
         anchors.horizontalCenter: parent.horizontalCenter
+        visible: !toastFace.medal && !toastFace.levelUp
         text: toastFace.t ? view.toastGlyph(toastFace.t.kind) : ""
         color: toastFace.ink
         font.family: Style.fontFamily
         font.pixelSize: view.w * 0.26
+      }
+      // A medal: its own ribbon, as on the bar's placard.
+      Ribbon {
+        anchors.horizontalCenter: parent.horizontalCenter
+        visible: !!toastFace.medal
+        size: view.w / 60
+        color: toastFace.medal ? toastFace.medal.color : "#555"
+        dot: toastFace.medal ? toastFace.medal.dot : "white"
+        dots: toastFace.medal ? (toastFace.medal.dots || 1) : 1
+        edges: toastFace.medal ? (toastFace.medal.edges || "none") : "none"
+      }
+      // Level up: green chevrons streaming up.
+      Chevrons {
+        anchors.horizontalCenter: parent.horizontalCenter
+        visible: toastFace.levelUp
+        up: true
+        color: view.green
+        glyphSize: view.w * 0.22
+      }
+      Text {
+        anchors.horizontalCenter: parent.horizontalCenter
+        visible: toastFace.levelUp
+        text: toastFace.t ? toastFace.t.title.replace("Level ", "") : ""
+        color: view.green
+        font.family: Style.fontFamily
+        font.pixelSize: view.w * 0.13
+        font.bold: true
       }
       // RARE, EPIC… as the bar spells it.
       Text {
@@ -436,6 +515,15 @@ Item {
     Text {
       anchors.horizontalCenter: parent.horizontalCenter
       y: view.w * 0.2
+      // "Still there?": the sign blinks gently, asking for a click.
+      property real blink: 1
+      opacity: questionFace.single ? blink : 1
+      SequentialAnimation on blink {
+        running: questionFace.single && questionFace.visible
+        loops: Animation.Infinite
+        NumberAnimation { from: 1; to: 0.25; duration: 650; easing.type: Easing.InOutSine }
+        NumberAnimation { from: 0.25; to: 1; duration: 650; easing.type: Easing.InOutSine }
+      }
       text: questionFace.q ? view.questionGlyph(questionFace.q.question) : ""
       color: questionFace.tint
       font.family: Style.fontFamily
