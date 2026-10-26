@@ -84,51 +84,54 @@ Item {
   // clicked. Something new passes in front, then it comes back.
 
   readonly property int questionMs: 10000
-  property var queue: []
+  property var temps: []      // toasts, in turn
+  property var stack: []      // what waits for the user, the latest last
   property var current: null
 
   function sameItem(a, b) {
     if (!a || !b || a.type !== b.type) return false
     if (a.type === "question") return a.question === b.question && !!a.demo === !!b.demo
     if (a.type === "announcement") return a.data.id === b.data.id
+    if (a.type === "toast") return a === b
     return false
   }
 
   function enqueue(item) {
-    if (sameItem(current, item)) return
-    for (var i = 0; i < queue.length; i++) if (sameItem(queue[i], item)) return
-    // A waiting item yields to anything new.
-    if (current && current.persistent) {
-      queue = [item].concat(queue).concat([current])
-      showNext()
-      return
+    if (item.persistent) {
+      for (var i = 0; i < stack.length; i++) if (sameItem(stack[i], item)) return
+      stack = stack.concat([item])
+      minimap.notify(view, 0, true)
+    } else {
+      temps = temps.concat([item])
     }
-    queue = queue.concat([item])
-    if (!current) showNext()
+    refresh()
   }
 
-  function showNext() {
+  // What shows: the first toast in turn, else the latest of what waits.
+  function refresh() {
+    var next = temps.length ? temps[0] : (stack.length ? stack[stack.length - 1] : null)
+    if (next === current) return
+    current = next
     ringText.stop()
-    if (!queue.length) {
-      if (current) minimap.release(view)
-      current = null
-      return
-    }
-    current = queue[0]
-    queue = queue.slice(1)
+    shownFor.stop()
+    if (!current) { minimap.release(view); return }
     ringText.text = itemText(current)
     var ms = ringText.runMs + 700
     if (current.type === "question") ms = Math.max(questionMs, ms)
     shownFor.interval = ms
     shownFor.restart()
-    minimap.notify(view, ms, !!current.persistent)
+    if (!current.persistent) minimap.notify(view, ms)
     if (onScreen) ringText.start()
   }
 
-  // Settled elsewhere (answered in the bar, resumed, seen): drop it.
+  // Settled (answered, resumed, seen, or gone elsewhere): drop it; when
+  // nothing waits any more, let the minimap go back.
   function settle(test) {
-    queue = queue.filter(function(it) { return !test(it) })
-    if (current && test(current)) { minimap.release(view); showNext() }
+    temps = temps.filter(function(it) { return !test(it) })
+    stack = stack.filter(function(it) { return !test(it) })
+    if (!stack.length) minimap.release(view)
+    if (current && test(current)) current = null
+    refresh()
   }
 
   readonly property bool onScreen: minimap.shownMap === "prometheus"
@@ -144,9 +147,14 @@ Item {
   Timer {
     id: shownFor
     onTriggered: {
-      if (!view.current || !view.current.persistent) { view.showNext(); return }
-      // Waiting for the user: others first, then its text goes round again.
-      if (view.queue.length) { view.queue = view.queue.concat([view.current]); view.showNext(); return }
+      if (!view.current) return
+      if (!view.current.persistent) {
+        view.temps = view.temps.slice(1)
+        view.current = null
+        view.refresh()
+        return
+      }
+      // Waiting for the user: its text goes round again.
       shownFor.restart()
       if (view.onScreen) ringText.start()
     }
@@ -251,7 +259,7 @@ Item {
   function demo(arg) {
     var a = String(arg || "")
     if (["presence", "challenge", "break", "coffee"].indexOf(a) !== -1)
-      enqueue({ type: "question", question: a, demo: true })
+      enqueue({ type: "question", question: a, demo: true, persistent: true })
     else if (a === "level") announceLevel(Math.max(2, level + 1))
     else if (["promoted", "relegated", "stayed"].indexOf(a) !== -1)
       p.call("announce:preview", ["league", a === "promoted" ? "up" : a === "relegated" ? "down" : "stay"])
