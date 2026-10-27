@@ -48,6 +48,7 @@ Item {
   readonly property color gold: "#e0af68"
   readonly property color green: "#9ece6a"
   readonly property color red: Color.urgent
+  readonly property color blue: "#7aa2f7"
   readonly property color presenceAmber: "#ffb020"
   readonly property color breakTeal: "#2ac3de"
   readonly property color coffeeBrown: "#c08552"
@@ -363,25 +364,17 @@ Item {
       }
     }
 
-    // Click: pause the running session. With none running (none yet, or
-    // paused) the halves below take the clicks instead.
-    MouseArea {
-      anchors.fill: parent
-      enabled: p.live && !status.offering
-      cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-      onClicked: {
-        if (p.session) p.toggle()
-        else Quickshell.execDetached(["omarchy-shell", "shell", "summon", "austraz.prometheus", "{}"])
-      }
-    }
-
-    // Hovered with no session running (none yet, or paused), the disc
-    // splits like a question: a coffee on the left, start or resume on the
-    // right (a new session opens the bar's panel to be named first). The
-    // halves slide in from their sides and light up under the
-    // pointer; a coffee taken bounces its cup with "+1".
+    // Hovered, the disc splits like a question. With no session running
+    // (none yet, or paused): a coffee on the left, start or resume on the
+    // right (a new session opens the bar's panel to be named first). While
+    // one runs: end it on the left (not during a challenge, as in the bar's
+    // panel), pause it on the right. The halves slide in from their sides
+    // and light up under the pointer; a coffee taken bounces its cup with
+    // "+1".
     readonly property bool offering: p.live && (!p.session || p.paused)
-    readonly property bool hovered: offering && (coffeeArea.containsMouse || goArea.containsMouse)
+    readonly property bool running: p.live && !!p.session && !p.paused
+    readonly property bool canEnd: running && !p.challengeActive
+    readonly property bool hovered: (offering || running) && (leftArea.containsMouse || rightArea.containsMouse)
     property real reveal: hovered ? 1 : 0
     Behavior on reveal { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
     property bool poured: false
@@ -398,17 +391,50 @@ Item {
         opacity: status.reveal
       }
 
-      // Left: coffee.
+      // Left: coffee, or end the running session.
       Item {
         x: -view.w / 2 * (1 - status.reveal)
         width: view.w / 2; height: view.w
         opacity: status.reveal
         Rectangle {
           anchors.fill: parent
-          color: Qt.alpha(view.coffeeBrown, coffeeArea.containsMouse ? 0.3 : 0.1)
+          color: status.running
+            ? Qt.alpha(view.red, leftArea.containsMouse && status.canEnd ? 0.3 : 0.1)
+            : Qt.alpha(view.coffeeBrown, leftArea.containsMouse ? 0.3 : 0.1)
           Behavior on color { ColorAnimation { duration: 120 } }
         }
         Column {
+          visible: status.running
+          opacity: status.canEnd ? 1 : 0.35
+          anchors.right: parent.right
+          anchors.rightMargin: view.w * 0.07
+          anchors.verticalCenter: parent.verticalCenter
+          spacing: view.w * 0.015
+          Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: view.glyph(0xF04DB)
+            color: leftArea.containsMouse && status.canEnd ? view.red : Qt.alpha(Color.foreground, 0.75)
+            font.family: Style.fontFamily
+            font.pixelSize: view.w * 0.15
+          }
+          Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: "End"
+            color: leftArea.containsMouse && status.canEnd ? view.red : Qt.alpha(Color.foreground, 0.75)
+            font.family: Style.fontFamily
+            font.pixelSize: Math.round(view.w * 0.075)
+            font.bold: true
+          }
+          Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: p.challengeActive ? "challenge" : "+" + p.sessionXp + " XP"
+            color: Qt.alpha(Color.foreground, 0.5)
+            font.family: Style.fontFamily
+            font.pixelSize: Math.round(view.w * 0.055)
+          }
+        }
+        Column {
+          visible: !status.running
           anchors.right: parent.right
           anchors.rightMargin: view.w * 0.07
           anchors.verticalCenter: parent.verticalCenter
@@ -417,7 +443,7 @@ Item {
             id: cup
             anchors.horizontalCenter: parent.horizontalCenter
             text: view.glyph(0xF0176)
-            color: coffeeArea.containsMouse || status.poured ? view.coffeeBrown : Qt.alpha(Color.foreground, 0.75)
+            color: leftArea.containsMouse || status.poured ? view.coffeeBrown : Qt.alpha(Color.foreground, 0.75)
             font.family: Style.fontFamily
             font.pixelSize: view.w * 0.15
             SequentialAnimation {
@@ -429,7 +455,7 @@ Item {
           Text {
             anchors.horizontalCenter: parent.horizontalCenter
             text: status.poured ? "+1" : "Coffee"
-            color: coffeeArea.containsMouse || status.poured ? view.coffeeBrown : Qt.alpha(Color.foreground, 0.75)
+            color: leftArea.containsMouse || status.poured ? view.coffeeBrown : Qt.alpha(Color.foreground, 0.75)
             font.family: Style.fontFamily
             font.pixelSize: Math.round(view.w * 0.075)
             font.bold: true
@@ -445,17 +471,48 @@ Item {
         }
       }
 
-      // Right: start a session, or resume the paused one.
+      // Right: start a session, resume the paused one, or pause the
+      // running one.
       Item {
         x: view.w / 2 + view.w / 2 * (1 - status.reveal)
         width: view.w / 2; height: view.w
         opacity: status.reveal
         Rectangle {
           anchors.fill: parent
-          color: Qt.alpha(view.green, goArea.containsMouse ? 0.3 : 0.1)
+          color: Qt.alpha(status.running ? view.blue : view.green, rightArea.containsMouse ? 0.3 : 0.1)
           Behavior on color { ColorAnimation { duration: 120 } }
         }
         Column {
+          visible: status.running
+          anchors.left: parent.left
+          anchors.leftMargin: view.w * 0.07
+          anchors.verticalCenter: parent.verticalCenter
+          spacing: view.w * 0.015
+          Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: view.glyph(0xF03E4)
+            color: rightArea.containsMouse ? view.blue : Qt.alpha(Color.foreground, 0.75)
+            font.family: Style.fontFamily
+            font.pixelSize: view.w * 0.15
+          }
+          Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: "Pause"
+            color: rightArea.containsMouse ? view.blue : Qt.alpha(Color.foreground, 0.75)
+            font.family: Style.fontFamily
+            font.pixelSize: Math.round(view.w * 0.075)
+            font.bold: true
+          }
+          Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: p.session ? p.formatShort(p.elapsed) : ""
+            color: Qt.alpha(Color.foreground, 0.5)
+            font.family: Style.fontFamily
+            font.pixelSize: Math.round(view.w * 0.055)
+          }
+        }
+        Column {
+          visible: !status.running
           anchors.left: parent.left
           anchors.leftMargin: view.w * 0.07
           anchors.verticalCenter: parent.verticalCenter
@@ -463,14 +520,14 @@ Item {
           Text {
             anchors.horizontalCenter: parent.horizontalCenter
             text: view.glyph(0xF040A)
-            color: goArea.containsMouse ? view.green : Qt.alpha(Color.foreground, 0.75)
+            color: rightArea.containsMouse ? view.green : Qt.alpha(Color.foreground, 0.75)
             font.family: Style.fontFamily
             font.pixelSize: view.w * 0.15
           }
           Text {
             anchors.horizontalCenter: parent.horizontalCenter
             text: p.session ? "Resume" : "Start"
-            color: goArea.containsMouse ? view.green : Qt.alpha(Color.foreground, 0.75)
+            color: rightArea.containsMouse ? view.green : Qt.alpha(Color.foreground, 0.75)
             font.family: Style.fontFamily
             font.pixelSize: Math.round(view.w * 0.075)
             font.bold: true
@@ -494,12 +551,16 @@ Item {
     }
 
     MouseArea {
-      id: coffeeArea
+      id: leftArea
       x: 0; width: view.w / 2; height: view.w
-      enabled: status.offering
+      enabled: status.offering || status.running
       hoverEnabled: true
-      cursorShape: Qt.PointingHandCursor
+      cursorShape: !status.running || status.canEnd ? Qt.PointingHandCursor : Qt.ArrowCursor
       onClicked: {
+        if (status.running) {
+          if (status.canEnd) p.stop()
+          return
+        }
         p.addCoffee()
         status.poured = true
         pourTimer.restart()
@@ -507,15 +568,16 @@ Item {
       }
     }
     MouseArea {
-      id: goArea
+      id: rightArea
       x: view.w / 2; width: view.w / 2; height: view.w
-      enabled: status.offering
+      enabled: status.offering || status.running
       hoverEnabled: true
       cursorShape: Qt.PointingHandCursor
       // A new session is named first: the bar's panel opens on its name
-      // field. A paused one just resumes.
+      // field. A paused one just resumes, a running one pauses.
       onClicked: {
-        if (p.session) p.resume()
+        if (status.running) p.pause()
+        else if (p.session) p.resume()
         else Quickshell.execDetached(["omarchy-shell", "austraz.prometheus", "startSession"])
       }
     }
