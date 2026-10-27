@@ -277,6 +277,7 @@ Item {
   // ------------------------------------------------------------- faces
 
   readonly property real w: width
+  readonly property real k: minimap.uiScale || 1   // fixed sizes are for a 210 px minimap
 
   Rectangle {
     anchors.fill: parent
@@ -299,18 +300,18 @@ Item {
       preferredRendererType: Shape.CurveRenderer
       ShapePath {
         strokeColor: Qt.alpha(Color.foreground, 0.08)
-        strokeWidth: 5
+        strokeWidth: 5 * view.k
         fillColor: "transparent"
-        PathAngleArc { centerX: view.w / 2; centerY: view.w / 2; radiusX: view.w / 2 - 4; radiusY: radiusX; startAngle: 0; sweepAngle: 360 }
+        PathAngleArc { centerX: view.w / 2; centerY: view.w / 2; radiusX: view.w / 2 - 4 * view.k; radiusY: radiusX; startAngle: 0; sweepAngle: 360 }
       }
       ShapePath {
         strokeColor: p.challengeActive ? view.red : view.gold
-        strokeWidth: 5
+        strokeWidth: 5 * view.k
         fillColor: "transparent"
         capStyle: ShapePath.RoundCap
         PathAngleArc {
           centerX: view.w / 2; centerY: view.w / 2
-          radiusX: view.w / 2 - 4; radiusY: radiusX
+          radiusX: view.w / 2 - 4 * view.k; radiusY: radiusX
           startAngle: -90
           sweepAngle: 360 * status.ring
         }
@@ -320,7 +321,7 @@ Item {
     Column {
       anchors.centerIn: parent
       width: view.w * 0.72
-      spacing: 2
+      spacing: 2 * view.k
 
       Text {
         anchors.horizontalCenter: parent.horizontalCenter
@@ -619,7 +620,7 @@ Item {
       anchors.margins: 3
       radius: width / 2
       color: "transparent"
-      border.width: 2
+      border.width: 2 * view.k
       border.color: Qt.lighter(toastFace.tint, 1.5)
       SequentialAnimation on opacity {
         running: toastFace.visible && toastFace.achievement
@@ -650,7 +651,7 @@ Item {
     Column {
       anchors.centerIn: parent
       width: view.w * 0.8
-      spacing: 2
+      spacing: 2 * view.k
 
       Text {
         anchors.horizontalCenter: parent.horizontalCenter
@@ -735,12 +736,12 @@ Item {
         preferredRendererType: Shape.CurveRenderer
         ShapePath {
           strokeColor: recapFace.putOff ? Qt.alpha(Color.foreground, 0.35) : recapFace.palette[index % recapFace.palette.length]
-          strokeWidth: 5
+          strokeWidth: 5 * view.k
           fillColor: "transparent"
           capStyle: ShapePath.FlatCap
           PathAngleArc {
             centerX: view.w / 2; centerY: view.w / 2
-            radiusX: view.w / 2 - 3; radiusY: radiusX
+            radiusX: view.w / 2 - 3 * view.k; radiusY: radiusX
             startAngle: -90 + before
             sweepAngle: Math.max(0, Math.min(sweep - 1.5, 360 * recapFace.drawn - before))
           }
@@ -751,7 +752,7 @@ Item {
     Column {
       anchors.centerIn: parent
       width: view.w * 0.62
-      spacing: 1
+      spacing: 1 * view.k
       Text {
         anchors.horizontalCenter: parent.horizontalCenter
         text: recapFace.r ? p.formatShort(recapFace.r.durationSeconds || 0) : ""
@@ -789,13 +790,13 @@ Item {
       anchors.fill: parent
       radius: width / 2
       color: Qt.alpha(endFace.league && endFace.a ? endFace.a.after.color : endFace.tint, 0.12)
-      border.width: 3
+      border.width: 3 * view.k
       border.color: Qt.alpha(endFace.tint, 0.7)
     }
 
     Column {
       anchors.centerIn: parent
-      spacing: 4
+      spacing: 4 * view.k
 
       // League: promoted, relegated…
       Chevrons {
@@ -880,7 +881,7 @@ Item {
       anchors.fill: parent
       radius: width / 2
       color: Qt.alpha(questionFace.tint, 0.12)
-      border.width: 3
+      border.width: 3 * view.k
       border.color: Qt.alpha(questionFace.tint, 0.75)
     }
 
@@ -959,6 +960,8 @@ Item {
   RingText {
     id: ringText
     anchors.fill: parent
+    pixelSize: Math.round(13 * view.k)
+    inset: 12 * view.k
     visible: view.current !== null
     color: !view.current ? Color.foreground
       : view.current.type === "question" ? view.questionColor(view.current.question)
