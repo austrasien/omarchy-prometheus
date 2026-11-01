@@ -9,8 +9,8 @@ import qs.Ui
 // runs. Hidden while prometheusd is not running.
 //
 //   left click    panel: session, journal tasks, stats, settings
-//   right click   pause / resume (opens the panel when no session runs,
-//                 so a session always starts with a name)
+//   right click   menu: bar display (icon only, or icon + session timer)
+//                 and pause / resume while a session runs
 //   middle click  today's daily note in Obsidian
 //
 // Ending a session lives in the panel only: it is the one irreversible
@@ -299,7 +299,11 @@ BarWidget {
 
   readonly property string lockGlyph: String.fromCodePoint(0xF033E)
 
-  readonly property string barText: (p.session
+  // "timer" (default): icon + running session timer; "icon": icon only.
+  readonly property string displayMode: setting("display", "timer") === "icon" ? "icon" : "timer"
+  property bool displayMenuOpen: false
+
+  readonly property string barText: displayMode === "icon" ? fireGlyph : (p.session
     ? fireGlyph + "  " + p.formatDuration(p.elapsed)
     : fireGlyph)
     + (p.challengeActive ? "  " + lockGlyph + " " + Math.ceil((p.challenge.remainingSeconds || 0) / 60) + " min" : "")
@@ -328,15 +332,86 @@ BarWidget {
 
     onPressed: function(b) {
       if (b === Qt.RightButton) {
-        if (p.session) p.toggle()
-        else {
-          root.tab = "session"
-          root.open()
-        }
+        root.displayMenuOpen = !root.displayMenuOpen
       } else if (b === Qt.MiddleButton) {
         root.openJournal()
       } else {
+        root.displayMenuOpen = false
         root.togglePanel()
+      }
+    }
+  }
+
+  // ---- right-click menu
+  QtObject {
+    id: displayMenuOwner
+    function close() { root.displayMenuOpen = false }
+  }
+
+  PopupCard {
+    id: displayMenu
+    anchorItem: button
+    owner: displayMenuOwner
+    bar: root.bar
+    open: root.displayMenuOpen
+    padding: Style.space(8)
+    contentWidth: displayMenu.fittedContentWidth(Style.space(240))
+    contentHeight: displayMenu.fittedContentHeight(displayMenuColumn.implicitHeight)
+
+    Column {
+      id: displayMenuColumn
+      anchors.fill: parent
+      spacing: 0
+
+      Repeater {
+        model: [
+          { key: "icon", label: "Icon only" },
+          { key: "timer", label: "Icon + session timer" }
+        ].concat(p.session ? [{ key: "toggle", label: p.paused ? "Resume session" : "Pause session" }] : [])
+
+        delegate: Rectangle {
+          required property var modelData
+          readonly property bool isMode: modelData.key !== "toggle"
+          readonly property bool checked: isMode && root.displayMode === modelData.key
+          width: displayMenuColumn.width
+          implicitHeight: Style.space(30)
+          radius: Style.space(4)
+          color: rowArea.containsMouse ? Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.1) : "transparent"
+
+          Text {
+            id: rowMark
+            anchors.left: parent.left
+            anchors.leftMargin: Style.space(8)
+            anchors.verticalCenter: parent.verticalCenter
+            width: Style.space(18)
+            text: parent.checked ? root.checkGlyph
+              : !parent.isMode ? (p.paused ? root.playGlyph : root.pauseGlyph) : ""
+            color: root.accent
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
+          }
+          Text {
+            anchors.left: rowMark.right
+            anchors.leftMargin: Style.space(6)
+            anchors.verticalCenter: parent.verticalCenter
+            text: parent.modelData.label
+            color: Color.foreground
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
+          }
+          MouseArea {
+            id: rowArea
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: {
+              var key = parent.modelData.key
+              if (key === "toggle") p.toggle()
+              else if (key !== root.displayMode) root.writeSettings({ display: key })
+              root.displayMenuOpen = false
+            }
+          }
+        }
       }
     }
   }
