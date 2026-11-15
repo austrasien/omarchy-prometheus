@@ -268,6 +268,16 @@ BarWidget {
       root.open()
       return "ok"
     }
+    // `omarchy-shell austraz.prometheus openTab leagues` (the HUD
+    // wallpaper's panels): the panel on that tab.
+    function openTab(name: string): string {
+      if (!p.live) return "offline"
+      var known = ["session", "tasks", "quests", "leagues", "seasons", "achievements", "stats", "leaderboard", "settings"]
+      if (known.indexOf(name) < 0) return "unknown tab"
+      root.tab = name
+      root.open()
+      return "ok"
+    }
   }
   function closeForPopoutSwitch() {
     popoutSwitchClosing = true
