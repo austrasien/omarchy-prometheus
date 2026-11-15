@@ -278,6 +278,27 @@ BarWidget {
       root.open()
       return "ok"
     }
+    // `omarchy-shell austraz.prometheus shareCard`: builds the share card
+    // (the medal rack among it) as from the panel's share button.
+    function shareCard(): string {
+      if (!p.live) return "offline"
+      root.open()
+      shareSoon.tries = 0
+      shareSoon.start()
+      return "ok"
+    }
+  }
+  // The card lives in the panel: wait for the panel to exist, then share.
+  Timer {
+    id: shareSoon
+    property int tries: 0
+    interval: 100
+    repeat: true
+    onTriggered: {
+      tries++
+      if (panelLoader.item) { stop(); panelLoader.item.share() }
+      else if (tries > 30) stop()
+    }
   }
   function closeForPopoutSwitch() {
     popoutSwitchClosing = true
