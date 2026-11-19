@@ -13,6 +13,9 @@ Item {
   property var colors: null        // { bg, dot, edge }
   property bool won: false
   property real size: 1.2
+  // The ribbon's shine at a given phase (0-1) instead of running on its own:
+  // a host that cannot afford 60 fps (a wallpaper) steps it itself. -1 runs.
+  property real phaseOverride: -1
   // Set from outside so that hovering one medal wakes them all.
   property bool hot: false
   readonly property bool hovering: hover.hovered
@@ -51,6 +54,7 @@ Item {
         dot: root.dotColor
         edge: root.edgeColor
         shining: root.lit
+        phaseOverride: root.phaseOverride
       }
     }
     layer.enabled: true
