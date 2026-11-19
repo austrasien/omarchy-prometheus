@@ -16,6 +16,10 @@ Item {
   // The ribbon's shine at a given phase (0-1) instead of running on its own:
   // a host that cannot afford 60 fps (a wallpaper) steps it itself. -1 runs.
   property real phaseOverride: -1
+  // The layer effect (saturation, brightness, glow). A host where the medal
+  // is always won and never hovered (the HUD) can drop it: neutral there, it
+  // still redraws its blur on every step of the shine.
+  property bool effects: true
   // Set from outside so that hovering one medal wakes them all.
   property bool hot: false
   readonly property bool hovering: hover.hovered
@@ -57,7 +61,7 @@ Item {
         phaseOverride: root.phaseOverride
       }
     }
-    layer.enabled: true
+    layer.enabled: root.effects
     layer.effect: MultiEffect {
       autoPaddingEnabled: true
       saturation: root.fxSaturation
